@@ -1,0 +1,63 @@
+interrupt_reasons
+	bit 0 - power button pressed
+	bit 1 - DVD tray related
+	bit 2 - DVD tray related
+	bit 3 - AV mode changed
+	bit 4 - AV cable unplugged
+	bit 5 - eject button pressed
+	bit 6 - DVD tray related
+	bit 7 - unused
+
+bitfield_DATA_6E bit 0 is set when power switch is pressed and when power off is requested via SMBus
+bitfield_DATA_6E bit 1 is set when eject switch is pressed
+bitfield_DATA_6E bit 2 is set for the first execution of the main loop after the Xbox turns on
+bitfield_DATA_6E bit 3 is set when Xbox is powered up (tells update_audio_clamp to unclamp audio after a timeout)
+bitfield_DATA_6E bit 4 is set when the system is overheated
+bitfield_DATA_6E bit 5 is set when the SMC should prepare for Xbox shutdown (tray close, turn off audio clamp, don't change fan speed, don't monitor boot challenge)
+bitfield_DATA_6E bit 6 is DVD tray related (causes SMI interrupt to be fired)
+bitfield_DATA_6E bit 7 is set when vide mode changes (causes SMI interrupt to be fired)
+
+bitfield_DATA_6F bit 0 is set when audio clamp enable is requested
+bitfield_DATA_6F bit 1 is set when power off is requested
+bitfield_DATA_6F bit 2 is set while a custom fan speed is used
+bitfield_DATA_6F bit 3 is set when DVD tray eject is requested
+bitfield_DATA_6F bit 4 is set when DVD tray eject is requested
+bitfield_DATA_6F bit 5 is DVD tray state related
+bitfield_DATA_6F bit 6 is set while a power-related interrupt is being handled
+bitfield_DATA_6F bit 7 is set when audio clamp disable is requested
+
+bitfield_DATA_70 bit 0 is set when various things should reset (the boot challenge, sysreset, PLL) for various reasons (overheated, when turning off, boot challenge failed)
+bitfield_DATA_70 bit 1 is DVD tray related
+bitfield_DATA_70 bit 2 is set when LEDs are under manual control
+bitfield_DATA_70 bit 3 is set when the system is powered
+bitfield_DATA_70 bit 4 changes/stops the behaviour of shutdown
+bitfield_DATA_70 bit 5 skips some timeout/delay in power-off
+bitfield_DATA_70 bit 6 is set when SMC is waiting to be addressed (SMBus)
+bitfield_DATA_70 bit 7 is set when SMBus cmd data frame is expected next
+
+bitfield_DATA_71 bit 0 is set when SMBus cmd data frame is expected next
+bitfield_DATA_71 bit 1 is only used as a condition to exit a loop in the function at 0xB05
+bitfield_DATA_71 bit 2 is DVD tray related, likely when tray is ejected (causes SMI interrupt to be fired)
+bitfield_DATA_71 bit 3 is set when a system reset is requested
+bitfield_DATA_71 bit 4 is set when the RAM test results are submitted
+bitfield_DATA_71 bit 5 triggers FRAO when cleared
+bitfield_DATA_71 bit 6 is set when there's no AV cable plugged in
+bitfield_DATA_71 bit 7 is set if there's no AV cable plugged in, cleared by update_system_interrupt
+
+bitfield_DATA_72 bit 0 is set when AV cable is detected (causes SMI interrupt to be fired)
+bitfield_DATA_72 bit 1 is set when reset-on-eject is disabled
+bitfield_DATA_72 bit 2 is cleared once reset-on-eject command is issued
+bitfield_DATA_72 bit 3 is DVD tray related
+bitfield_DATA_72 bit 4 is DVD tray related
+bitfield_DATA_72 bit 5 is set when the Xbox is sitting in FRAG state
+bitfield_DATA_72 bit 6 is interrupt enable (set via SMBus)
+bitfield_DATA_72 bit 7 is set when eject switch is pressed
+
+bitfield_DATA_73 bit 0 is set when a system reset is requested
+bitfield_DATA_73 bit 1 is DVD tray related
+bitfield_DATA_73 bit 2 is set when the Xbox is sitting in FRAG state
+bitfield_DATA_73 bit 3 is set on reset (allows SMBus_master_write to run)
+bitfield_DATA_73 bit 4 is set once boot challenge has been answered (cmd write 0x21)
+bitfield_DATA_73 bit 5 is DVD tray related (causes SMI interrupt to be fired)
+bitfield_DATA_73 bit 6 is set when a power cycle is requested
+bitfield_DATA_73 bit 7 is unused
