@@ -4,6 +4,7 @@
 #include "hardware/i2c.h"
 
 namespace pins {
+// SMC
 constexpr uint8_t LED_RED      = 2;
 constexpr uint8_t LED_GREEN    = 3;
 constexpr uint8_t SYSTEM_RESET = 4;
@@ -30,6 +31,8 @@ constexpr uint8_t DVD_ACTIVE   = 26;
 
 // Pico Internal
 constexpr uint8_t RP2040_LED = 25;
+// RGB Led
+constexpr uint8_t YD_BOARD_RGB = 23;
 }  // namespace pins
 
 #define I2C_PORT i2c0

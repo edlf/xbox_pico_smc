@@ -20,8 +20,8 @@ void smi_pin_on();
 void smi_pin_off();
 void audio_clamp_on();
 void audio_clamp_off();
-void power_on_on();
-void power_on_off();
+void power_on_assert();
+void power_on_deassert();
 void PLL_on();
 void PLL_off();
 void dvd_eject_on();
@@ -61,8 +61,6 @@ void timer1_disable();
 bool read_byte(const uint8_t device, const uint8_t reg, uint8_t *out);
 bool smbus_reply(const uint8_t data);
 bool smbus_send_byte(const uint8_t device, const uint8_t data);
-bool I2C_messageForSMC();
-bool I2C_isWrite();
 void setupI2C();
 
 //

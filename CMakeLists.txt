@@ -30,16 +30,16 @@ include(pico_sdk_import.cmake)
 
 project(OG_SMC C CXX ASM)
 
-# Initialise the Raspberry Pi Pico SDK
+# Initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
+
+# add_compile_definitions(SYS_CLK_MHZ=200)
 
 # Add I2C slave library
 add_subdirectory(i2c_slave)
 
-
 # Add executable. Default name is the project name, version 0.1
 add_executable(OG_SMC main.cpp pico_hal.cpp smc.cpp smc_debug.cpp)
-
 
 pico_set_program_name(OG_SMC "OG_SMC")
 pico_set_program_version(OG_SMC "0.1")
@@ -57,8 +57,6 @@ target_link_libraries(OG_SMC
 target_include_directories(OG_SMC PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
 )
-
-
 
 # Add any user requested libraries
 target_link_libraries(OG_SMC

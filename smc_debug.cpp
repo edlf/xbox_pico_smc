@@ -6,7 +6,7 @@ namespace debug {
 void print_states(const state_struct& state) {
   printf("--------------- State info start ---------------\n");
   printf("standby_power     %d\n", state.standby_power);
-  printf("power             %d\n", state.power);
+  printf("power             %d\n", state.smi_power);
   printf("fan_control       %d\n", state.fan_control);
   printf("dvd_tray          %d\n", state.dvd_tray);
   printf("tray_eject        %d\n", state.tray_eject);
@@ -26,8 +26,8 @@ void print_state_changes(const state_struct& state, const state_struct& state_pr
   if (state.standby_power != state_previous.standby_power) {
     printf("standby_power     %02d -> %02d\n", state_previous.standby_power, state.standby_power);
   }
-  if (state.power != state_previous.power) {
-    printf("power             %02d -> %02d\n", state_previous.power, state.power);
+  if (state.smi_power != state_previous.smi_power) {
+    printf("power             %02d -> %02d\n", state_previous.smi_power, state.smi_power);
   }
   if (state.fan_control != state_previous.fan_control) {
     printf("fan_control       %02d -> %02d\n", state_previous.fan_control, state.fan_control);
@@ -65,7 +65,7 @@ void print_state_changes(const state_struct& state, const state_struct& state_pr
   if (state.update_eject_tray != state_previous.update_eject_tray) {
     printf("update_eject_tray %02d -> %02d\n", state_previous.update_eject_tray, state.update_eject_tray);
   }
-  printf("---------------- State changes end ----------------\n");
+  // printf("---------------- State changes end ----------------\n");
 }
 
 } // namespace SMC

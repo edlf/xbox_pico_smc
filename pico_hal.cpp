@@ -1,9 +1,9 @@
-#include <stdio.h>
 #include "hardware/i2c.h"
 #include "hardware/pwm.h"
 #include "hardware/watchdog.h"
 #include "i2c_slave/include/i2c_slave.h"
 #include "pico/stdlib.h"
+#include <stdio.h>
 
 #include "pico_hal.hpp"
 #include "pin_assignments.hpp"
@@ -57,11 +57,13 @@ void audio_clamp_off() {
   gpio_put(pins::AUDIO_CLAMP, 0);
 }
 
-void power_on_on() {
+void power_on_assert() {
+  printf("Assert POWER ON\n");
   gpio_put(pins::POWER_ON, 1);
 }
 
-void power_on_off() {
+void power_on_deassert() {
+  printf("Deassert POWER ON\n");
   gpio_put(pins::POWER_ON, 0);
 }
 
@@ -74,35 +76,36 @@ void dvd_eject_off() {
 }
 
 bool get_power_ok() {
-  bool a = gpio_get(pins::POWER_OK);
   return gpio_get(pins::POWER_OK);
 }
 
 // Gets video cable type
 uint8_t get_video_mode() {
   uint8_t video_mode = 0;
+  // Video mode is set as 0b0000_1110
   if (gpio_get(pins::VIDEO_MODE_0)) {
-    video_mode = video_mode | (1 << 0);
-  }
-  if (gpio_get(pins::VIDEO_MODE_1)) {
     video_mode = video_mode | (1 << 1);
   }
-  if (gpio_get(pins::VIDEO_MODE_2)) {
+  if (gpio_get(pins::VIDEO_MODE_1)) {
     video_mode = video_mode | (1 << 2);
+  }
+  if (gpio_get(pins::VIDEO_MODE_2)) {
+    video_mode = video_mode | (1 << 3);
   }
   return video_mode;
 }
 
 uint8_t get_tray_state() {
   uint8_t tray_state = 0;
-  if (gpio_get(pins::VIDEO_MODE_0)) {
-    tray_state = tray_state | (1 << 0);
+  // Tray state is set as 0b0111_0000
+  if (gpio_get(pins::TRAY_STATE_0)) {
+    tray_state = tray_state | (1 << 4);
   }
-  if (gpio_get(pins::VIDEO_MODE_1)) {
-    tray_state = tray_state | (1 << 1);
+  if (gpio_get(pins::TRAY_STATE_1)) {
+    tray_state = tray_state | (1 << 5);
   }
-  if (gpio_get(pins::VIDEO_MODE_2)) {
-    tray_state = tray_state | (1 << 2);
+  if (gpio_get(pins::TRAY_STATE_2)) {
+    tray_state = tray_state | (1 << 6);
   }
   return tray_state;
 }
@@ -179,6 +182,7 @@ void init() {
 
   gpio_set_function(pins::POWER_ON, GPIO_FUNC_SIO);
   gpio_set_dir(pins::POWER_ON, GPIO_OUT);
+
   gpio_set_function(pins::RTC_DUMP, GPIO_FUNC_SIO);
   gpio_set_dir(pins::RTC_DUMP, GPIO_OUT);
 
@@ -245,22 +249,22 @@ bool rebootCauseWatchdog() {
 }
 
 uint32_t disableInterrupts() {
-    uint32_t status;
-    __asm volatile ("mrs %0, PRIMASK" : "=r" (status)::);
-    __asm volatile ("cpsid i");
-    return status;
+  uint32_t status;
+  __asm volatile("mrs %0, PRIMASK" : "=r"(status)::);
+  __asm volatile("cpsid i");
+  return status;
 }
 
 void reenableInterrupts(uint32_t status) {
-  __asm volatile ("msr PRIMASK,%0"::"r" (status) : );
+  __asm volatile("msr PRIMASK,%0" ::"r"(status) :);
 }
 
 // TODO use sdk instead
 static uint64_t get_time(void) {
-    // Reading low latches the high value
-    uint32_t lo = timer_hw->timelr;
-    uint32_t hi = timer_hw->timehr;
-    return ((uint64_t) hi << 32u) | lo;
+  // Reading low latches the high value
+  uint32_t lo = timer_hw->timelr;
+  uint32_t hi = timer_hw->timehr;
+  return ((uint64_t)hi << 32u) | lo;
 }
 
 #define ALARM0_IRQ timer_hardware_alarm_get_irq_num(timer_hw, 0)
@@ -295,7 +299,7 @@ void timer0_init(uint32_t delay_us) {
 
   // Write the lower 32 bits of the target time to the alarm which
   // will arm it
-  timer_hw->alarm[alarm_no] = (uint32_t) target;
+  timer_hw->alarm[alarm_no] = (uint32_t)target;
 }
 
 void timer0_wait() {
@@ -332,7 +336,7 @@ void timer1_init(uint32_t delay_us) {
 
   // Write the lower 32 bits of the target time to the alarm which
   // will arm it
-  timer_hw->alarm[alarm_no] = (uint32_t) target;
+  timer_hw->alarm[alarm_no] = (uint32_t)target;
 }
 
 void timer1_wait() {
@@ -350,15 +354,6 @@ void timer1_disable() {
 }
 
 // I2C
-
-bool I2C_messageForSMC() {
-  return true;
-}
-
-bool I2C_isWrite() {
-  return true;
-}
-
 void setupI2C() {
   // 0x36
 }
@@ -374,4 +369,4 @@ void panic(const char* message) {
   }
 }
 
-}  // namespace pico_hal
+} // namespace pico_hal
