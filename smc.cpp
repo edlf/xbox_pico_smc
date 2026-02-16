@@ -80,6 +80,19 @@ uint8_t checkBitNo(const uint8_t bits, const uint8_t bit_no) {
   return ((bits) & (1 << (bit_no)));
 }
 
+void fireSystemInterrupt() {
+  /* Pulse SMI signal (RA4) low to signal system interrupt */
+  pico_hal::smi_pin_off();
+  sleep_ms(20);
+  pico_hal::smi_pin_on();
+}
+
+void configureConexantEncoder() {
+  constexpr size_t len = 2;
+  uint8_t config[len] = {0xBA, 0x3F};
+  i2c_write_burst_blocking(i2c0, 0x8A, config, len);
+}
+
 void gpio_callback(uint gpio, uint32_t events) {
   uint32_t int_status = pico_hal::disableInterrupts();
   // bit 3 - AV mode changed
@@ -301,7 +314,7 @@ void main_loop() {
 uint8_t update_power_standby() {
   // Done, untested, some port stuff missing
   switch (state.standby_power) {
-  case power_standby_state::initial:
+  case power_standby_state::initial: // State 0
     pico_hal::led_red_off();
     pico_hal::led_green_on();
     pico_hal::set_fan_off();
@@ -311,25 +324,22 @@ uint8_t update_power_standby() {
     state.standby_power = power_standby_state::read_av;
     break;
 
-  case power_standby_state::read_av:
+  case power_standby_state::read_av: // State 1
     update_video_mode();
     state.standby_power = power_standby_state::check_av_power_button;
     break;
 
-  case power_standby_state::check_av_power_button:
-    if (sensors.vmode == 0x0E) {
-      state.standby_power = power_standby_state::turn_on_power_no_av;
+  case power_standby_state::check_av_power_button: // State 2
+    // Check power button or AVIP port kiosk power on
+    update_pwr_sw();
+    if ((sensors.vmode != 0x0E) && (!checkStatusBit(power_change_requested))) {
+      state.standby_power = power_standby_state::check_eject_button;
     } else {
-      update_pwr_sw();
-      if (checkStatusBit(power_change_requested)) {
-        state.standby_power = power_standby_state::check_eject_button;
-      } else {
-        state.standby_power = power_standby_state::turn_on_power_no_av;
-      }
+      state.standby_power = power_standby_state::turn_on_power_no_av;
     }
     break;
 
-  case power_standby_state::turn_on_power_no_av:
+  case power_standby_state::turn_on_power_no_av: // State 3
     pico_hal::power_on_assert();
     pico_hal::set_fan_on();
     timers.power_timeout3 = 50;
@@ -337,7 +347,7 @@ uint8_t update_power_standby() {
     state.standby_power = power_standby_state::powered_up_wait_power_ok;
     break;
 
-  case power_standby_state::powered_up_wait_power_ok:
+  case power_standby_state::powered_up_wait_power_ok: // State 4
     pico_hal::petWatchdog();
     pico_hal::timer0_init(500);
 
@@ -352,7 +362,7 @@ uint8_t update_power_standby() {
     }
     break;
 
-  case power_standby_state::check_eject_button:
+  case power_standby_state::check_eject_button: // State 5
     update_eject_sw();
     if (checkStatusBit(eject_change_requested)) {
       state.standby_power = power_standby_state::turn_on_power_alternative;
@@ -361,14 +371,14 @@ uint8_t update_power_standby() {
     }
     break;
 
-  case power_standby_state::idle:
+  case power_standby_state::idle: // State 6
     update_LEDs();
     pico_hal::timer1_wait();
     state.standby_power = power_standby_state::read_av; // Loop back to AV reading
     return 0;
     break;
 
-  case power_standby_state::turn_on_power_alternative:
+  case power_standby_state::turn_on_power_alternative: // State 7
     flags.bitfield_DATA_73 |= 0x02; // Set eject flag
     pico_hal::power_on_assert();
     pico_hal::set_fan_on();
@@ -655,46 +665,46 @@ uint8_t update_SMI_and_power() {
       /* Power button pressed */
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_power_sw_pressed);
-      pico_hal::fireSystemInterrupt();
+      fireSystemInterrupt();
       state.smi_power = smi_power_state::start_power_off;
     } else if (checkStatusBit(eject_change_requested)) {
       /* Eject button pressed */
       clearStatusBit(eject_change_requested);
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_eject_sw_pressed);
-      pico_hal::fireSystemInterrupt();
+      fireSystemInterrupt();
       state.smi_power = smi_power_state::start_power_off;
     } else if (flags.bitfield_DATA_72 & 0x01) {
       /* AV cable detected */
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_power_sw_pressed);
-      pico_hal::fireSystemInterrupt();
+      fireSystemInterrupt();
       state.smi_power = smi_power_state::start_power_off;
     } else if (flags.bitfield_DATA_71 & 0x04) {
       /* System reset request */
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_dvd_tray1);
-      pico_hal::fireSystemInterrupt();
+      fireSystemInterrupt();
       state.smi_power = smi_power_state::case2;
     } else if (checkStatusBit(dvd_tray)) {
       /* DVD tray change */
       setInterruptReason(InterruptReason_dvd_tray0);
-      pico_hal::fireSystemInterrupt();
+      fireSystemInterrupt();
       state.smi_power = smi_power_state::case2;
     } else if (flags.bitfield_DATA_73 & 0x20) {
       /* Boot challenge event */
       setInterruptReason(InterruptReason_dvd_tray2);
-      pico_hal::fireSystemInterrupt();
+      fireSystemInterrupt();
       state.smi_power = smi_power_state::case2;
     } else if (checkStatusBit(video_mode_changed)) {
       /* Video mode changed */
       setInterruptReason(InterruptReason_av_mode_changed);
-      pico_hal::fireSystemInterrupt();
+      fireSystemInterrupt();
       state.smi_power = smi_power_state::case2;
     } else if (flags.bitfield_DATA_71 & 0x80) {
       /* No AV cable */
       setInterruptReason(InterruptReason_av_unplugged);
-      pico_hal::fireSystemInterrupt();
+      fireSystemInterrupt();
       state.smi_power = smi_power_state::case2;
     }
     break;
@@ -1515,12 +1525,12 @@ void update_PLL_SYSRESET() {
     }
 
     timers.fan_control_timeout1 = 1;
-    pico_hal::configureConexantEncoder();
+    configureConexantEncoder();
     pico_hal::liftSystemReset();
     flags.bitfield_DATA_73 |= 0x08; // Set initialization flag
 
     /* Wait for encoder communication */
-    busy_wait_ms(132); // Delay ~832 cycles
+    busy_wait_ms(132);
 
     // TODO: Send SMBus write command
 
@@ -1529,7 +1539,7 @@ void update_PLL_SYSRESET() {
 
   case pll_sysreset_state::warm_reset_2:
     pico_hal::liftSystemReset();
-    pico_hal::configureConexantEncoder();
+    configureConexantEncoder();
     flags.bitfield_DATA_73 |= 0x08; // Set initialization flag
 
     /* Wait for encoder communication */
@@ -1980,7 +1990,7 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
 
   case Command::SOFTWARE_INTERRUPT: // 0x18
     // Trigger SMI interrupt signal to BIOS
-    pico_hal::fireSystemInterrupt();
+    fireSystemInterrupt();
     if (data == 0x00) {
       // Clear the interrupt after delivery
       pico_hal::smi_pin_off();
@@ -2073,6 +2083,7 @@ void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
 }
 
 void globals_init() {
+  flags = {0};
   challenge = {0};
   something_with_cpu_temp = true;
 

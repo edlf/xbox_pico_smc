@@ -43,8 +43,6 @@ void set_fan_speed(uint16_t level);
 // Interface
 void assertSystemReset();
 void liftSystemReset();
-void configureConexantEncoder();
-void fireSystemInterrupt();
 void enableWatchdog();
 void petWatchdog();
 bool rebootCauseWatchdog();
@@ -59,8 +57,6 @@ void timer1_disable();
 
 // I2C
 bool read_byte(const uint8_t device, const uint8_t reg, uint8_t *out);
-bool smbus_reply(const uint8_t data);
-bool smbus_send_byte(const uint8_t device, const uint8_t data);
 void setupI2C();
 
 //

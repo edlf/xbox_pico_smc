@@ -25,19 +25,13 @@ void led_red_off() {
   gpio_put(pins::LED_RED, 0);
 }
 
-void system_reset_on() {
-  gpio_put(pins::SYSTEM_RESET, 1);
-}
-
-void system_reset_off() {
-  gpio_put(pins::SYSTEM_RESET, 0);
-}
-
 void PLL_on() {
+  printf("Assert PLL\n");
   gpio_put(pins::PLL_ENABLE, 1);
 }
 
 void PLL_off() {
+  printf("Deassert PLL\n");
   gpio_put(pins::PLL_ENABLE, 0);
 }
 
@@ -111,11 +105,13 @@ uint8_t get_tray_state() {
 }
 
 bool power_button_pressed() {
-  return gpio_get(pins::SW_POWER);
+  // High is not pressed
+  return !gpio_get(pins::SW_POWER);
 }
 
 bool eject_button_pressed() {
-  return gpio_get(pins::SW_EJECT);
+  // High is not pressed
+  return !gpio_get(pins::SW_EJECT);
 }
 
 void set_fan_on() {
@@ -136,14 +132,6 @@ bool read_byte(const uint8_t device, const uint8_t reg, uint8_t* out) {
     return true;
   }
 
-  return false;
-}
-
-bool smbus_reply(const uint8_t data) {
-  return false;
-}
-
-bool smbus_send_byte(const uint8_t device, const uint8_t data) {
   return false;
 }
 
@@ -218,22 +206,13 @@ void init() {
 }
 
 void assertSystemReset() {
-  system_reset_off();
+  printf("Assert reset\n");
+  gpio_put(pins::SYSTEM_RESET, 0);
 }
 
 void liftSystemReset() {
-  system_reset_on();
-}
-
-void fireSystemInterrupt() {
-  /* Pulse SMI signal (RA4) low to signal system interrupt */
-  smi_pin_off();
-  smi_pin_on();
-}
-
-void configureConexantEncoder() {
-  smbus_send_byte(0x8A, 0xBA);
-  smbus_send_byte(0x8A, 0x3F);
+  printf("Lift reset\n");
+  gpio_put(pins::SYSTEM_RESET, 1);
 }
 
 void enableWatchdog() {
