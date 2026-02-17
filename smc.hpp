@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include "smc_debug.hpp"
+#include "debug.hpp"
 #include "smc_types.hpp"
 
 // pico stuff

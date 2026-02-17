@@ -1,7 +1,6 @@
 #ifndef __SMC_TYPES__
 #define __SMC_TYPES__
 
-#include "smc_debug.hpp"
 #include <stdint.h>
 #include <stdio.h>
 

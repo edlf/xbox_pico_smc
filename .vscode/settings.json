@@ -43,5 +43,6 @@
         "Pico",
         "pinout",
         "smbus"
-    ]
+    ],
+    "files.eol": "\n"
 }

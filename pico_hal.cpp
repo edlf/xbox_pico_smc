@@ -7,8 +7,10 @@
 
 #include "pico_hal.hpp"
 #include "pin_assignments.hpp"
+#include "debug.hpp"
 
 namespace pico_hal {
+  
 void led_green_on() {
   gpio_put(pins::LED_GREEN, 1);
 }
@@ -26,12 +28,12 @@ void led_red_off() {
 }
 
 void PLL_on() {
-  printf("Assert PLL\n");
+  debug::print_message("GPIO: Assert PLL");
   gpio_put(pins::PLL_ENABLE, 1);
 }
 
 void PLL_off() {
-  printf("Deassert PLL\n");
+  debug::print_message("GPIO: Deassert PLL");
   gpio_put(pins::PLL_ENABLE, 0);
 }
 
@@ -52,12 +54,12 @@ void audio_clamp_off() {
 }
 
 void power_on_assert() {
-  printf("Assert POWER ON\n");
+  debug::print_message("GPIO: Assert POWER ON");
   gpio_put(pins::POWER_ON, 1);
 }
 
 void power_on_deassert() {
-  printf("Deassert POWER ON\n");
+  debug::print_message("GPIO: Deassert POWER ON");
   gpio_put(pins::POWER_ON, 0);
 }
 
@@ -126,17 +128,8 @@ void set_fan_speed(uint16_t level) {
   pwm_set_gpio_level(pins::FAN_PWM1, level);
 }
 
-bool read_byte(const uint8_t device, const uint8_t reg, uint8_t* out) {
-  if (out != nullptr) {
-    *out = 99;
-    return true;
-  }
-
-  return false;
-}
-
 void init() {
-  printf("Init GPIO\n");
+  debug::print_message("GPIO: Init");
   gpio_set_function(pins::LED_RED, GPIO_FUNC_SIO);
   gpio_set_dir(pins::LED_RED, GPIO_OUT);
   gpio_set_function(pins::LED_GREEN, GPIO_FUNC_SIO);
@@ -202,16 +195,17 @@ void init() {
   gpio_pull_up(pins::I2C_SDA);
   gpio_pull_up(pins::I2C_SCL);
 
+  debug::print_message("GPIO: I2C Init");
   i2c_init(i2c0, I2C_BAUDRATE);
 }
 
 void assertSystemReset() {
-  printf("Assert reset\n");
+  debug::print_message("GPIO: Assert reset");
   gpio_put(pins::SYSTEM_RESET, 0);
 }
 
 void liftSystemReset() {
-  printf("Lift reset\n");
+  debug::print_message("GPIO: Lift reset");
   gpio_put(pins::SYSTEM_RESET, 1);
 }
 
@@ -254,7 +248,7 @@ volatile bool timer0_fired;
 void timer0_callback() {
   timer0_disable();
 
-  // printf("timer0 fired\n");
+  // debug::print_message("timer0 fired");
   timer0_fired = true;
 }
 
@@ -291,7 +285,7 @@ bool timer1_fired;
 
 void timer1_callback() {
   timer1_disable();
-  // printf("timer1 fired\n");
+  // debug::print_message("timer1 fired");
   timer1_fired = true;
 }
 
@@ -340,7 +334,7 @@ void setupI2C() {
 void panic(const char* message) {
   timer0_disable();
   timer1_disable();
-  printf(message);
+  debug::print_critical(message);
   while (true) {
     gpio_put(pins::RP2040_LED, 1);
     sleep_ms(500);

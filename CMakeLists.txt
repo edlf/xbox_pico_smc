@@ -39,7 +39,7 @@ pico_sdk_init()
 add_subdirectory(i2c_slave)
 
 # Add executable. Default name is the project name, version 0.1
-add_executable(OG_SMC main.cpp pico_hal.cpp smc.cpp smc_debug.cpp)
+add_executable(OG_SMC utils.cpp debug.cpp main.cpp pico_hal.cpp smc.cpp)
 
 pico_set_program_name(OG_SMC "OG_SMC")
 pico_set_program_version(OG_SMC "0.1")

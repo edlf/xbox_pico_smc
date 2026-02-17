@@ -6,12 +6,13 @@
 #include <stdio.h>
 
 #include "smc.hpp"
+#include "debug.hpp"
 
 int main() {
   stdio_init_all();
-  printf("SMC Boot\n");
+  debug::print_welcome();
   if (watchdog_caused_reboot()) {
-    printf("Warning, rebooted by watchdog!\n");
+    debug::print_critical("Rebooted by watchdog");
   }
   SMC::main_loop();
 }

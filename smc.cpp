@@ -1,6 +1,7 @@
 #include "smc.hpp"
-#include "smc_debug.hpp"
 #include "smc_types.hpp"
+#include "debug.hpp"
+#include "utils.hpp"
 
 // Pico stuff
 #include "hardware/i2c.h"
@@ -68,18 +69,6 @@ uint8_t checkStatusBit(uint8_t status) {
   return flags.status & status;
 }
 
-void setBitNo(uint8_t& bits, const uint8_t bit_no) {
-  bits |= (1 << bit_no);
-}
-
-void clearBitNo(uint8_t& bits, const uint8_t bit_no) {
-  bits &= ~(1 << bit_no);
-}
-
-uint8_t checkBitNo(const uint8_t bits, const uint8_t bit_no) {
-  return ((bits) & (1 << (bit_no)));
-}
-
 void fireSystemInterrupt() {
   /* Pulse SMI signal (RA4) low to signal system interrupt */
   pico_hal::smi_pin_off();
@@ -102,11 +91,12 @@ void gpio_callback(uint gpio, uint32_t events) {
 
   switch (gpio) {
   case pins::SW_EJECT:
-    printf("isr eject sw\n");
+    debug::print_message("ISRL: eject sw\n");
     setInterruptReason(InterruptReason_eject_sw_pressed);
     break;
 
   case pins::POWER_OK:
+    // ISR got called, but somehow power good didnt stay enabled
     if (!pico_hal::get_power_ok()) {
       // Power supply failure - shutdown sequence
       pico_hal::assertSystemReset();
@@ -124,51 +114,52 @@ void gpio_callback(uint gpio, uint32_t events) {
       // Enter infinite loop waiting for watchdog timer to reset the system
       pico_hal::panic("POWER_OK timeout. Waiting for watchdog to reboot\n");
     }
-    printf("isr power OK\n");
+
+    debug::print_message("ISR: power OK");
     break;
 
   case pins::SW_POWER:
-    printf("isr power sw\n");
+    debug::print_message("ISR: power sw\n");
     setInterruptReason(InterruptReason_power_sw_pressed);
     break;
 
   case pins::VIDEO_MODE_0:
-    printf("isr vm0\n");
+    debug::print_message("ISR: vm0");
     update_video_mode();
     break;
 
   case pins::VIDEO_MODE_1:
-    printf("isr vm1\n");
+    debug::print_message("ISR: vm1");
     update_video_mode();
     break;
 
   case pins::VIDEO_MODE_2:
-    printf("isr vm2\n");
+    debug::print_message("ISR: vm2");
     update_video_mode();
     break;
 
   case pins::TRAY_STATE_0:
-    printf("isr ts0\n");
+    debug::print_message("ISR: ts0");
     setInterruptReason(InterruptReason_dvd_tray0);
     break;
 
   case pins::TRAY_STATE_1:
-    printf("isr ts1\n");
+    debug::print_message("ISR: ts1");
     setInterruptReason(InterruptReason_dvd_tray1);
     break;
 
   case pins::TRAY_STATE_2:
-    printf("isr ts2\n");
+    debug::print_message("ISR: ts2");
     setInterruptReason(InterruptReason_dvd_tray2);
     break;
 
   case pins::DVD_ACTIVE:
-    printf("isr dvd active\n");
+    debug::print_message("ISR: dvd active");
     break;
 
   default:
-    setInterruptReason(InterruptReason_unused);
-    printf("Unknown interrupt");
+    debug::print_warn("ISR: Unknown interrupt");
+    setInterruptReason(InterruptReason_unused);    
     break;
   }
 
@@ -189,6 +180,10 @@ void wait_for_isr() {
 void main_loop() {
   globals_init();
   pico_hal::init();
+
+  pico_hal::led_red_on();
+  pico_hal::led_green_on();
+
   gpio_set_irq_enabled_with_callback(pins::SW_POWER, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
   gpio_set_irq_enabled_with_callback(pins::SW_EJECT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
   gpio_set_irq_enabled_with_callback(pins::DVD_EJECT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
@@ -402,18 +397,18 @@ uint8_t update_power_standby() {
   case power_standby_state::powered_up_alt:
     clearStatusBit(eject_change_requested);
     setInterruptReason(InterruptReason_eject_sw_pressed);
-    setBitNo(flags.bitfield_DATA_6D, 5);
+    utils::setBitNo(flags.bitfield_DATA_6D, 5);
     isr();
     state.standby_power = power_standby_state::powered_up;
     break;
 
   case power_standby_state::powered_up:
-    setBitNo(flags.bitfield_DATA_70, 1);
-    clearBitNo(flags.bitfield_DATA_70, 2);
+    utils::setBitNo(flags.bitfield_DATA_70, 1);
+    utils::clearBitNo(flags.bitfield_DATA_70, 2);
     setStatusBit(first_execution);
     clearStatusBit(video_mode_changed);
-    clearBitNo(flags.bitfield_DATA_6F, 0);
-    clearBitNo(flags.bitfield_DATA_6F, 7);
+    utils::clearBitNo(flags.bitfield_DATA_6F, 0);
+    utils::clearBitNo(flags.bitfield_DATA_6F, 7);
     setStatusBit(audio_clamp_timer);
     state.video_mode = 0;
     state.dvd_tray = dvd_tray_state::initial;
@@ -950,7 +945,7 @@ void update_pwr_sw() {
   // Done, untested
   switch (state.pwr_sw) {
   case power_switch_state::wait_for_button_press:
-    // state.smi_power = smi_power_state::initial;
+    state.smi_power = smi_power_state::initial;
     if (pico_hal::power_button_pressed()) {
       state.pwr_sw = power_switch_state::debouncing;
     }
@@ -967,14 +962,14 @@ void update_pwr_sw() {
     break;
 
   case power_switch_state::wait_for_button_release:
-    // state.smi_power = smi_power_state::case11;
+    state.smi_power = smi_power_state::case11;
     if (!pico_hal::power_button_pressed()) {
       state.pwr_sw = power_switch_state::release_debounce;
     }
     break;
 
   case power_switch_state::release_debounce:
-    // state.smi_power = smi_power_state::going_to_reset;
+    state.smi_power = smi_power_state::going_to_reset;
     if (pico_hal::power_button_pressed()) {
       state.pwr_sw = power_switch_state::wait_for_button_release;
     } else {
@@ -1203,20 +1198,20 @@ void update_dvd_tray() {
   case dvd_tray_state::state4:
     sensors.tray_status = sensors.tray_status_raw;
     if (sensors.tray_status_raw == 0x30) {
-      if (checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
-        setBitNo(flags.bitfield_DATA_71, 2);
+      if (utils::checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
+        utils::setBitNo(flags.bitfield_DATA_71, 2);
       }
     } else if (sensors.tray_status_raw == 0) {
-      if (checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
-        setBitNo(flags.bitfield_DATA_73, 5);
+      if (utils::checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
+        utils::setBitNo(flags.bitfield_DATA_73, 5);
       }
     } else {
       if ((sensors.tray_status_raw != 0x60) && (sensors.tray_status_raw != 0x40)) {
         state.dvd_tray = dvd_tray_state::state2;
-        setBitNo(flags.bitfield_DATA_72, 4);
+        utils::setBitNo(flags.bitfield_DATA_72, 4);
         return;
       }
-      if (checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
+      if (utils::checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
         setStatusBit(InterruptReason_eject_sw_pressed);
       }
     }
@@ -1241,23 +1236,24 @@ void update_LEDs() {
       return;
     }
 
-    if (checkBitNo(flags.bitfield_DATA_71, 6)) {
+    if (utils::checkBitNo(flags.bitfield_DATA_71, 6)) {
       // AV cable missing
       state.leds = led_state::quick_green_orange;
       return;
     }
 
-    if (checkBitNo(flags.bitfield_DATA_70, 3)) {
+    if (utils::checkBitNo(flags.bitfield_DATA_70, 3)) {
       state.leds = led_state::off;
       return;
     }
 
-    if (checkBitNo(flags.bitfield_DATA_70, 2)) {
+    if (utils::checkBitNo(flags.bitfield_DATA_70, 2)) {
       state.leds = led_state::manual_control;
       return;
     }
 
-    if (checkBitNo(flags.bitfield_DATA_6F, 5)) {
+    // DVD eject in progress?
+    if (utils::checkBitNo(flags.bitfield_DATA_6F, 5)) {
       state.leds = led_state::quick_green_blink;
       return;
     }
@@ -1311,12 +1307,12 @@ void update_LEDs() {
 
   case led_state::set_gpios: // 7
     // Actually set leds according to patterns
-    if (checkBitNo(leds.red_phases, leds.state_counter)) {
+    if (utils::checkBitNo(leds.red_phases, leds.state_counter)) {
       pico_hal::led_red_on();
     } else {
       pico_hal::led_red_off();
     }
-    if (checkBitNo(leds.green_phases, leds.state_counter)) {
+    if (utils::checkBitNo(leds.green_phases, leds.state_counter)) {
       pico_hal::led_green_on();
     } else {
       pico_hal::led_green_off();
@@ -1331,7 +1327,7 @@ void update_LEDs() {
     break;
 
   case led_state::reset_phase_counter: // 8
-    leds.state_counter = 3;
+    leds.state_counter = 3; // ? gets overwritten by the initial state with 6...
     state.leds = led_state::initial;
     break;
 
@@ -1354,16 +1350,16 @@ void update_audio_clamp() {
   case audio_state::clamped:
     // Audio clamped
     pico_hal::audio_clamp_on();
-    clearBitNo(flags.bitfield_DATA_6F, 0);
+    utils::clearBitNo(flags.bitfield_DATA_6F, 0);
     timers.audio_clamp_timeout = 44;
 
     // Cable missing, keep audio clamped
-    if (checkBitNo(flags.bitfield_DATA_71, 6)) {
+    if (utils::checkBitNo(flags.bitfield_DATA_71, 6)) {
       return;
     }
 
     // Check if clamp off was requested
-    if (checkBitNo(flags.bitfield_DATA_6F, 7)) {
+    if (utils::checkBitNo(flags.bitfield_DATA_6F, 7)) {
       if (!checkStatusBit(audio_clamp_timer)) {
         return;
       }
@@ -1377,8 +1373,8 @@ void update_audio_clamp() {
     // Audio clamped timer tick
     clearStatusBit(audio_clamp_timer);
 
-    if (!checkBitNo(flags.bitfield_DATA_71, 6) && !checkBitNo(flags.bitfield_DATA_6F, 0) && !checkBitNo(flags.bitfield_DATA_6F, 7)) {
-      if (!checkBitNo(flags.bitfield_DATA_6F, 7)) {
+    if (!utils::checkBitNo(flags.bitfield_DATA_71, 6) && !utils::checkBitNo(flags.bitfield_DATA_6F, 0) && !utils::checkBitNo(flags.bitfield_DATA_6F, 7)) {
+      if (!utils::checkBitNo(flags.bitfield_DATA_6F, 7)) {
         timers.audio_clamp_timeout--;
         if (timers.audio_clamp_timeout != 0) {
           return;
@@ -1394,10 +1390,10 @@ void update_audio_clamp() {
   case audio_state::unclamped:
     // Audio unclamped
     pico_hal::audio_clamp_off();
-    clearBitNo(flags.bitfield_DATA_6F, 7);
+    utils::clearBitNo(flags.bitfield_DATA_6F, 7);
     clearStatusBit(audio_clamp_timer);
 
-    if (checkStatusBit(prepare_for_shutdown) && !checkBitNo(flags.bitfield_DATA_6F, 0) && !checkBitNo(flags.bitfield_DATA_71, 6)) {
+    if (checkStatusBit(prepare_for_shutdown) && !utils::checkBitNo(flags.bitfield_DATA_6F, 0) && !utils::checkBitNo(flags.bitfield_DATA_71, 6)) {
       return;
     }
     state.audio_clamp = audio_state::clamped;
@@ -1547,7 +1543,7 @@ void update_eject_tray() {
     timers.eject_timeout = 5;
 
     // Check if eject signal is set
-    if (checkBitNo(flags.bitfield_DATA_72, 5) != 0) {
+    if (utils::checkBitNo(flags.bitfield_DATA_72, 5) != 0) {
       state.update_eject_tray = update_eject_tray_state::tick_timer;
     }
     break;
@@ -1560,7 +1556,7 @@ void update_eject_tray() {
     break;
 
   case update_eject_tray_state::release_eject:
-    clearBitNo(flags.bitfield_DATA_72, 5);
+    utils::clearBitNo(flags.bitfield_DATA_72, 5);
     pico_hal::dvd_eject_on();
     state.update_eject_tray = update_eject_tray_state::initial;
     break;
@@ -1572,7 +1568,6 @@ void update_eject_tray() {
 }
 
 void update_dvd_tray_eject() {
-  // printf("update_dvd_tray_eject\n");
   /* Handle tray eject mechanism - manages DVD tray eject/inject operations
    * States: 0=check eject conditions, 1=wait for shutdown signal */
 
@@ -1669,9 +1664,9 @@ void update_dvd_tray3() {
   switch (state.dvd_tray_3) {
   case update_dvd_tray3::initial:
     timers.dvd_tray_timeout = 0xFF;
-    clearBitNo(flags.bitfield_DATA_6F, 5);
+    utils::clearBitNo(flags.bitfield_DATA_6F, 5);
 
-    if (checkBitNo(flags.bitfield_DATA_72, 7)) {
+    if (utils::checkBitNo(flags.bitfield_DATA_72, 7)) {
       state.dvd_tray_3 = update_dvd_tray3::eject;
     } else {
       if (!(sensors.tray_status == 0x70 ||  // Eject state
@@ -1685,8 +1680,8 @@ void update_dvd_tray3() {
     break;
 
   case update_dvd_tray3::wait:
-    setBitNo(flags.bitfield_DATA_6F, 5);
-    clearBitNo(flags.bitfield_DATA_72, 7);
+    utils::setBitNo(flags.bitfield_DATA_6F, 5);
+    utils::clearBitNo(flags.bitfield_DATA_72, 7);
 
     // Check if tray reached a stable position
     if (sensors.tray_status == 0x10 || // Stable position 1
@@ -1697,15 +1692,15 @@ void update_dvd_tray3() {
     break;
 
   case update_dvd_tray3::eject:
-    setBitNo(flags.bitfield_DATA_6F, 5);
+    utils::setBitNo(flags.bitfield_DATA_6F, 5);
 
     /* Check if we should exit this state based on eject flag */
-    if (!checkBitNo(flags.bitfield_DATA_73, 1)) {
+    if (!utils::checkBitNo(flags.bitfield_DATA_73, 1)) {
       /* Eject flag not set - check specific tray positions */
       if (sensors.tray_status == 0x50) {
         /* Tray fully ejected */
         state.dvd_tray_3 = update_dvd_tray3::initial;
-        clearBitNo(flags.bitfield_DATA_73, 1);
+        utils::clearBitNo(flags.bitfield_DATA_73, 1);
         return;
       }
     }
@@ -1714,13 +1709,13 @@ void update_dvd_tray3() {
     if (sensors.tray_status == 0x30 || // Fully inserted
         sensors.tray_status == 0x20 || // Position 2
         sensors.tray_status == 0x10) { // Position 1
-      clearBitNo(flags.bitfield_DATA_73, 1);
+      utils::clearBitNo(flags.bitfield_DATA_73, 1);
       state.dvd_tray_3 = update_dvd_tray3::wait;
       return;
     }
 
     // Check if we should wait on timeout
-    if (checkBitNo(flags.bitfield_DATA_72, 6)) {
+    if (utils::checkBitNo(flags.bitfield_DATA_72, 6)) {
       if (--timers.dvd_tray_timeout == 0) {
         state.dvd_tray_3 = update_dvd_tray3::wait;
         return;
@@ -1940,9 +1935,9 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
   case Command::OVERRIDE_RESET_ON_TRAY_OPEN: // 0x19
     // data: 0 = reset on tray open, non-zero = don't reset
     if (data == 0x00) {
-      clearBitNo(flags.bitfield_DATA_71, 0); // Allow reset on tray open
+      utils::clearBitNo(flags.bitfield_DATA_71, 0); // Allow reset on tray open
     } else {
-      setBitNo(flags.bitfield_DATA_71, 0); // Override reset on tray open
+      utils::setBitNo(flags.bitfield_DATA_71, 0); // Override reset on tray open
     }
     break;
 
@@ -2099,13 +2094,16 @@ void set_fan_speed() {
 void read_temperatures() {
   // Function only valid for 1.0-1.4
 
-  // CPU
-  if (pico_hal::read_byte(I2C_TEMP_SENSOR_ADDRESS, 0x01, &(sensors.CPU_temperature))) {
-    sensors.CPU_temperature_previous = sensors.CPU_temperature;
-  }
+  // TODO: CPU
+  sensors.CPU_temperature = 55;
+  sensors.CPU_temperature_previous = sensors.CPU_temperature;
+  sensors.board_temperature = 55;
+  // if (i2c_read(I2C_TEMP_SENSOR_ADDRESS, 0x01, &(sensors.CPU_temperature))) {
+  //   sensors.CPU_temperature_previous = sensors.CPU_temperature;
+  // }
 
   // Board, near MCPX for 1.0-1.4
-  pico_hal::read_byte(I2C_TEMP_SENSOR_ADDRESS, 0x02, &(sensors.board_temperature));
+  // i2c_read(I2C_TEMP_SENSOR_ADDRESS, 0x02, &(sensors.board_temperature));
 }
 
 void boot_challenge_compute() {

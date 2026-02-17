@@ -5,7 +5,7 @@
 |  1  | !MCLR     |         | SMC Reset      | Input  | Brown out triggers this | RUN             |
 |  2  | RA0       | PORT A  | Red Led        | Output | buffered                | GPIO2           |
 |  3  | RA1       | PORT A  | Green Led      | Output | buffered                | GPIO3           |
-|  4  | RA2       | PORT A  | Sys reset      | Output | has 10k pull up         | GPIO4           |
+|  4  | !RA2      | PORT A  | Sys reset      | Output | has 10k pull up         | GPIO4           |
 |  5  | RA3       | PORT A  | Eject switch   | Input  | has 10k pull up         | GPIO5           |
 |  6  | RA4/T0CKI | PORT A  | SMI*           | Output | has 10k pull up         | GPIO6           |
 |  7  | RA5       | PORT A  | DVD Eject      | Output | has 1k pull up          | GPIO7           |

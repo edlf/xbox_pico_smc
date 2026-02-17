@@ -56,7 +56,6 @@ void timer1_wait();
 void timer1_disable();
 
 // I2C
-bool read_byte(const uint8_t device, const uint8_t reg, uint8_t *out);
 void setupI2C();
 
 //
