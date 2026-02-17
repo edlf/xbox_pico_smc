@@ -379,7 +379,7 @@ uint8_t update_power_standby() {
     break;
 
   case power_standby_state::turn_on_power_alternative: // State 7
-    flags.bitfield_DATA_73 |= 0x02; // Set eject flag
+    flags.bitfield_DATA_73 |= 0x02;                    // Set eject flag
     pico_hal::power_on_assert();
     pico_hal::set_fan_on();
     timers.power_timeout3 = 0x32; // 50 cycles
@@ -1232,10 +1232,8 @@ void update_dvd_tray() {
 
 void update_LEDs() {
   // Done, untested
-  bool skip = false;
-
   switch (state.leds) {
-  case led_state::initial:
+  case led_state::initial: // 0
     leds.state_counter = 6;
 
     if (checkStatusBit(overheated)) {
@@ -1267,42 +1265,42 @@ void update_LEDs() {
     state.leds = led_state::solid_green;
     break;
 
-  case led_state::overheat:
+  case led_state::overheat: // 1
     // System overheated - slow blinking
     leds.red_phases = 3;
     leds.green_phases = 3;
     state.leds = led_state::tick_update;
     break;
 
-  case led_state::manual_control:
+  case led_state::manual_control: // 2
     // Manual control mode
     leds.red_phases = leds.red_phases_manual;
     leds.green_phases = leds.green_phases_manual;
     state.leds = led_state::tick_update;
     break;
 
-  case led_state::quick_green_blink:
+  case led_state::quick_green_blink: // 3
     // Quick green blinking
     leds.red_phases = 0;
     leds.green_phases = 5;
     state.leds = led_state::tick_update;
     break;
 
-  case led_state::solid_green:
+  case led_state::solid_green: // 4
     // Solid green
     leds.red_phases = 0;
     leds.green_phases = 0xF;
     state.leds = led_state::tick_update;
     break;
 
-  case led_state::off:
+  case led_state::off: // 5
     // Off
     leds.red_phases = 0;
     leds.green_phases = 0;
     state.leds = led_state::tick_update;
     break;
 
-  case led_state::tick_update:
+  case led_state::tick_update: // 6
     // Counter tick
     leds.state_counter--;
     if (leds.state_counter != 0) {
@@ -1311,91 +1309,33 @@ void update_LEDs() {
     state.leds = led_state::set_gpios;
     break;
 
-  case led_state::set_gpios:
+  case led_state::set_gpios: // 7
     // Actually set leds according to patterns
-    skip = false;
-    if (leds.state_counter != 3) {
-      if (leds.state_counter == 2) {
-        if ((leds.red_phases & 4) != 0) {
-          pico_hal::led_red_on();
-        }
-        if ((leds.red_phases & 4) == 0) {
-          pico_hal::led_red_off();
-        }
-        if ((leds.green_phases & 4) != 0) {
-          pico_hal::led_green_on();
-        }
-        if ((leds.green_phases & 4) == 0) {
-          pico_hal::led_green_off();
-        }
-        skip = true;
-      }
-
-      if (leds.state_counter == 1) {
-        if ((leds.red_phases & 2) != 0) {
-          pico_hal::led_red_on();
-        }
-        if ((leds.red_phases & 2) == 0) {
-          pico_hal::led_red_off();
-        }
-        if ((leds.green_phases & 2) != 0) {
-          pico_hal::led_green_on();
-        }
-        if ((leds.green_phases & 2) == 0) {
-          pico_hal::led_green_off();
-        }
-        skip = true;
-      }
-
-      if (leds.state_counter == 0) {
-        if ((leds.red_phases & 1) != 0) {
-          pico_hal::led_red_on();
-        }
-        if ((leds.red_phases & 1) == 0) {
-          pico_hal::led_red_off();
-        }
-        if ((leds.green_phases & 1) != 0) {
-          pico_hal::led_green_on();
-        }
-        if ((leds.green_phases & 1) == 0) {
-          pico_hal::led_green_off();
-        }
-        skip = true;
-      }
+    if (checkBitNo(leds.red_phases, leds.state_counter)) {
+      pico_hal::led_red_on();
+    } else {
+      pico_hal::led_red_off();
+    }
+    if (checkBitNo(leds.green_phases, leds.state_counter)) {
+      pico_hal::led_green_on();
+    } else {
+      pico_hal::led_green_off();
     }
 
-    if (!skip) {
-      if ((leds.red_phases & 8) != 0) {
-        pico_hal::led_red_on();
-      }
-
-      if ((leds.red_phases & 8) == 0) {
-        pico_hal::led_red_off();
-      }
-
-      if ((leds.green_phases & 8) != 0) {
-        pico_hal::led_green_on();
-      }
-
-      if ((leds.green_phases & 8) == 0) {
-        pico_hal::led_green_off();
-      }
-    }
-
-    leds.state_counter = leds.state_counter + -1;
+    leds.state_counter--;
     if (leds.state_counter == -1) {
       state.leds = led_state::reset_phase_counter;
-      return;
+    } else {
+      state.leds = led_state::initial;
     }
-    state.leds = led_state::initial;
     break;
 
-  case led_state::reset_phase_counter:
+  case led_state::reset_phase_counter: // 8
     leds.state_counter = 3;
     state.leds = led_state::initial;
     break;
 
-  case led_state::quick_green_orange:
+  case led_state::quick_green_orange: // 9
     leds.red_phases = 5;
     leds.green_phases = 0xF;
     state.leds = led_state::tick_update;
