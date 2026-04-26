@@ -13,6 +13,8 @@
 
 namespace SMC {
 
+uint8_t previous_video_mode;
+
 uint8_t failure_count;
 uint8_t rtc_time;
 uint8_t version_byte;
@@ -194,6 +196,11 @@ void init_irqs() {
 void main_loop() {
   globals_init();
   pico_hal::init();
+
+  // Fail safes
+  pico_hal::assertSystemReset();
+  pico_hal::power_on_deassert(); // Shut off system if we rebooted
+
   init_irqs();
   pico_hal::set_fan_off();
   pico_hal::audio_clamp_on();
@@ -1017,6 +1024,11 @@ void update_eject_sw() {
 
 void update_video_mode() {
   sensors.vmode_raw = pico_hal::get_video_mode();
+
+  if (previous_video_mode != sensors.vmode_raw) {
+    debug::print_video_mode(sensors.vmode_raw);
+    previous_video_mode = sensors.vmode_raw;
+  }
 
   if (sensors.vmode_raw != sensors.vmode) {
     sensors.vmode = sensors.vmode_raw;
@@ -2088,7 +2100,7 @@ void set_fan_speed() {
   if (sensors.fan_speed == 0) {
     pico_hal::set_fan_off();
   } else {
-    pico_hal::set_fan_speed(pwm_duty[sensors.fan_speed]);
+    pico_hal::set_fan_speed(sensors.fan_speed);
     pico_hal::set_fan_on();
   }
 }

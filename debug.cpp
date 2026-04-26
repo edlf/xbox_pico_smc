@@ -133,4 +133,36 @@ void print_state_changes(const SMC::state_struct& state, const SMC::state_struct
   // printf("---------------- State changes end ----------------\n");
 }
 
+void print_video_mode(const uint8_t vm) {
+  uint8_t temp = (vm >> 1);
+  switch (temp) {
+    case 0:
+      print_message("Advanced SCART Cable");
+      break;
+    case 1:
+      print_message("High Definition AV Pack");
+      break;
+    case 2:
+      print_message("VGA / progressive RGB");
+      break;
+    case 3:
+      print_message("RF Adapter");
+      break;
+    case 4:
+      print_message("Advanced AV Pack");
+      break;
+    case 5:
+      print_message("Unknown mode 5");
+      break;
+    case 6:
+      print_message("Standard AV Cable");
+      break;
+    case 7:
+      print_message("No cable connected");
+      break;
+    default:
+      print_warn("Invalid video mode");
+  }
+}
+
 } // namespace debug

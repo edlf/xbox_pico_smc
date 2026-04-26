@@ -39,7 +39,7 @@ uint8_t get_video_mode();
 // FAN
 void set_fan_on();
 void set_fan_off();
-void set_fan_speed(uint16_t level);
+void set_fan_speed(uint8_t level);
 
 // Interface
 void assertSystemReset();

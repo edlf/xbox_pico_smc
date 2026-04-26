@@ -11,7 +11,12 @@
 #include "debug.hpp"
 
 namespace pico_hal {
-  
+
+// FAN PWM
+pwm_config pwm_cfg;
+uint pwm_slice;
+uint pwm_channel;
+
 void led_green_on() {
   gpio_put(pins::LED_GREEN, 1);
 }
@@ -79,6 +84,7 @@ bool get_power_ok() {
 // Gets video cable type
 uint8_t get_video_mode() {
   uint8_t video_mode = 0;
+
   // Video mode is set as 0b0000_1110
   if (gpio_get(pins::VIDEO_MODE_0)) {
     video_mode = video_mode | (1 << 1);
@@ -89,6 +95,8 @@ uint8_t get_video_mode() {
   if (gpio_get(pins::VIDEO_MODE_2)) {
     video_mode = video_mode | (1 << 3);
   }
+
+  // debug::print_message("GPIO: Get video mode " + std::to_string(video_mode));
   return video_mode;
 }
 
@@ -104,6 +112,8 @@ uint8_t get_tray_state() {
   if (gpio_get(pins::TRAY_STATE_2)) {
     tray_state = tray_state | (1 << 6);
   }
+
+  // debug::print_message("GPIO: Get tray state " + std::to_string(tray_state));
   return tray_state;
 }
 
@@ -118,19 +128,25 @@ bool eject_button_pressed() {
 }
 
 void set_fan_on() {
-  // TODO
+  debug::print_message("GPIO: Fan ON");
+  pwm_set_chan_level(pwm_slice, PWM_CHAN_A, 20);
+  pwm_set_enabled(pwm_slice, true);
 }
 
 void set_fan_off() {
-  // TODO
+  debug::print_message("GPIO: Fan OFF");
+  pwm_set_chan_level(pwm_slice, PWM_CHAN_A, 0);
+  pwm_set_enabled(pwm_slice, false);
 }
 
-void set_fan_speed(uint16_t level) {
+void set_fan_speed(uint8_t level) {
+  debug::print_message("GPIO: Set Fan level: " + std::to_string(level));
   pwm_set_gpio_level(pins::FAN_PWM1, level);
 }
 
 void init() {
   debug::print_message("GPIO: Init");
+
   gpio_set_function(pins::LED_RED, GPIO_FUNC_SIO);
   gpio_set_dir(pins::LED_RED, GPIO_OUT);
   gpio_set_function(pins::LED_GREEN, GPIO_FUNC_SIO);
@@ -138,8 +154,10 @@ void init() {
 
   gpio_set_function(pins::SW_POWER, GPIO_FUNC_SIO);
   gpio_set_dir(pins::SW_POWER, GPIO_IN);
+  gpio_pull_up(pins::SW_POWER);
   gpio_set_function(pins::SW_EJECT, GPIO_FUNC_SIO);
   gpio_set_dir(pins::SW_EJECT, GPIO_IN);
+  gpio_pull_up(pins::SW_EJECT);
 
   gpio_set_function(pins::SYSTEM_RESET, GPIO_FUNC_SIO);
   gpio_set_dir(pins::SYSTEM_RESET, GPIO_OUT);
@@ -158,9 +176,6 @@ void init() {
 
   gpio_set_function(pins::FAN_PWM1, GPIO_FUNC_PWM);
   gpio_set_dir(pins::FAN_PWM1, GPIO_OUT);
-  // uint slice = pwm_gpio_to_slice_num(pins::FAN_PWM1);
-  // uint channel = pwm_gpio_to_channel(pins::FAN_PWM1);
-  // pwm_set_enabled(slice, true);
 
   gpio_set_function(pins::POWER_ON, GPIO_FUNC_SIO);
   gpio_set_dir(pins::POWER_ON, GPIO_OUT);
@@ -173,17 +188,23 @@ void init() {
 
   gpio_set_function(pins::VIDEO_MODE_0, GPIO_FUNC_SIO);
   gpio_set_dir(pins::VIDEO_MODE_0, GPIO_IN);
+  gpio_pull_up(pins::VIDEO_MODE_0);
   gpio_set_function(pins::VIDEO_MODE_1, GPIO_FUNC_SIO);
   gpio_set_dir(pins::VIDEO_MODE_1, GPIO_IN);
+  gpio_pull_up(pins::VIDEO_MODE_1);
   gpio_set_function(pins::VIDEO_MODE_2, GPIO_FUNC_SIO);
   gpio_set_dir(pins::VIDEO_MODE_2, GPIO_IN);
+  gpio_pull_up(pins::VIDEO_MODE_2);
 
   gpio_set_function(pins::TRAY_STATE_0, GPIO_FUNC_SIO);
   gpio_set_dir(pins::TRAY_STATE_0, GPIO_IN);
+  gpio_pull_up(pins::TRAY_STATE_0);
   gpio_set_function(pins::TRAY_STATE_1, GPIO_FUNC_SIO);
   gpio_set_dir(pins::TRAY_STATE_1, GPIO_IN);
+  gpio_pull_up(pins::TRAY_STATE_1);
   gpio_set_function(pins::TRAY_STATE_2, GPIO_FUNC_SIO);
   gpio_set_dir(pins::TRAY_STATE_2, GPIO_IN);
+  gpio_pull_up(pins::TRAY_STATE_2);
 
   gpio_set_function(pins::DVD_ACTIVE, GPIO_FUNC_SIO);
   gpio_set_dir(pins::DVD_ACTIVE, GPIO_IN);
@@ -195,6 +216,15 @@ void init() {
   gpio_set_function(pins::I2C_SCL, GPIO_FUNC_I2C);
   gpio_pull_up(pins::I2C_SDA);
   gpio_pull_up(pins::I2C_SCL);
+
+  debug::print_message("GPIO: PWM Init");
+  pwm_slice = pwm_gpio_to_slice_num(pins::FAN_PWM1);
+  pwm_channel = pwm_gpio_to_channel(pins::FAN_PWM1);
+  pwm_init(pwm_slice, &pwm_cfg, true);
+  pwm_set_wrap(pwm_slice, 50);
+  pwm_set_chan_level(pwm_slice, PWM_CHAN_A, 0);
+  pwm_set_enabled(pwm_slice, true);
+
 
   debug::print_message("GPIO: I2C Init");
   i2c_init(i2c0, I2C_BAUDRATE);
@@ -338,6 +368,10 @@ void panic(const std::string message) {
   (void) save_and_disable_interrupts();
   timer0_disable();
   timer1_disable();
+
+  // Kill power to system
+  assertSystemReset();
+  power_on_deassert();
 
   debug::print_critical(message + " Waiting for watchdog to reboot");
 
