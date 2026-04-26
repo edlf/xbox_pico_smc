@@ -1,7 +1,7 @@
 #ifndef __SMC__
 #define __SMC__
 
-#include <stdint.h>
+#include <cstdint>
 #include <stdio.h>
 #include "debug.hpp"
 #include "smc_types.hpp"
@@ -15,6 +15,7 @@ void main_loop();
 void globals_init();
 void port_init();
 
+void init_irqs();
 void isr();
 void gpio_callback(uint gpio, uint32_t events);
 

@@ -1,7 +1,7 @@
 #ifndef __SMC_TYPES__
 #define __SMC_TYPES__
 
-#include <stdint.h>
+#include <cstdint>
 #include <stdio.h>
 
 constexpr uint8_t MAX_BOARD_TEMP = 75;

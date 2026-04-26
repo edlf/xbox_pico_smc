@@ -91,7 +91,7 @@ void gpio_callback(uint gpio, uint32_t events) {
 
   switch (gpio) {
   case pins::SW_EJECT:
-    debug::print_message("ISRL: eject sw\n");
+    debug::print_message("ISRL: Eject switch");
     setInterruptReason(InterruptReason_eject_sw_pressed);
     break;
 
@@ -112,14 +112,14 @@ void gpio_callback(uint gpio, uint32_t events) {
       resetStatus();
 
       // Enter infinite loop waiting for watchdog timer to reset the system
-      pico_hal::panic("POWER_OK timeout. Waiting for watchdog to reboot\n");
+      pico_hal::panic("POWER_OK timeout");
     }
 
     debug::print_message("ISR: power OK");
     break;
 
   case pins::SW_POWER:
-    debug::print_message("ISR: power sw\n");
+    debug::print_message("ISR: Power switch");
     setInterruptReason(InterruptReason_power_sw_pressed);
     break;
 
@@ -177,13 +177,8 @@ void wait_for_isr() {
   } while ((flags.interrupt_reason & 1) == 0);
 }
 
-void main_loop() {
-  globals_init();
-  pico_hal::init();
-
-  pico_hal::led_red_on();
-  pico_hal::led_green_on();
-
+void init_irqs() {
+  debug::print_message("MAIN: Set gpio IRQs");
   gpio_set_irq_enabled_with_callback(pins::SW_POWER, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
   gpio_set_irq_enabled_with_callback(pins::SW_EJECT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
   gpio_set_irq_enabled_with_callback(pins::DVD_EJECT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
@@ -194,11 +189,18 @@ void main_loop() {
   gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_0, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
   gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_1, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
   gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_2, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+}
+
+void main_loop() {
+  globals_init();
+  pico_hal::init();
+  init_irqs();
   pico_hal::set_fan_off();
   pico_hal::audio_clamp_on();
 
   gpio_put(pins::RP2040_LED, 1);
-
+  
+  debug::print_message("MAIN: Set I2C interrupt");
   i2c_slave_init(i2c0, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
 
   /* Initialize state variables */
@@ -263,7 +265,7 @@ void main_loop() {
           break;
         }
 
-        busy_wait_ms(390);
+        busy_wait_ms(40);
         wait_for_isr();
         pico_hal::petWatchdog();
       }
@@ -298,9 +300,9 @@ void main_loop() {
       timers.power_timeout3 = 0;
     }
 
-    busy_wait_ms(390);
+    busy_wait_ms(40);
 
-    debug::print_state_changes(state, state_previous);
+    // debug::print_state_changes(state, state_previous);
     pico_hal::petWatchdog();
     loop_count++;
   } while (true);
@@ -350,7 +352,7 @@ uint8_t update_power_standby() {
       state.standby_power = power_standby_state::powered_up;
     } else {
       if (--timers.power_timeout3 == 0) {
-        pico_hal::panic("POWER_OK timeout. Waiting for watchdog to reboot\n");
+        pico_hal::panic("POWER_OK timeout");
       } else {
         pico_hal::timer1_wait();
       }
@@ -388,7 +390,7 @@ uint8_t update_power_standby() {
     if (pico_hal::get_power_ok()) {
       state.standby_power = power_standby_state::powered_up_alt;
     } else if (--timers.power_timeout3 == 0) {
-      pico_hal::panic("POWER_OK timeout. Waiting for watchdog to reboot\n");
+      pico_hal::panic("POWER_OK timeout");
     } else {
       pico_hal::timer1_wait();
     }
@@ -626,7 +628,7 @@ void update_fan_temp() {
 }
 
 uint8_t update_SMI_and_power() {
-  // printf("update_SMI_and_power\n");
+  debug::print_message("update_SMI_and_power");
   // Manages power interrupts and SMI signaling when Xbox is powered up
 
   // State starts at 9 when powered on, and stops at 9 when powered off

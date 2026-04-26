@@ -1,7 +1,7 @@
 #ifndef __DEBUG__
 #define __DEBUG__
 
-#include <stdint.h>
+#include <cstdint>
 #include <stdio.h>
 #include <string>
 #include "smc_types.hpp"

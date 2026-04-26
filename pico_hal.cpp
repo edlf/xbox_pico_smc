@@ -4,6 +4,7 @@
 #include "i2c_slave/include/i2c_slave.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
+#include <pico/sync.h>
 
 #include "pico_hal.hpp"
 #include "pin_assignments.hpp"
@@ -210,6 +211,7 @@ void liftSystemReset() {
 }
 
 void enableWatchdog() {
+  debug::print_message("PICO: Watchdog enabled");
   watchdog_enable(1000, 1);
 }
 
@@ -331,14 +333,19 @@ void setupI2C() {
   // 0x36
 }
 
-void panic(const char* message) {
+void panic(const std::string message) {
+  // Disable all interrupts + timers
+  (void) save_and_disable_interrupts();
   timer0_disable();
   timer1_disable();
-  debug::print_critical(message);
+
+  debug::print_critical(message + " Waiting for watchdog to reboot");
+
   while (true) {
     gpio_put(pins::RP2040_LED, 1);
     sleep_ms(500);
     gpio_put(pins::RP2040_LED, 0);
+    sleep_ms(500);
   }
 }
 

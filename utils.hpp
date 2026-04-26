@@ -1,7 +1,7 @@
 #ifndef __UTILS__
 #define __UTILS__
 
-#include <stdint.h>
+#include <cstdint>
 
 namespace utils {
 

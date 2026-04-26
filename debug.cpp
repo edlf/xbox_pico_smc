@@ -1,38 +1,54 @@
 #include "debug.hpp"
 #include <iostream>
+#include <iomanip>
+#include "pico/time.h"
 
 namespace debug {
 
 DebugLevel debugLevel = DebugLevel::All;
 
+void print_timestamp() {
+    absolute_time_t time = get_absolute_time();
+    std::ios_base::fmtflags flags(std::cout.flags());
+    std::cout << "[";
+    std::cout << std::setfill('0') << std::setw(12);
+    std::cout << std::to_string(to_us_since_boot(time)) << "] ";
+    std::cout.flags(flags);
+}
+
 void print_critical(const std::string& msg) {
   if (debugLevel >= DebugLevel::Critical) {
-    std::cout << "(CRIT) " << msg << std::endl;
+    print_timestamp();
+    std::cout <<  "(CRIT ) " << msg << std::endl;
   }
 }
 
 void print_error(const std::string& msg) {
   if (debugLevel >= DebugLevel::Errors) {
-    std::cout << "(ERR ) " << msg << std::endl;
+    print_timestamp();
+    std::cout <<  "(ERROR) " << msg << std::endl;
   }
 }
 
 void print_warn(const std::string& msg) {
   if (debugLevel >= DebugLevel::Warnings) {
-    std::cout << "(WARN) " << msg << std::endl;
+    print_timestamp();
+    std::cout <<  "(WARN ) " << msg << std::endl;
   }
 }
 
 void print_message(const std::string& msg) {
   if (debugLevel == DebugLevel::All) {
-    std::cout << "(INFO) " << msg << std::endl;
+    print_timestamp();
+    std::cout <<  "(INFO ) " << msg << std::endl;
   }
 }
 
 void print_welcome() {
-  std::cout << "*------------------------------------------------*\n"
-            << "*                    SMC Boot                    *\n"
-            << "*------------------------------------------------*"
+  std::cout << std::endl;
+  std::cout << "*-----------------------------------------------------------------------------*\n"
+            << "*                                  SMC Boot                                   *\n"
+            << "*-----------------------------------------------------------------------------*"
             << std::endl;
 }
 
@@ -55,48 +71,64 @@ void print_states(const SMC::state_struct& state) {
             << "*--------------- State info end -----------------*" << std::endl;
 }
 
+void print_state_change(const std::string state_name, const uint8_t previous, const uint8_t current) {
+  if (debugLevel == DebugLevel::All) {
+    print_timestamp();
+    std::cout <<  "(STATE) " << state_name;
+    
+    constexpr size_t max_len = 20;
+    size_t str_size = state_name.size();
+    if (max_len > str_size) {
+      std::string s(max_len - str_size, ' ');
+      std::cout << s;
+    }
+    
+    std::cout << " " << std::to_string(previous) << " -> " << std::to_string(current) << std::endl;
+  }
+}
+
 void print_state_changes(const SMC::state_struct& state, const SMC::state_struct& state_previous) {
   if (state.standby_power != state_previous.standby_power) {
-    printf("standby_power     %02d -> %02d\n", state_previous.standby_power, state.standby_power);
+    print_state_change("standby_power", static_cast<uint8_t>(state_previous.standby_power), static_cast<uint8_t>(state.standby_power));
   }
   if (state.smi_power != state_previous.smi_power) {
-    printf("power             %02d -> %02d\n", state_previous.smi_power, state.smi_power);
+    print_state_change("smi_power", static_cast<uint8_t>(state_previous.smi_power), static_cast<uint8_t>(state.smi_power));
   }
   if (state.fan_control != state_previous.fan_control) {
-    printf("fan_control       %02d -> %02d\n", state_previous.fan_control, state.fan_control);
+    print_state_change("fan_control", static_cast<uint8_t>(state_previous.fan_control), static_cast<uint8_t>(state.fan_control));
   }
   if (state.dvd_tray != state_previous.dvd_tray) {
-    printf("dvd_tray          %02d -> %02d\n", state_previous.dvd_tray, state.dvd_tray);
+    print_state_change("dvd_tray", static_cast<uint8_t>(state_previous.dvd_tray), static_cast<uint8_t>(state.dvd_tray));
   }
   if (state.tray_eject != state_previous.tray_eject) {
-    printf("tray_eject        %02d -> %02d\n", state_previous.tray_eject, state.tray_eject);
+    print_state_change("tray_eject", static_cast<uint8_t>(state_previous.tray_eject), static_cast<uint8_t>(state.tray_eject));
   }
   if (state.video_mode != state_previous.video_mode) {
-    printf("video_mode        %02d -> %02d\n", state_previous.video_mode, state.video_mode);
+    print_state_change("video_mode", static_cast<uint8_t>(state_previous.video_mode), static_cast<uint8_t>(state.video_mode));
   }
   if (state.audio_clamp != state_previous.audio_clamp) {
-    printf("audio_clamp       %02d -> %02d\n", state_previous.audio_clamp, state.audio_clamp);
+    print_state_change("audio_clamp", static_cast<uint8_t>(state_previous.audio_clamp), static_cast<uint8_t>(state.audio_clamp));
   }
   if (state.pwr_sw != state_previous.pwr_sw) {
-    printf("pwr_sw            %02d -> %02d\n", state_previous.pwr_sw, state.pwr_sw);
+    print_state_change("pwr_sw", static_cast<uint8_t>(state_previous.pwr_sw), static_cast<uint8_t>(state.pwr_sw));
   }
   if (state.boot_challenge != state_previous.boot_challenge) {
-    printf("boot_challenge    %02d -> %02d\n", state_previous.boot_challenge, state.boot_challenge);
+    print_state_change("boot_challenge", static_cast<uint8_t>(state_previous.boot_challenge), static_cast<uint8_t>(state.boot_challenge));
   }
   if (state.leds != state_previous.leds) {
-    printf("leds              %02d -> %02d\n", state_previous.leds, state.leds);
+    print_state_change("leds", static_cast<uint8_t>(state_previous.leds), static_cast<uint8_t>(state.leds));
   }
   if (state.dvd_tray_3 != state_previous.dvd_tray_3) {
-    printf("dvd_tray_3        %02d -> %02d\n", state_previous.dvd_tray_3, state.dvd_tray_3);
+    print_state_change("dvd_tray_3", static_cast<uint8_t>(state_previous.dvd_tray_3), static_cast<uint8_t>(state.dvd_tray_3));
   }
   if (state.pll_reset != state_previous.pll_reset) {
-    printf("pll_reset         %02d -> %02d\n", state_previous.pll_reset, state.pll_reset);
+    print_state_change("pll_reset", static_cast<uint8_t>(state_previous.pll_reset), static_cast<uint8_t>(state.pll_reset));
   }
   if (state.eject_sw != state_previous.eject_sw) {
-    printf("eject_sw          %02d -> %02d\n", state_previous.eject_sw, state.eject_sw);
+    print_state_change("eject_sw", static_cast<uint8_t>(state_previous.eject_sw), static_cast<uint8_t>(state.eject_sw));
   }
   if (state.update_eject_tray != state_previous.update_eject_tray) {
-    printf("update_eject_tray %02d -> %02d\n", state_previous.update_eject_tray, state.update_eject_tray);
+    print_state_change("update_eject_tray", static_cast<uint8_t>(state_previous.update_eject_tray), static_cast<uint8_t>(state.update_eject_tray));
   }
   // printf("---------------- State changes end ----------------\n");
 }

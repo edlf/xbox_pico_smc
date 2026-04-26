@@ -1,7 +1,8 @@
 #ifndef __PICO_HAL__
 #define __PICO_HAL__
 
-#include <stdint.h>
+#include <cstdint>
+#include <string>
 
 namespace pico_hal {
 void init();
@@ -59,7 +60,7 @@ void timer1_disable();
 void setupI2C();
 
 //
-void panic(const char* message);
+void panic(const std::string message);
 } // namespace pico_hal
 
 #endif // __GPIO__
