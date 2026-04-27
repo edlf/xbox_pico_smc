@@ -4,6 +4,7 @@
 #include "utils.hpp"
 
 namespace SMC {
+namespace DVD {
 
 uint8_t raw_tray_status_filtered;
 
@@ -266,4 +267,5 @@ void update_dvd_tray_three() {
   }
 }
 
+} // namespace DVD
 } // namespace SMC

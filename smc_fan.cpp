@@ -4,6 +4,7 @@
 #include "smc_smbus.hpp"
 
 namespace SMC {
+namespace Fan {
 
 uint8_t cpu_temperature_history[temperature_history_length];
 uint8_t board_temperature_history[temperature_history_length];
@@ -219,4 +220,5 @@ void set_fan_speed() {
   }
 }
 
+} // namespace Fan
 } // namespace SMC

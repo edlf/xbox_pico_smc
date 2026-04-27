@@ -253,16 +253,16 @@ void main_loop() {
       while (true) {
         update_PLL_SYSRESET();
         BootChallenge::update();
-        update_dvd_tray();
-        update_eject_tray();
+        DVD::update_dvd_tray();
+        DVD::update_eject_tray();
         Video::update();
         update_pwr_sw();
         update_eject_sw();
-        update_dvd_tray_eject();
-        update_dvd_tray_three();
+        DVD::update_dvd_tray_eject();
+        DVD::update_dvd_tray_three();
         AudioClamp::update();
         update_LEDs();
-        update_fan_temp();
+        Fan::update_fan_temp();
 
         power_standby_state = update_SMI_and_power();
         printStateSMI();
@@ -276,7 +276,7 @@ void main_loop() {
       }
 
       sensors.fan_speed = 0;
-      set_fan_speed();
+      Fan::set_fan_speed();
 
       state.standby_power = power_standby_state::initial;
       // jump_index_sub_code_828 = 0;
