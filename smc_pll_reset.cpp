@@ -1,4 +1,5 @@
 #include "smc.hpp"
+#include "smc_fan.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
 #include "pico/stdlib.h" // TODO move busywait to pico_hal
@@ -19,7 +20,7 @@ void update_PLL_SYSRESET() {
 
   case pll_sysreset_state::state1:
     pico_hal::PLL_off();
-    timers.fan_control_timeout1 = 0;
+    Fan::control_timeout = 0;
 
     if (flags.bitfield_DATA_70 & 0x01) {
       /* Cold reset path - go back to state 0 */
@@ -46,8 +47,8 @@ void update_PLL_SYSRESET() {
       state.pll_reset = pll_sysreset_state::initial;
     } else {
       /* Decrement timer and check for completion */
-      if (timers.fan_control_timeout1 == 0) {
-        timers.fan_control_timeout1 = 2;
+      if (Fan::control_timeout == 0) {
+        Fan::control_timeout = 2;
         state.pll_reset = pll_sysreset_state::cold_reset;
       }
     }
@@ -56,11 +57,11 @@ void update_PLL_SYSRESET() {
   case pll_sysreset_state::cold_reset:
     pico_hal::PLL_on();
 
-    if (--timers.fan_control_timeout1 != 0) {
+    if (--Fan::control_timeout != 0) {
       return; // Wait for timeout
     }
 
-    timers.fan_control_timeout1 = 1;
+    Fan::control_timeout = 1;
     configureConexantEncoder();
     pico_hal::liftSystemReset();
     flags.bitfield_DATA_73 |= 0x08; // Set initialization flag
@@ -96,19 +97,19 @@ void update_PLL_SYSRESET() {
 
   case pll_sysreset_state::state6:
     /* PLL disable wait - decrement counter */
-    if (--timers.fan_control_timeout1 != 0) {
+    if (--Fan::control_timeout != 0) {
       return;
     }
 
     pico_hal::PLL_off();
     pico_hal::assertSystemReset();
-    timers.fan_control_timeout1 = 1;
+    Fan::control_timeout = 1;
     state.pll_reset = pll_sysreset_state::state7;
     break;
 
   case pll_sysreset_state::state7:
     /* PLL enable wait - wait before re-enabling PLL */
-    if (--timers.fan_control_timeout1 != 0) {
+    if (--Fan::control_timeout != 0) {
       return;
     }
 

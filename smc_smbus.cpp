@@ -1,6 +1,7 @@
 #include "smc_smbus.hpp"
 #include "smc_audio_clamp.hpp"
 #include "smc_smbus.hpp"
+#include "smc_fan.hpp"
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
@@ -79,7 +80,7 @@ uint8_t smbus_read_handler(uint8_t command) {
     break;
 
   case Command::READ_FAN_SPEED: // 0x10
-    response = sensors.fan_speed;
+    response = Fan::getFanSpeed();
     break;
 
   case Command::INTERRUPT_REASON: // 0x11
@@ -104,7 +105,7 @@ uint8_t smbus_read_handler(uint8_t command) {
     break;
 
   case Command::SCRATCH: // 0x1B
-    response = config.custom_fan_speed;
+    response = Fan::getCustomFanSpeed();
     break;
 
   case Command::READ_ERROR_CODE:             // 0x0F
@@ -154,30 +155,22 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
   case Command::FAN_OVERRIDE: // 0x05
     // data: bit 0 = enable override, bit 1-7 = unused
     if (data & 0x01) {
-      // Enable fan override mode
-      state.fan_control = fan_control_state::custom_fan_speed;
+      Fan::enableCustomFanSpeed();
     } else {
-      // Disable override, return to automatic control
-      state.fan_control = fan_control_state::decision_state;
+      Fan::disableCustomFanSpeed();
     }
     break;
 
   case Command::REQUEST_FAN_SPEED: // 0x06
     // Set requested fan speed (0-50)
-    if (data <= 50) {
-      sensors.fan_speed = data;
-    } else {
-      sensors.fan_speed = 50; // Clamp to max
-    }
+    Fan::setFanSpeed(data);
     break;
 
   case Command::LED_OVERRIDE: // 0x07
     // data: bit 0 = enable override
     if (data & 0x01) {
-      // Enable LED manual control
       Led::setManualControl(true);
     } else {
-      // Disable override, return to automatic control
       Led::resetState();
     }
     break;
@@ -254,8 +247,9 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::SCRATCH: // 0x1B
+    // TODO: This looks broken AF
     // Write to scratch register (general purpose storage)
-    config.custom_fan_speed = data;
+    Fan::setCustomSpeed(data);
     break;
 
   case Command::FIRMWARE_REVISION:     // 0x01 (read-only, ignore writes)

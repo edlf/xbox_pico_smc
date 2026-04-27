@@ -7,6 +7,7 @@
 #include "smc_boot_challenge.hpp"
 #include "smc_smbus.hpp"
 #include "smc_dvd.hpp"
+#include "smc_front_panel_sw.hpp"
 
 // Pico stuff
 #include "hardware/i2c.h"
@@ -29,7 +30,6 @@ state_struct state_previous;
 flags_struct flags;
 sensors_struct sensors;
 timers_struct timers;
-config_struct config;
 
 void resetInterruptReason() {
   flags.interrupt_reason = 0;
@@ -208,10 +208,8 @@ void main_loop() {
 
   /* Initialize state variables */
   state.standby_power = power_standby_state::initial;
-  state.pwr_sw = power_switch_state::wait_for_button_press;
-  state.eject_sw = eject_switch_state::wait_for_button_press;
-
-  state.fan_control = fan_control_state::initial;
+  FrontPanelSW::init();
+  Fan::init();
   state.dvd_tray = dvd_tray_state::initial;
   Video::init();
   AudioClamp::init();
@@ -256,8 +254,7 @@ void main_loop() {
         DVD::update_dvd_tray();
         DVD::update_eject_tray();
         Video::update();
-        update_pwr_sw();
-        update_eject_sw();
+        FrontPanelSW::update();
         DVD::update_dvd_tray_eject();
         DVD::update_dvd_tray_three();
         AudioClamp::update();
@@ -275,12 +272,11 @@ void main_loop() {
         pico_hal::petWatchdog();
       }
 
-      sensors.fan_speed = 0;
-      Fan::set_fan_speed();
+      Fan::applyFanSpeed();
 
       state.standby_power = power_standby_state::initial;
       // jump_index_sub_code_828 = 0;
-      state.fan_control = fan_control_state::initial;
+      Fan::init();
       state.dvd_tray = dvd_tray_state::initial;
       Video::init();
       AudioClamp::init();
@@ -298,7 +294,7 @@ void main_loop() {
       do {
         wait_for_isr();
         pico_hal::petWatchdog();
-        update_pwr_sw();
+        FrontPanelSW::updatePower();
         timers.power_timeout3--;
       } while (timers.power_timeout3 != 0);
 
@@ -322,12 +318,11 @@ void globals_init() {
   something_with_cpu_temp = true;
 
   state.standby_power = power_standby_state::initial;
-  state.fan_control = fan_control_state::initial;
+  Fan::init();
   state.pll_reset = pll_sysreset_state::initial;
   state.update_eject_tray = update_eject_tray_state::initial;
   state.dvd_tray_three = update_dvd_tray_three_state::initial;
-  state.pwr_sw = power_switch_state::wait_for_button_press;
-  state.eject_sw = eject_switch_state::wait_for_button_press;
+  FrontPanelSW::init();
   state.smi_power = smi_power_state::decision_state;
   state.dvd_tray = dvd_tray_state::initial;
   state.tray_eject = 0;
@@ -343,7 +338,6 @@ void globals_init() {
   flags.bitfield_DATA_74 = 0;
 
   /* Initialize sensor/config variables */
-  sensors.fan_speed = 0;
   sensors.CPU_temperature = 0;
   sensors.board_temperature = 0;
   sensors.CPU_temp_predicted = 0;
@@ -351,17 +345,9 @@ void globals_init() {
   sensors.vmode = 0;
   sensors.vmode_raw = 0;
 
-  config.custom_fan_speed = 10; /* Default custom fan speed */
-  config.LED_green_manual_cycles = 0;
-  config.LED_red_manual_cycles = 0;
-
   /* Initialize timer variables */
   timers.power_timeout = 0;
-  timers.power_timeout2 = 0;
   timers.power_timeout3 = 0;
-  timers.boot_response_timeout = 0;
-  timers.fan_control_timeout1 = 0;
-  timers.fan_control_timeout2 = 0;
 }
 
 } // namespace SMC

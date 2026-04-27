@@ -20,11 +20,7 @@ void print_critical(const std::string&);
 void print_error(const std::string&);
 void print_warn(const std::string&);
 void print_message(const std::string&);
-
 void print_welcome();
-
-// SMC state related debug
-void print_states(const SMC::state_struct& status);
 
 } // namespace debug
 

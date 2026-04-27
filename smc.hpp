@@ -17,7 +17,6 @@ extern state_struct state_previous;
 extern flags_struct flags;
 extern sensors_struct sensors;
 extern timers_struct timers;
-extern config_struct config;
 extern bool something_with_cpu_temp;
 extern volatile uint8_t ram_test_response0;
 extern volatile uint8_t ram_test_response1;
@@ -47,9 +46,6 @@ void smc_gpio_callback(unsigned int gpio, uint32_t events);
 uint8_t update_power_standby();
 
 void update_PLL_SYSRESET();
-
-void update_pwr_sw();
-void update_eject_sw();
 
 void update_LEDs();
 

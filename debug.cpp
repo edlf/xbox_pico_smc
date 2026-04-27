@@ -52,21 +52,6 @@ void print_welcome() {
             << std::endl;
 }
 
-void print_states(const SMC::state_struct& state) {
-  std::cout << "*--------------- State info start ---------------*\n"
-            << "* standby_power     [" << static_cast<int>(state.standby_power)       << "]\n"
-            << "* power             [" << static_cast<int>(state.smi_power)           << "]\n"
-            << "* fan_control       [" << static_cast<int>(state.fan_control)         << "]\n"
-            << "* dvd_tray          [" << static_cast<int>(state.dvd_tray)            << "]\n"
-            << "* tray_eject        [" << static_cast<int>(state.tray_eject)          << "]\n"
-            << "* pwr_sw            [" << static_cast<int>(state.pwr_sw)              << "]\n"
-            << "* dvd_tray_three    [" << static_cast<int>(state.dvd_tray_three)      << "]\n"
-            << "* pll_reset         [" << static_cast<int>(state.pll_reset)           << "]\n"
-            << "* eject_sw          [" << static_cast<int>(state.eject_sw)            << "]\n"
-            << "* update_eject_tray [" << static_cast<int>(state.update_eject_tray)   << "]\n"
-            << "*--------------- State info end -----------------*" << std::endl;
-}
-
 void print_state_change(const std::string state_name, const uint8_t previous, const uint8_t current) {
   if (debugLevel == DebugLevel::All) {
     print_timestamp();

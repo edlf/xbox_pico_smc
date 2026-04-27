@@ -4,6 +4,7 @@
 #include "pico/stdlib.h"
 #include "pin_assignments.hpp"
 #include "smc_video.hpp"
+#include "smc_front_panel_sw.hpp"
 
 namespace SMC {
 
@@ -27,7 +28,7 @@ uint8_t update_power_standby() {
 
   case power_standby_state::check_av_power_button: // State 2
     // Check power button or AVIP port kiosk power on
-    update_pwr_sw();
+    FrontPanelSW::updatePower();
     if ((sensors.vmode != 0x0E) && (!checkStatusBit(power_change_requested))) {
       state.standby_power = power_standby_state::check_eject_button;
     } else {
@@ -59,7 +60,7 @@ uint8_t update_power_standby() {
     break;
 
   case power_standby_state::check_eject_button: // State 5
-    update_eject_sw();
+    FrontPanelSW::updateEject();
     if (checkStatusBit(eject_change_requested)) {
       state.standby_power = power_standby_state::turn_on_power_alternative;
     } else {

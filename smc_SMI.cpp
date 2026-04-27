@@ -30,6 +30,8 @@ const std::vector<std::string> smi_state_names {
   "wait_state_for_initial"
 };
 
+uint16_t power_timeout2;
+
 void printStateSMI() {
     const size_t smi_state = static_cast<size_t>(state.smi_power);
     std::string msg = "SMI state [" + std::to_string(smi_state) + "]";
@@ -134,7 +136,7 @@ uint8_t update_SMI_and_power() {
   case smi_power_state::case2:
     /* Process power-off conditions */
     timers.power_timeout = 25;
-    timers.power_timeout2 = 3;
+    power_timeout2 = 3;
 
     if (checkStatusBit(power_change_requested)) {
       state.smi_power = smi_power_state::case3;
@@ -306,7 +308,7 @@ uint8_t update_SMI_and_power() {
 
   case smi_power_state::case13:
     /* Intermediate handling state */
-    if (--timers.power_timeout2 != 0) {
+    if (--power_timeout2 != 0) {
       state.smi_power = smi_power_state::case5;
     } else {
       state.smi_power = smi_power_state::request_tray_close;

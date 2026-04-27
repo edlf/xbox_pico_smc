@@ -1,5 +1,5 @@
-#ifndef __smc_led__
-#define __smc_led__
+#ifndef __SMC_LED__
+#define __SMC_LED__
 
 #include "smc_types.hpp"
 
@@ -35,4 +35,4 @@ void printState();
 } // namespace Led
 } // namespace SMC
 
-#endif // __smc_led__
+#endif // __SMC_LED__

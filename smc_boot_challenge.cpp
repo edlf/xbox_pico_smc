@@ -26,9 +26,11 @@ uint8_t failure_count;
 uint8_t rtc_time;
 challenge_struct challenge;
 boot_challenge_state state;
+uint16_t boot_response_timeout;
 
 void init() {
   challenge = {0};
+  boot_response_timeout = 0;
   state = boot_challenge_state::initial;
 }
 
@@ -60,7 +62,7 @@ void compute() {
 void update() {
   switch (state) {
   case boot_challenge_state::initial:
-    timers.boot_response_timeout = 12;
+    boot_response_timeout = 12;
     compute();
     state = boot_challenge_state::wait_for_ram_test_result;
     break;
@@ -76,7 +78,7 @@ void update() {
         /* RAM test failed */
         state = boot_challenge_state::ram_test_failed;
       }
-    } else if (--timers.boot_response_timeout == 0) {
+    } else if (--boot_response_timeout == 0) {
       state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
     }
     break;
@@ -86,16 +88,16 @@ void update() {
     break;
 
   case boot_challenge_state::ram_test_failed:
-    config.LED_red_manual_cycles = 15;
-    config.LED_green_manual_cycles = 5;
-    flags.bitfield_DATA_70 |= 0x04; // Manual LED control
+    Led::setRedPhases(15);
+    Led::setGreenPhases(5);
+    Led::setManualControl(true);
     state = boot_challenge_state::boot_failed;
     break;
 
   case boot_challenge_state::challenge_failed_or_no_ram_test_result:
-    config.LED_red_manual_cycles = 10;
-    config.LED_green_manual_cycles = 5;
-    flags.bitfield_DATA_70 |= 0x04; // Manual LED control
+    Led::setRedPhases(10);
+    Led::setGreenPhases(5);
+    Led::setManualControl(true);
     state = boot_challenge_state::boot_failed;
     break;
 
@@ -110,7 +112,7 @@ void update() {
       return;
     } else if ((flags.bitfield_DATA_70 & 0x01) == 0) {
       /* System not overheated */
-      timers.boot_response_timeout = 2;
+      boot_response_timeout = 2;
       state = boot_challenge_state::check_response;
     }
     break;
@@ -160,7 +162,7 @@ void update() {
       } else {
         state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
       }
-    } else if (--timers.boot_response_timeout == 0) {
+    } else if (--boot_response_timeout == 0) {
       state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
     }
     break;
