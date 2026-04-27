@@ -10,6 +10,7 @@
 #include <string>
 
 namespace SMC {
+namespace SMI {
 
 const std::vector<std::string> smi_state_names {
   "Decision_state",
@@ -32,10 +33,23 @@ const std::vector<std::string> smi_state_names {
   "wait_state_for_initial"
 };
 
+smi_power_state state;
 uint16_t power_timeout2;
 
-void printStateSMI() {
-    const size_t smi_state = static_cast<size_t>(state.smi_power);
+void init() {
+  state = smi_power_state::decision_state;
+}
+
+void setStateCase11() {
+  state = smi_power_state::case11;
+}
+
+void setStateGoingToReset() {
+  state = smi_power_state::going_to_reset;
+}
+
+void printState() {
+    const size_t smi_state = static_cast<size_t>(state);
     std::string msg = "SMI state [" + std::to_string(smi_state) + "]";
 
     if (smi_state <= smi_state_names.size()) {
@@ -45,7 +59,7 @@ void printStateSMI() {
     debug::print_message(msg);
 }
 
-uint8_t update_SMI_and_power() {
+uint8_t update() {
   debug::print_message("update_SMI_and_power");
   // Manages power interrupts and SMI signaling when Xbox is powered up
 
@@ -65,7 +79,7 @@ uint8_t update_SMI_and_power() {
   // 13 -> (5, 6)
   // 17 -> 9
 
-  switch (state.smi_power) {
+  switch (state) {
   case smi_power_state::decision_state:
     /* Decision state - Check for pending interrupts */
     clearStatusBit(first_execution);
@@ -75,52 +89,52 @@ uint8_t update_SMI_and_power() {
 
     if (checkStatusBit(overheated)) {
       /* System overheated */
-      state.smi_power = smi_power_state::overheat_cooldown_wait;
+      state = smi_power_state::overheat_cooldown_wait;
     } else if (checkStatusBit(power_change_requested)) {
       /* Power button pressed */
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_power_sw_pressed);
       fireSystemInterrupt();
-      state.smi_power = smi_power_state::start_power_off;
+      state = smi_power_state::start_power_off;
     } else if (checkStatusBit(eject_change_requested)) {
       /* Eject button pressed */
       clearStatusBit(eject_change_requested);
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_eject_sw_pressed);
       fireSystemInterrupt();
-      state.smi_power = smi_power_state::start_power_off;
+      state = smi_power_state::start_power_off;
     } else if (flags.bitfield_DATA_72 & 0x01) {
       /* AV cable detected */
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_power_sw_pressed);
       fireSystemInterrupt();
-      state.smi_power = smi_power_state::start_power_off;
+      state = smi_power_state::start_power_off;
     } else if (flags.bitfield_DATA_71 & 0x04) {
       /* System reset request */
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_dvd_tray1);
       fireSystemInterrupt();
-      state.smi_power = smi_power_state::case2;
+      state = smi_power_state::case2;
     } else if (checkStatusBit(dvd_tray)) {
       /* DVD tray change */
       setInterruptReason(InterruptReason_dvd_tray0);
       fireSystemInterrupt();
-      state.smi_power = smi_power_state::case2;
+      state = smi_power_state::case2;
     } else if (flags.bitfield_DATA_73 & 0x20) {
       /* Boot challenge event */
       setInterruptReason(InterruptReason_dvd_tray2);
       fireSystemInterrupt();
-      state.smi_power = smi_power_state::case2;
+      state = smi_power_state::case2;
     } else if (checkStatusBit(video_mode_changed)) {
       /* Video mode changed */
       setInterruptReason(InterruptReason_av_mode_changed);
       fireSystemInterrupt();
-      state.smi_power = smi_power_state::case2;
+      state = smi_power_state::case2;
     } else if (flags.bitfield_DATA_71 & 0x80) {
       /* No AV cable */
       setInterruptReason(InterruptReason_av_unplugged);
       fireSystemInterrupt();
-      state.smi_power = smi_power_state::case2;
+      state = smi_power_state::case2;
     }
     break;
 
@@ -129,9 +143,9 @@ uint8_t update_SMI_and_power() {
     flags.bitfield_DATA_70 &= ~0x08;
     if (flags.bitfield_DATA_72 & 0x20) {
       /* FRAG set - go to different state */
-      state.smi_power = smi_power_state::leds_off;
+      state = smi_power_state::leds_off;
     } else {
-      state.smi_power = smi_power_state::case2;
+      state = smi_power_state::case2;
     }
     break;
 
@@ -141,25 +155,25 @@ uint8_t update_SMI_and_power() {
     power_timeout2 = 3;
 
     if (checkStatusBit(power_change_requested)) {
-      state.smi_power = smi_power_state::case3;
+      state = smi_power_state::case3;
     } else if (flags.bitfield_DATA_72 & 0x01) {
-      state.smi_power = smi_power_state::case3;
+      state = smi_power_state::case3;
     } else if (flags.bitfield_DATA_71 & 0x04) {
       if (flags.bitfield_DATA_72 & 0x02) {
-        state.smi_power = smi_power_state::case11;
+        state = smi_power_state::case11;
       } else {
-        state.smi_power = smi_power_state::case11;
+        state = smi_power_state::case11;
       }
     } else if (checkStatusBit(dvd_tray)) {
-      state.smi_power = smi_power_state::case11;
+      state = smi_power_state::case11;
     } else if (flags.bitfield_DATA_73 & 0x20) {
-      state.smi_power = smi_power_state::case11;
+      state = smi_power_state::case11;
     } else if (flags.bitfield_DATA_71 & 0x80) {
-      state.smi_power = smi_power_state::case11;
+      state = smi_power_state::case11;
     } else if (checkStatusBit(video_mode_changed)) {
-      state.smi_power = smi_power_state::case11;
+      state = smi_power_state::case11;
     } else {
-      state.smi_power = smi_power_state::case11;
+      state = smi_power_state::case11;
     }
     break;
 
@@ -167,20 +181,20 @@ uint8_t update_SMI_and_power() {
     /* Check RAM test results and proceed */
     if ((flags.bitfield_DATA_6F & 0x02) == 0) {
       if ((flags.bitfield_DATA_71 & 0x10) == 0) {
-        state.smi_power = smi_power_state::request_tray_close;
+        state = smi_power_state::request_tray_close;
       } else if ((flags.bitfield_DATA_71 & 0x20) == 0) {
-        state.smi_power = smi_power_state::request_tray_close;
+        state = smi_power_state::request_tray_close;
       } else if ((flags.bitfield_DATA_72 & 0x40) == 0) {
-        state.smi_power = smi_power_state::request_tray_close;
+        state = smi_power_state::request_tray_close;
       } else if (flags.bitfield_DATA_70 & 0x20) {
-        state.smi_power = smi_power_state::case13;
+        state = smi_power_state::case13;
       } else {
         if (--timers.power_timeout == 0) {
-          state.smi_power = smi_power_state::request_tray_close;
+          state = smi_power_state::request_tray_close;
         }
       }
     } else {
-      state.smi_power = smi_power_state::request_tray_close;
+      state = smi_power_state::request_tray_close;
     }
     break;
 
@@ -203,7 +217,7 @@ uint8_t update_SMI_and_power() {
     }
     flags.bitfield_DATA_70 &= ~0x10;
     flags.bitfield_DATA_71 &= ~0x08;
-    state.smi_power = smi_power_state::decision_state;
+    state = smi_power_state::decision_state;
     break;
 
   case smi_power_state::case5:
@@ -211,14 +225,14 @@ uint8_t update_SMI_and_power() {
     timers.power_timeout = 0xFF;
     flags.bitfield_DATA_70 &= ~0x20;
     flags.bitfield_DATA_6F |= 0x40;
-    state.smi_power = smi_power_state::case3;
+    state = smi_power_state::case3;
     break;
 
   case smi_power_state::request_tray_close:
     /* Request tray close and set timeout */
     setStatusBit(prepare_for_shutdown); // System shutting down
     timers.power_timeout = 25;
-    state.smi_power = smi_power_state::wait_tray_close;
+    state = smi_power_state::wait_tray_close;
     break;
 
   case smi_power_state::leds_off:
@@ -230,17 +244,17 @@ uint8_t update_SMI_and_power() {
     flags.bitfield_DATA_70 &= ~0x20;
     flags.bitfield_DATA_6F &= ~0x40;
     timers.power_timeout = 25;
-    state.smi_power = smi_power_state::delay;
+    state = smi_power_state::delay;
     break;
 
   case smi_power_state::wait_tray_close:
     /* Wait for tray to close */
     if (AudioClamp::isClamped() && Dvd::isTrayClosing()) {
       timers.power_timeout = 0xFF;
-      state.smi_power = smi_power_state::case15;
+      state = smi_power_state::case15;
     } else if (--timers.power_timeout == 0) {
       timers.power_timeout = 0xFF;
-      state.smi_power = smi_power_state::case15;
+      state = smi_power_state::case15;
     }
     break;
 
@@ -258,11 +272,11 @@ uint8_t update_SMI_and_power() {
     if (flags.bitfield_DATA_73 & 0x40) {
       /* Power cycle requested */
       flags.bitfield_DATA_73 &= ~0x40;
-      state.smi_power = smi_power_state::wait_state_for_initial;
+      state = smi_power_state::wait_state_for_initial;
     } else if ((checkStatusBit(first_execution)) == 0) {
       return 1; /* System powered off */
     }
-    state.smi_power = smi_power_state::decision_state;
+    state = smi_power_state::decision_state;
     clearStatusBit(prepare_for_shutdown);
 
     return 1;
@@ -272,7 +286,7 @@ uint8_t update_SMI_and_power() {
     /* Wait for overheated status to end */
     if ((checkStatusBit(overheated)) == 0) {
       timers.power_timeout = 1;
-      state.smi_power = smi_power_state::delay;
+      state = smi_power_state::delay;
     }
     break;
 
@@ -280,19 +294,19 @@ uint8_t update_SMI_and_power() {
     /* Check for various conditions before going to state 4 or others */
     if (flags.bitfield_DATA_70 & 0x10) {
       if ((flags.bitfield_DATA_71 & 0x04) == 0) {
-        state.smi_power = smi_power_state::event_interrupt_handled;
+        state = smi_power_state::event_interrupt_handled;
       } else {
-        state.smi_power = smi_power_state::event_interrupt_handled;
+        state = smi_power_state::event_interrupt_handled;
       }
     } else if (flags.bitfield_DATA_70 & 0x20) {
-      state.smi_power = smi_power_state::case5;
+      state = smi_power_state::case5;
     } else if (flags.bitfield_DATA_6F & 0x02) {
-      state.smi_power = smi_power_state::request_tray_close;
+      state = smi_power_state::request_tray_close;
     } else if (flags.bitfield_DATA_71 & 0x08) {
-      state.smi_power = smi_power_state::going_to_reset;
+      state = smi_power_state::going_to_reset;
     } else {
       if (--timers.power_timeout == 0) {
-        state.smi_power = smi_power_state::going_to_reset;
+        state = smi_power_state::going_to_reset;
       }
     }
     break;
@@ -305,15 +319,15 @@ uint8_t update_SMI_and_power() {
     flags.bitfield_DATA_71 &= ~0x80;
     clearStatusBit(dvd_tray);
     flags.bitfield_DATA_71 &= ~0x04;
-    state.smi_power = smi_power_state::decision_state;
+    state = smi_power_state::decision_state;
     break;
 
   case smi_power_state::case13:
     /* Intermediate handling state */
     if (--power_timeout2 != 0) {
-      state.smi_power = smi_power_state::case5;
+      state = smi_power_state::case5;
     } else {
-      state.smi_power = smi_power_state::request_tray_close;
+      state = smi_power_state::request_tray_close;
     }
     break;
 
@@ -333,9 +347,9 @@ uint8_t update_SMI_and_power() {
     sensors.tray_status = pico_hal::get_tray_state();
 
     if ((sensors.tray_status == 0x00) || (sensors.tray_status == 0x40) || (sensors.tray_status == 0x60)) {
-      state.smi_power = smi_power_state::leds_off;
+      state = smi_power_state::leds_off;
     } else if (--timers.power_timeout == 0) {
-      state.smi_power = smi_power_state::leds_off;
+      state = smi_power_state::leds_off;
     }
     break;
 
@@ -343,14 +357,14 @@ uint8_t update_SMI_and_power() {
     /* Delayed turning power off */
     if (--timers.power_timeout == 0) {
       pico_hal::turn_off_psu();
-      state.smi_power = smi_power_state::initial;
+      state = smi_power_state::initial;
     }
     break;
 
   case smi_power_state::wait_state_for_initial:
     /* Wait state for power cycle */
     if (--timers.power_timeout == 0) {
-      state.smi_power = smi_power_state::initial;
+      state = smi_power_state::initial;
     }
     break;
 
@@ -361,4 +375,5 @@ uint8_t update_SMI_and_power() {
   return 0; /* System powered on */
 }
 
+} // namespace SMI
 } // namespace SMC

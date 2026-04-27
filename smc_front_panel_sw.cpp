@@ -39,7 +39,7 @@ void update() {
 void updatePower() {
   switch (pwr_state) {
   case switch_state::wait_for_button_press:
-    state.smi_power = smi_power_state::initial;
+    SMI::init(); // set state to initial
     if (pico_hal::power_button_pressed()) {
       pwr_state = switch_state::debouncing;
     }
@@ -56,14 +56,14 @@ void updatePower() {
     break;
 
   case switch_state::wait_for_button_release:
-    state.smi_power = smi_power_state::case11;
+    SMI::setStateCase11();
     if (!pico_hal::power_button_pressed()) {
       pwr_state = switch_state::release_debounce;
     }
     break;
 
   case switch_state::release_debounce:
-    state.smi_power = smi_power_state::going_to_reset;
+    SMI::setStateGoingToReset();
     if (pico_hal::power_button_pressed()) {
       pwr_state = switch_state::wait_for_button_release;
     } else {

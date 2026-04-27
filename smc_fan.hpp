@@ -6,6 +6,10 @@
 namespace SMC {
 namespace Fan {
 
+constexpr uint8_t MAX_BOARD_TEMP = 75;
+constexpr uint8_t MAX_CPU_TEMP = 88;
+constexpr uint8_t temperature_history_length = 16;
+
 enum class fan_control_state {
   initial,
   state1,

@@ -4,10 +4,6 @@
 #include <cstdint>
 #include <stdio.h>
 
-constexpr uint8_t MAX_BOARD_TEMP = 75;
-constexpr uint8_t MAX_CPU_TEMP = 88;
-constexpr uint8_t temperature_history_length = 16;
-
 namespace SMC {
 
 enum InterruptReason : uint8_t {
@@ -48,47 +44,6 @@ enum Status : uint8_t {
   // bit 7 is set when vide mode changes (causes SMI interrupt to be fired)
   video_mode_changed = 0b10000000 // 0x80
 };
-
-enum class smi_power_state {
-  decision_state,
-  start_power_off,
-  case2,
-  case3,
-  event_interrupt_handled,
-  case5,
-  request_tray_close,
-  leds_off,
-  wait_tray_close,
-  initial,
-  overheat_cooldown_wait,
-  case11,
-  going_to_reset,
-  case13,
-  delay,
-  case15,
-  delayed_turning_off,
-  wait_state_for_initial
-};
-
-enum class power_standby_state {
-  initial,
-  read_av,
-  check_av_power_button,
-  turn_on_power_no_av,
-  powered_up_wait_power_ok,
-  check_eject_button,
-  idle,
-  turn_on_power_alternative,
-  powered_up_wait_power_ok_alternative,
-  powered_up_alt,
-  powered_up
-};
-
-// State Machines
-typedef struct {
-  power_standby_state standby_power;
-  smi_power_state smi_power;
-} state_struct;
 
 typedef struct {
   uint8_t interrupt_reason; // 6C

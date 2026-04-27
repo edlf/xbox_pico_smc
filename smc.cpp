@@ -18,8 +18,6 @@ volatile uint8_t ram_test_response1;
 volatile uint8_t bios_response_byte0;
 volatile uint8_t bios_response_byte1;
 
-state_struct state;
-state_struct state_previous;
 flags_struct flags;
 sensors_struct sensors;
 timers_struct timers;
@@ -200,14 +198,14 @@ void main_loop() {
   i2c_slave_init(i2c0, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
 
   /* Initialize state variables */
-  state.standby_power = power_standby_state::initial;
+  PowerStandby::init();
   FrontPanelSW::init();
   Fan::init();
   Dvd::init();
   Video::init();
   AudioClamp::init();
   Led::resetPhaseCounter();
-  state.smi_power = smi_power_state::initial;
+  SMI::init();
 
   timers.power_timeout3 = 1;
 
@@ -218,7 +216,6 @@ void main_loop() {
   BootChallenge::challenge_struct& challenge = BootChallenge::getChallengeStructRef();
 
   do {
-    state_previous = state;
     // printf("Loop %d\n", loop_count);
 
     challenge.status_byte0 = challenge.status_byte0 + 1;
@@ -234,7 +231,7 @@ void main_loop() {
     //   clearStatusBit(eject_change_requested);
     // }
 
-    uint8_t power_standby_state = update_power_standby();
+    uint8_t power_standby_state = PowerStandby::update();
     if ((power_standby_state & 1) != 0) {
       // Get timer + cpu temp for entropy
       challenge.status_byte2 = challenge.status_byte0 + 22; // TODO Feed number from timer
@@ -253,8 +250,8 @@ void main_loop() {
         update_LEDs();
         Fan::update_fan_temp();
 
-        power_standby_state = update_SMI_and_power();
-        printStateSMI();
+        power_standby_state = SMI::update();
+        SMI::printState();
         if ((power_standby_state & 1) != 0) {
           break;
         }
@@ -266,7 +263,7 @@ void main_loop() {
 
       Fan::applyFanSpeed();
 
-      state.standby_power = power_standby_state::initial;
+      PowerStandby::init();
       // jump_index_sub_code_828 = 0;
       Fan::init();
       Dvd::init();
@@ -275,7 +272,7 @@ void main_loop() {
       // jump_index_sub_code_5AF = 0;
       BootChallenge::resetState();
       Led::resetPhaseCounter();
-      state.smi_power = smi_power_state::initial;
+      SMI::init();
       pico_hal::petWatchdog();
 
       globals_init();
@@ -307,12 +304,12 @@ void globals_init() {
   flags = {0};
   something_with_cpu_temp = true;
 
-  state.standby_power = power_standby_state::initial;
+  PowerStandby::init();
   Fan::init();
   PLL_Reset::init();
   Dvd::init();
   FrontPanelSW::init();
-  state.smi_power = smi_power_state::decision_state;
+  SMI::init();
 
   /* Initialize flags */
   resetInterruptReason();

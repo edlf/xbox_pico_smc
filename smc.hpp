@@ -15,12 +15,11 @@
 #include "smc_smbus.hpp"
 #include "smc_fan.hpp"
 #include "smc_pll_reset.hpp"
+#include "smc_power_standby.hpp"
 
 namespace SMC {
 
 // TODO: remove hacks
-extern state_struct state;
-extern state_struct state_previous;
 extern flags_struct flags;
 extern sensors_struct sensors;
 extern timers_struct timers;
@@ -49,8 +48,6 @@ void port_init();
 void init_irqs();
 void isr();
 void smc_gpio_callback(unsigned int gpio, uint32_t events);
-
-uint8_t update_power_standby();
 
 void update_LEDs();
 
