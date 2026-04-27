@@ -210,12 +210,11 @@ void main_loop() {
   state.standby_power = power_standby_state::initial;
   FrontPanelSW::init();
   Fan::init();
-  state.dvd_tray = dvd_tray_state::initial;
+  Dvd::init();
   Video::init();
   AudioClamp::init();
   Led::resetPhaseCounter();
   state.smi_power = smi_power_state::initial;
-  state.tray_eject = 1;
 
   timers.power_timeout3 = 1;
 
@@ -251,12 +250,12 @@ void main_loop() {
       while (true) {
         update_PLL_SYSRESET();
         BootChallenge::update();
-        DVD::update_dvd_tray();
-        DVD::update_eject_tray();
+        Dvd::updateDvdTray();
+        Dvd::updateEjectTray();
         Video::update();
         FrontPanelSW::update();
-        DVD::update_dvd_tray_eject();
-        DVD::update_dvd_tray_three();
+        Dvd::updateDvdTrayEject();
+        Dvd::updateDvdTrayThree();
         AudioClamp::update();
         update_LEDs();
         Fan::update_fan_temp();
@@ -277,15 +276,13 @@ void main_loop() {
       state.standby_power = power_standby_state::initial;
       // jump_index_sub_code_828 = 0;
       Fan::init();
-      state.dvd_tray = dvd_tray_state::initial;
+      Dvd::init();
       Video::init();
       AudioClamp::init();
       // jump_index_sub_code_5AF = 0;
       BootChallenge::resetState();
-      state.dvd_tray_three = update_dvd_tray_three_state::initial; // jump_index_sub_code_519
       Led::resetPhaseCounter();
       state.smi_power = smi_power_state::initial;
-      state.tray_eject = 1;
       pico_hal::petWatchdog();
 
       globals_init();
@@ -320,12 +317,9 @@ void globals_init() {
   state.standby_power = power_standby_state::initial;
   Fan::init();
   state.pll_reset = pll_sysreset_state::initial;
-  state.update_eject_tray = update_eject_tray_state::initial;
-  state.dvd_tray_three = update_dvd_tray_three_state::initial;
+  Dvd::init();
   FrontPanelSW::init();
   state.smi_power = smi_power_state::decision_state;
-  state.dvd_tray = dvd_tray_state::initial;
-  state.tray_eject = 0;
 
   /* Initialize flags */
   resetInterruptReason();

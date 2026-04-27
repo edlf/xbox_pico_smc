@@ -96,37 +96,11 @@ enum class pll_sysreset_state {
   state8
 };
 
-enum class dvd_tray_state {
-  initial,
-  tick_timer,
-  state2,
-  state3,
-  state4
-};
-
-enum class update_eject_tray_state {
-  initial,
-  tick_timer,
-  release_eject
-};
-
-enum class update_dvd_tray_three_state {
-  initial,
-  wait,
-  eject
-};
-
 // State Machines
 typedef struct {
   power_standby_state standby_power;
   pll_sysreset_state pll_reset;
-
   smi_power_state smi_power;
-
-  dvd_tray_state dvd_tray;
-  uint8_t tray_eject;
-  update_dvd_tray_three_state dvd_tray_three; // jump_index_sub_code_519
-  update_eject_tray_state update_eject_tray;
 } state_struct;
 
 typedef struct {
@@ -156,9 +130,6 @@ typedef struct {
   uint16_t power_timeout;
   uint16_t power_timeout3;
   uint16_t smbus_attempt_counter;
-  uint16_t tray_state_timer;
-  uint16_t eject_timeout;
-  uint16_t dvd_tray_timeout;
 } timers_struct;
 
 } // namespace SMC

@@ -116,6 +116,7 @@ void printPowerState() {
 
     debug::print_message(msg);
 }
+
 void printEjectState() {
     const size_t e_state = static_cast<size_t>(eject_state);
     std::string msg = "Eject SW state [" + std::to_string(e_state) + "]";

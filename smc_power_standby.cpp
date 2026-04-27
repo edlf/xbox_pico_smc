@@ -5,6 +5,7 @@
 #include "pin_assignments.hpp"
 #include "smc_video.hpp"
 #include "smc_front_panel_sw.hpp"
+#include "smc_dvd.hpp"
 
 namespace SMC {
 
@@ -113,7 +114,7 @@ uint8_t update_power_standby() {
     utils::clearBitNo(flags.bitfield_DATA_6F, 7);
     setStatusBit(audio_clamp_timer);
     Video::init();
-    state.dvd_tray = dvd_tray_state::initial;
+    Dvd::initDdvdTray();
     ram_test_response0 = 0;
     ram_test_response1 = 0;
     pico_hal::timer1_init(500);

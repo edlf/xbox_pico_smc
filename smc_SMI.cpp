@@ -1,5 +1,6 @@
 #include "smc_SMI.hpp"
 #include "smc_audio_clamp.hpp"
+#include "smc_dvd.hpp"
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
@@ -233,7 +234,7 @@ uint8_t update_SMI_and_power() {
 
   case smi_power_state::wait_tray_close:
     /* Wait for tray to close */
-    if (AudioClamp::isClamped() && state.tray_eject == 1) {
+    if (AudioClamp::isClamped() && Dvd::isTrayClosing()) {
       timers.power_timeout = 0xFF;
       state.smi_power = smi_power_state::case15;
     } else if (--timers.power_timeout == 0) {
