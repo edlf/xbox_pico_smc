@@ -3,13 +3,22 @@
 #include "debug.hpp"
 #include "pico_hal.hpp"
 
+namespace SMC {
+namespace Video {
+
+uint8_t video_mode;
 uint8_t previous_video_mode;
 
-void update_video_mode() {
+void init() {
+  video_mode = 0;
+  previous_video_mode = 200;
+}
+
+void update() {
   SMC::sensors.vmode_raw = pico_hal::get_video_mode();
 
   if (previous_video_mode != SMC::sensors.vmode_raw) {
-    print_video_mode(SMC::sensors.vmode_raw);
+    printMode(SMC::sensors.vmode_raw);
     previous_video_mode = SMC::sensors.vmode_raw;
   }
 
@@ -19,7 +28,7 @@ void update_video_mode() {
   }
 }
 
-void print_video_mode(const uint8_t vm) {
+void printMode(const uint8_t vm) {
   uint8_t temp = (vm >> 1);
   switch (temp) {
     case 0:
@@ -51,3 +60,6 @@ void print_video_mode(const uint8_t vm) {
       break;
   }
 }
+
+} // namespace Video
+} // namespace SMC

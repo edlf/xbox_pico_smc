@@ -1,11 +1,42 @@
+#include "smc_boot_challenge.hpp"
 #include "smc.hpp"
 
+#include <vector>
+#include <string>
+
 namespace SMC {
+namespace BootChallenge {
+
+const std::vector<std::string> state_names {
+  "Initial",
+  "Wait for ram test result",
+  "Ram test ok",
+  "Ram test failed",
+  "Failed or no ram test result",
+  "Wait for reply",
+  "Boot failed",
+  "Lock up",
+  "Retry boot",
+  "Check response",
+  "Challenge passed",
+  "Reboot"
+};
 
 uint8_t failure_count;
 uint8_t rtc_time;
+challenge_struct challenge;
+boot_challenge_state state;
 
-void boot_challenge_compute() {
+void init() {
+  challenge = {0};
+  state = boot_challenge_state::initial;
+}
+
+void resetState() {
+  state = boot_challenge_state::initial;
+}
+
+void compute() {
   // Done, untested
   challenge.response0 = 0x33;
   challenge.response1 = 0xed;
@@ -26,12 +57,12 @@ void boot_challenge_compute() {
   } while (challenge_loop_count != 0);
 }
 
-void update_boot_challenge() {
-  switch (state.boot_challenge) {
+void update() {
+  switch (state) {
   case boot_challenge_state::initial:
     timers.boot_response_timeout = 12;
-    boot_challenge_compute();
-    state.boot_challenge = boot_challenge_state::wait_for_ram_test_result;
+    compute();
+    state = boot_challenge_state::wait_for_ram_test_result;
     break;
 
   case boot_challenge_state::wait_for_ram_test_result:
@@ -40,32 +71,32 @@ void update_boot_challenge() {
       /* RAM test results submitted */
       if (flags.bitfield_DATA_71 & 0x20) {
         /* RAM test passed */
-        state.boot_challenge = boot_challenge_state::ram_test_ok;
+        state = boot_challenge_state::ram_test_ok;
       } else {
         /* RAM test failed */
-        state.boot_challenge = boot_challenge_state::ram_test_failed;
+        state = boot_challenge_state::ram_test_failed;
       }
     } else if (--timers.boot_response_timeout == 0) {
-      state.boot_challenge = boot_challenge_state::challenge_failed_or_no_ram_test_result;
+      state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
     }
     break;
 
   case boot_challenge_state::ram_test_ok:
-    state.boot_challenge = boot_challenge_state::challenge_wait_for_reply;
+    state = boot_challenge_state::challenge_wait_for_reply;
     break;
 
   case boot_challenge_state::ram_test_failed:
     config.LED_red_manual_cycles = 15;
     config.LED_green_manual_cycles = 5;
     flags.bitfield_DATA_70 |= 0x04; // Manual LED control
-    state.boot_challenge = boot_challenge_state::boot_failed;
+    state = boot_challenge_state::boot_failed;
     break;
 
   case boot_challenge_state::challenge_failed_or_no_ram_test_result:
     config.LED_red_manual_cycles = 10;
     config.LED_green_manual_cycles = 5;
     flags.bitfield_DATA_70 |= 0x04; // Manual LED control
-    state.boot_challenge = boot_challenge_state::boot_failed;
+    state = boot_challenge_state::boot_failed;
     break;
 
   case boot_challenge_state::challenge_wait_for_reply:
@@ -73,14 +104,14 @@ void update_boot_challenge() {
       /* System reset requested */
       flags.bitfield_DATA_71 &= ~0x10;
       flags.bitfield_DATA_71 &= ~0x20;
-      state.boot_challenge = boot_challenge_state::initial;
+      state = boot_challenge_state::initial;
     } else if (flags.bitfield_DATA_70 & 0x01) {
       /* System overheated - stay in this state */
       return;
     } else if ((flags.bitfield_DATA_70 & 0x01) == 0) {
       /* System not overheated */
       timers.boot_response_timeout = 2;
-      state.boot_challenge = boot_challenge_state::check_response;
+      state = boot_challenge_state::check_response;
     }
     break;
 
@@ -91,9 +122,9 @@ void update_boot_challenge() {
       flags.bitfield_DATA_70 |= 0x04; // Manual LED control
       flags.bitfield_DATA_72 |= 0x20; // FRAG flag
       flags.bitfield_DATA_73 |= 0x04; // Locked state
-      state.boot_challenge = boot_challenge_state::lock_up;
+      state = boot_challenge_state::lock_up;
     } else {
-      state.boot_challenge = boot_challenge_state::retry_boot;
+      state = boot_challenge_state::retry_boot;
     }
     break;
 
@@ -115,7 +146,7 @@ void update_boot_challenge() {
     flags.bitfield_DATA_71 &= ~0x20;
     sensors.CPU_temperature = 0;
     sensors.board_temperature = 0;
-    state.boot_challenge = boot_challenge_state::initial;
+    state = boot_challenge_state::initial;
     break;
 
   case boot_challenge_state::check_response:
@@ -125,12 +156,12 @@ void update_boot_challenge() {
 
       /* Verify both response bytes match expected values */
       if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
-        state.boot_challenge = boot_challenge_state::challenge_passed;
+        state = boot_challenge_state::challenge_passed;
       } else {
-        state.boot_challenge = boot_challenge_state::challenge_failed_or_no_ram_test_result;
+        state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
       }
     } else if (--timers.boot_response_timeout == 0) {
-      state.boot_challenge = boot_challenge_state::challenge_failed_or_no_ram_test_result;
+      state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
     }
     break;
 
@@ -141,7 +172,7 @@ void update_boot_challenge() {
       flags.bitfield_DATA_71 &= ~0x20;
 
       /* TODO: Update challenge bytes for next boot */
-      state.boot_challenge = boot_challenge_state::initial;
+      state = boot_challenge_state::initial;
     } else if (flags.bitfield_DATA_70 & 0x01) {
       /* System overheated - stay in this state */
       return;
@@ -150,12 +181,12 @@ void update_boot_challenge() {
 
   case boot_challenge_state::reboot:
     if (--failure_count != 0) {
-      state.boot_challenge = boot_challenge_state::retry_boot;
+      state = boot_challenge_state::retry_boot;
     } else {
       rtc_time = 4;
       flags.bitfield_DATA_70 |= 0x01;
       flags.bitfield_DATA_70 &= ~0x02;
-      state.boot_challenge = boot_challenge_state::reboot;
+      state = boot_challenge_state::reboot;
     }
     break;
 
@@ -164,4 +195,20 @@ void update_boot_challenge() {
   }
 }
 
+challenge_struct& getChallengeStructRef() {
+  return challenge;
+}
+
+void printState() {
+    const size_t bc_state = static_cast<size_t>(state);
+    std::string msg = "Boot challenge state [" + std::to_string(bc_state) + "]";
+
+    if (bc_state <= state_names.size()) {
+        msg += " " + state_names[bc_state];
+    }
+
+    debug::print_message(msg);
+}
+
+} // namespace BootChallenge
 } // namespace SMC

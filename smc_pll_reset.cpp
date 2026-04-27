@@ -1,6 +1,7 @@
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
+#include "pico/stdlib.h" // TODO move busywait to pico_hal
 
 namespace SMC {
 

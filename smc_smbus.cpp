@@ -1,3 +1,4 @@
+#include "smc_smbus.hpp"
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
@@ -172,17 +173,17 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // data: bit 0 = enable override
     if (data & 0x01) {
       // Enable LED manual control
-      fsm_leds.setManualControl(true);
+      Led::setManualControl(true);
     } else {
       // Disable override, return to automatic control
-      fsm_leds.reset_state();
+      Led::resetState();
     }
     break;
 
   case Command::LED_STATES: // 0x08
     // data: LED color/state bits
-    fsm_leds.setGreenPhases((data >> 0) & 0x0F);
-    fsm_leds.setRedPhases((data >> 4) & 0x0F);
+    Led::setGreenPhases((data >> 0) & 0x0F);
+    Led::setRedPhases((data >> 4) & 0x0F);
     break;
 
   case Command::AUDIO_CLAMP: // 0x0B

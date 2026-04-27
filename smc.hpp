@@ -5,18 +5,13 @@
 #include <stdio.h>
 #include "debug.hpp"
 #include "smc_types.hpp"
-#include "fsm_led.hpp"
+#include "smc_led.hpp"
 #include "smc_video.hpp"
 #include "smc_SMI.hpp"
-
-// pico stuff
-#include "hardware/i2c.h"
-#include "i2c_slave/include/i2c_slave.h"
 
 namespace SMC {
 
 // TODO: remove hacks
-extern challenge_struct challenge;
 extern state_struct state;
 extern state_struct state_previous;
 extern flags_struct flags;
@@ -28,7 +23,6 @@ extern volatile uint8_t ram_test_response0;
 extern volatile uint8_t ram_test_response1;
 extern volatile uint8_t bios_response_byte0;
 extern volatile uint8_t bios_response_byte1;
-extern FSM_Leds fsm_leds;
 
 void configureConexantEncoder();
 
@@ -48,14 +42,9 @@ void port_init();
 
 void init_irqs();
 void isr();
-void gpio_callback(uint gpio, uint32_t events);
+void smc_gpio_callback(unsigned int gpio, uint32_t events);
 
 uint8_t update_power_standby();
-
-void update_dvd_tray_eject();
-void update_eject_tray();
-void update_dvd_tray3();
-void update_dvd_tray();
 
 void update_PLL_SYSRESET();
 
@@ -63,19 +52,6 @@ void update_pwr_sw();
 void update_eject_sw();
 
 void update_LEDs();
-
-void update_audio_clamp();
-
-void update_fan_temp();
-void set_fan_speed();
-
-void update_boot_challenge();
-void boot_challenge_compute();
-
-// SMBus / I2C
-void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event);
-
-void read_temperatures();
 
 }  // namespace SMC
 

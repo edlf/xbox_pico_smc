@@ -121,21 +121,6 @@ enum class fan_control_state {
   state13
 };
 
-enum class boot_challenge_state {
-  initial,
-  wait_for_ram_test_result,
-  ram_test_ok,
-  ram_test_failed,
-  challenge_failed_or_no_ram_test_result,
-  challenge_wait_for_reply,
-  boot_failed,
-  lock_up,
-  retry_boot,
-  check_response,
-  challenge_passed,
-  reboot
-};
-
 enum class pll_sysreset_state {
   initial,
   state1,
@@ -162,7 +147,7 @@ enum class update_eject_tray_state {
   release_eject
 };
 
-enum class update_dvd_tray3 {
+enum class update_dvd_tray_three_state {
   initial,
   wait,
   eject
@@ -170,7 +155,6 @@ enum class update_dvd_tray3 {
 
 // State Machines
 typedef struct {
-  boot_challenge_state boot_challenge;
   power_switch_state pwr_sw;
   eject_switch_state eject_sw;
   audio_state audio_clamp;
@@ -179,11 +163,10 @@ typedef struct {
   pll_sysreset_state pll_reset;
 
   smi_power_state smi_power;
-  uint8_t video_mode;
 
   dvd_tray_state dvd_tray;
   uint8_t tray_eject;
-  update_dvd_tray3 dvd_tray_3; // jump_index_sub_code_519
+  update_dvd_tray_three_state dvd_tray_three; // jump_index_sub_code_519
   update_eject_tray_state update_eject_tray;
 } state_struct;
 
@@ -217,7 +200,6 @@ typedef struct {
   uint16_t power_timeout3;
   uint16_t fan_control_timeout1;
   uint16_t fan_control_timeout2;
-  uint16_t audio_clamp_timeout;
   uint16_t boot_response_timeout;
   uint16_t smbus_attempt_counter;
   uint16_t tray_state_timer;
@@ -230,22 +212,6 @@ typedef struct {
   uint8_t LED_red_manual_cycles;
   uint8_t LED_green_manual_cycles;
 } config_struct;
-
-typedef struct {
-  uint8_t input_byte0; /* Input: Challenge seed uint8_t 0 */
-  uint8_t input_byte1; /* Input: Challenge seed uint8_t 1 */
-  uint8_t input_byte2; /* Input: Challenge seed uint8_t 2 */
-  uint8_t input_byte3; /* Input: Challenge seed uint8_t 3 */
-  uint8_t expected0;   /* Output: Expected challenge response uint8_t 0 */
-  uint8_t expected1;   /* Output: Expected challenge response uint8_t 1 */
-  uint8_t response0;   /* Input: Received challenge response uint8_t 0 */
-  uint8_t response1;   /* Input: Received challenge response uint8_t 1 */
-  uint8_t status_byte0;
-  uint8_t status_byte1;
-  uint8_t status_byte2;
-  uint8_t status_byte3;
-  uint8_t status_byte4;
-} challenge_struct;
 
 } // namespace SMC
 

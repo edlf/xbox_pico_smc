@@ -139,7 +139,7 @@ void set_fan_off() {
   pwm_set_enabled(pwm_slice, false);
 }
 
-void set_fan_speed(uint8_t level) {
+void set_fan_pwm(uint8_t level) {
   debug::print_message("GPIO: Set Fan level: " + std::to_string(level));
   pwm_set_gpio_level(pins::FAN_PWM1, level);
 }

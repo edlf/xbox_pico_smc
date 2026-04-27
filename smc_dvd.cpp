@@ -1,3 +1,4 @@
+#include "smc_dvd.hpp"
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
@@ -195,27 +196,27 @@ void update_dvd_tray_eject() {
   }
 }
 
-void update_dvd_tray3() {
+void update_dvd_tray_three() {
   // Done, untested
-  switch (state.dvd_tray_3) {
-  case update_dvd_tray3::initial:
+  switch (state.dvd_tray_three) {
+  case update_dvd_tray_three_state::initial:
     timers.dvd_tray_timeout = 0xFF;
     utils::clearBitNo(flags.bitfield_DATA_6F, 5);
 
     if (utils::checkBitNo(flags.bitfield_DATA_72, 7)) {
-      state.dvd_tray_3 = update_dvd_tray3::eject;
+      state.dvd_tray_three = update_dvd_tray_three_state::eject;
     } else {
       if (!(sensors.tray_status == 0x70 ||  // Eject state
             sensors.tray_status == 0x10 ||  // State 1
             sensors.tray_status == 0x00 ||  // State 0
             sensors.tray_status == 0x40 ||  // State 4
             sensors.tray_status == 0x60)) { // State 6
-        state.dvd_tray_3 = update_dvd_tray3::wait;
+        state.dvd_tray_three = update_dvd_tray_three_state::wait;
       }
     }
     break;
 
-  case update_dvd_tray3::wait:
+  case update_dvd_tray_three_state::wait:
     utils::setBitNo(flags.bitfield_DATA_6F, 5);
     utils::clearBitNo(flags.bitfield_DATA_72, 7);
 
@@ -223,11 +224,11 @@ void update_dvd_tray3() {
     if (sensors.tray_status == 0x10 || // Stable position 1
         sensors.tray_status == 0x40 || // Stable position 4
         sensors.tray_status == 0x60) { // Stable position 6
-      state.dvd_tray_3 = update_dvd_tray3::initial;
+      state.dvd_tray_three = update_dvd_tray_three_state::initial;
     }
     break;
 
-  case update_dvd_tray3::eject:
+  case update_dvd_tray_three_state::eject:
     utils::setBitNo(flags.bitfield_DATA_6F, 5);
 
     /* Check if we should exit this state based on eject flag */
@@ -235,7 +236,7 @@ void update_dvd_tray3() {
       /* Eject flag not set - check specific tray positions */
       if (sensors.tray_status == 0x50) {
         /* Tray fully ejected */
-        state.dvd_tray_3 = update_dvd_tray3::initial;
+        state.dvd_tray_three = update_dvd_tray_three_state::initial;
         utils::clearBitNo(flags.bitfield_DATA_73, 1);
         return;
       }
@@ -246,21 +247,21 @@ void update_dvd_tray3() {
         sensors.tray_status == 0x20 || // Position 2
         sensors.tray_status == 0x10) { // Position 1
       utils::clearBitNo(flags.bitfield_DATA_73, 1);
-      state.dvd_tray_3 = update_dvd_tray3::wait;
+      state.dvd_tray_three = update_dvd_tray_three_state::wait;
       return;
     }
 
     // Check if we should wait on timeout
     if (utils::checkBitNo(flags.bitfield_DATA_72, 6)) {
       if (--timers.dvd_tray_timeout == 0) {
-        state.dvd_tray_3 = update_dvd_tray3::wait;
+        state.dvd_tray_three = update_dvd_tray_three_state::wait;
         return;
       }
     }
     break;
 
   default:
-    state.dvd_tray_3 = update_dvd_tray3::initial;
+    state.dvd_tray_three = update_dvd_tray_three_state::initial;
     break;
   }
 }

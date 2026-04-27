@@ -3,6 +3,7 @@
 #include "utils.hpp"
 #include "pico/stdlib.h"
 #include "pin_assignments.hpp"
+#include "smc_video.hpp"
 
 namespace SMC {
 
@@ -20,7 +21,7 @@ uint8_t update_power_standby() {
     break;
 
   case power_standby_state::read_av: // State 1
-    update_video_mode();
+    Video::update();
     state.standby_power = power_standby_state::check_av_power_button;
     break;
 
@@ -110,13 +111,13 @@ uint8_t update_power_standby() {
     utils::clearBitNo(flags.bitfield_DATA_6F, 0);
     utils::clearBitNo(flags.bitfield_DATA_6F, 7);
     setStatusBit(audio_clamp_timer);
-    state.video_mode = 0;
+    Video::init();
     state.dvd_tray = dvd_tray_state::initial;
     ram_test_response0 = 0;
     ram_test_response1 = 0;
     pico_hal::timer1_init(500);
     pico_hal::setupI2C();
-    gpio_set_irq_enabled_with_callback(pins::POWER_OK, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    gpio_set_irq_enabled_with_callback(pins::POWER_OK, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
     return 1;
     break;
 

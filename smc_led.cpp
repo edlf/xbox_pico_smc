@@ -1,4 +1,4 @@
-#include "fsm_led.hpp"
+#include "smc_led.hpp"
 #include "smc_types.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
@@ -9,7 +9,21 @@
 
 namespace SMC {
 
-const std::vector<std::string> led_state_names {
+namespace Led {
+
+static led_state state;
+static uint8_t state_counter;
+static uint8_t green_phases_manual;
+static uint8_t red_phases_manual;
+static uint8_t green_phases;
+static uint8_t red_phases;
+static bool manual_control;
+static bool overheat;
+static bool av_missing;
+static bool power_off_bit;
+static bool quick_green_blink;
+
+const std::vector<std::string> state_names {
   "Initial",
   "Overheat",
   "Manual control",
@@ -22,7 +36,7 @@ const std::vector<std::string> led_state_names {
   "Quick green/orange (Missing AV)"
 };
 
-FSM_Leds::FSM_Leds() {
+void init() {
   state = led_state::initial;
   state_counter = 0;
   green_phases_manual = 0;
@@ -32,46 +46,55 @@ FSM_Leds::FSM_Leds() {
   manual_control = false;
 }
 
-FSM_Leds::~FSM_Leds() {
+void resetPhaseCounter() {
+    state = led_state::resetPhaseCounter;
 }
 
-void FSM_Leds::reset_phase_counter() {
-    state = led_state::reset_phase_counter;
-}
-
-void FSM_Leds::reset_state() {
+void resetState() {
     state = led_state::initial;
     manual_control = false;
 }
 
-void FSM_Leds::setGreenPhases(const uint8_t phase) {
+void setGreenPhases(const uint8_t phase) {
     green_phases = phase;
 }
 
-void FSM_Leds::setRedPhases(const uint8_t phase) {
+void setRedPhases(const uint8_t phase) {
     red_phases = phase;
 }
 
-void FSM_Leds::setManualControl(const bool mc) {
-    manual_control = mc;
+void setManualControl(const bool i) {
+    manual_control = i;
 }
 
-void FSM_Leds::printState() {
+void setOverheat(const bool i) {
+  overheat = i;
+}
+
+void setAvMissing(const bool i) {
+  av_missing = i;
+}
+
+void setPowerOff(const bool i) {
+  power_off_bit = i;
+}
+
+void setQuickGreenBlink(const bool i) {
+  quick_green_blink = i;
+}
+
+void printState() {
     const size_t led_state = static_cast<size_t>(state);
     std::string msg = "LED state [" + std::to_string(led_state) + "]";
 
-    if (led_state <= led_state_names.size()) {
-        msg += " " + led_state_names[led_state];
+    if (led_state <= state_names.size()) {
+        msg += " " + state_names[led_state];
     }
 
     debug::print_message(msg);
 }
 
-void FSM_Leds::update(
-  const bool overheat,
-  const bool av_missing,
-  const bool power_off_bit,
-  const bool quick_green_blink)
+void update()
 {
   switch (state) {
   case led_state::initial: // 0
@@ -159,13 +182,13 @@ void FSM_Leds::update(
 
     state_counter--;
     if (state_counter == -1) {
-      state = led_state::reset_phase_counter;
+      state = led_state::resetPhaseCounter;
     } else {
       state = led_state::initial;
     }
     break;
 
-  case led_state::reset_phase_counter: // 8
+  case led_state::resetPhaseCounter: // 8
     state_counter = 3; // ? gets overwritten by the initial state with 6...
     state = led_state::initial;
     break;
@@ -182,4 +205,5 @@ void FSM_Leds::update(
   }
 }
 
+} // namespace Led
 } // namespace SMC

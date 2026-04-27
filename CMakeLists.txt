@@ -44,7 +44,7 @@ add_executable(OG_SMC utils.cpp
                       main.cpp
                       pico_hal.cpp
                       smc.cpp
-                      fsm_led.cpp
+                      smc_led.cpp
                       smc_boot_challenge.cpp
                       smc_fan.cpp
                       smc_smbus.cpp

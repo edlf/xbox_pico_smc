@@ -25,7 +25,6 @@ void print_welcome();
 
 // SMC state related debug
 void print_states(const SMC::state_struct& status);
-void print_state_changes(const SMC::state_struct& status, const SMC::state_struct& status_previous);
 
 } // namespace debug
 

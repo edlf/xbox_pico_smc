@@ -59,11 +59,9 @@ void print_states(const SMC::state_struct& state) {
             << "* fan_control       [" << static_cast<int>(state.fan_control)         << "]\n"
             << "* dvd_tray          [" << static_cast<int>(state.dvd_tray)            << "]\n"
             << "* tray_eject        [" << static_cast<int>(state.tray_eject)          << "]\n"
-            << "* video_mode        [" << static_cast<int>(state.video_mode)          << "]\n"
             << "* audio_clamp       [" << static_cast<int>(state.audio_clamp)         << "]\n"
             << "* pwr_sw            [" << static_cast<int>(state.pwr_sw)              << "]\n"
-            << "* boot_challenge    [" << static_cast<int>(state.boot_challenge)      << "]\n"
-            << "* dvd_tray_3        [" << static_cast<int>(state.dvd_tray_3)          << "]\n"
+            << "* dvd_tray_three    [" << static_cast<int>(state.dvd_tray_three)      << "]\n"
             << "* pll_reset         [" << static_cast<int>(state.pll_reset)           << "]\n"
             << "* eject_sw          [" << static_cast<int>(state.eject_sw)            << "]\n"
             << "* update_eject_tray [" << static_cast<int>(state.update_eject_tray)   << "]\n"
@@ -83,48 +81,6 @@ void print_state_change(const std::string state_name, const uint8_t previous, co
     }
 
     std::cout << " " << std::to_string(previous) << " -> " << std::to_string(current) << std::endl;
-  }
-}
-
-void print_state_changes(const SMC::state_struct& state, const SMC::state_struct& state_previous) {
-  if (state.standby_power != state_previous.standby_power) {
-    print_state_change("standby_power", static_cast<uint8_t>(state_previous.standby_power), static_cast<uint8_t>(state.standby_power));
-  }
-  if (state.smi_power != state_previous.smi_power) {
-    print_state_change("smi_power", static_cast<uint8_t>(state_previous.smi_power), static_cast<uint8_t>(state.smi_power));
-  }
-  if (state.fan_control != state_previous.fan_control) {
-    print_state_change("fan_control", static_cast<uint8_t>(state_previous.fan_control), static_cast<uint8_t>(state.fan_control));
-  }
-  if (state.dvd_tray != state_previous.dvd_tray) {
-    print_state_change("dvd_tray", static_cast<uint8_t>(state_previous.dvd_tray), static_cast<uint8_t>(state.dvd_tray));
-  }
-  if (state.tray_eject != state_previous.tray_eject) {
-    print_state_change("tray_eject", static_cast<uint8_t>(state_previous.tray_eject), static_cast<uint8_t>(state.tray_eject));
-  }
-  if (state.video_mode != state_previous.video_mode) {
-    print_state_change("video_mode", static_cast<uint8_t>(state_previous.video_mode), static_cast<uint8_t>(state.video_mode));
-  }
-  if (state.audio_clamp != state_previous.audio_clamp) {
-    print_state_change("audio_clamp", static_cast<uint8_t>(state_previous.audio_clamp), static_cast<uint8_t>(state.audio_clamp));
-  }
-  if (state.pwr_sw != state_previous.pwr_sw) {
-    print_state_change("pwr_sw", static_cast<uint8_t>(state_previous.pwr_sw), static_cast<uint8_t>(state.pwr_sw));
-  }
-  if (state.boot_challenge != state_previous.boot_challenge) {
-    print_state_change("boot_challenge", static_cast<uint8_t>(state_previous.boot_challenge), static_cast<uint8_t>(state.boot_challenge));
-  }
-  if (state.dvd_tray_3 != state_previous.dvd_tray_3) {
-    print_state_change("dvd_tray_3", static_cast<uint8_t>(state_previous.dvd_tray_3), static_cast<uint8_t>(state.dvd_tray_3));
-  }
-  if (state.pll_reset != state_previous.pll_reset) {
-    print_state_change("pll_reset", static_cast<uint8_t>(state_previous.pll_reset), static_cast<uint8_t>(state.pll_reset));
-  }
-  if (state.eject_sw != state_previous.eject_sw) {
-    print_state_change("eject_sw", static_cast<uint8_t>(state_previous.eject_sw), static_cast<uint8_t>(state.eject_sw));
-  }
-  if (state.update_eject_tray != state_previous.update_eject_tray) {
-    print_state_change("update_eject_tray", static_cast<uint8_t>(state_previous.update_eject_tray), static_cast<uint8_t>(state.update_eject_tray));
   }
 }
 

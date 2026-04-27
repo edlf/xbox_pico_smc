@@ -1,5 +1,7 @@
+#include "smc_fan.hpp"
 #include "smc.hpp"
 #include "pico_hal.hpp"
+#include "smc_smbus.hpp"
 
 namespace SMC {
 
@@ -212,7 +214,7 @@ void set_fan_speed() {
   if (sensors.fan_speed == 0) {
     pico_hal::set_fan_off();
   } else {
-    pico_hal::set_fan_speed(sensors.fan_speed);
+    pico_hal::set_fan_pwm(sensors.fan_speed);
     pico_hal::set_fan_on();
   }
 }

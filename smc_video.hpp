@@ -3,7 +3,14 @@
 
 #include <cstdint>
 
-void update_video_mode();
-void print_video_mode(const uint8_t vm);
+namespace SMC {
+namespace Video {
+
+void init();
+void update();
+void printMode(const uint8_t vm);
+
+} // namespace Video
+} // namespace SMC
 
 #endif // __SMC_VIDEO__

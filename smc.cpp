@@ -2,6 +2,11 @@
 #include "smc_types.hpp"
 #include "debug.hpp"
 #include "utils.hpp"
+#include "smc_audio_clamp.hpp"
+#include "smc_fan.hpp"
+#include "smc_boot_challenge.hpp"
+#include "smc_smbus.hpp"
+#include "smc_dvd.hpp"
 
 // Pico stuff
 #include "hardware/i2c.h"
@@ -13,17 +18,12 @@
 
 namespace SMC {
 
-FSM_Leds fsm_leds;
-
-uint8_t version_byte;
-
 bool something_with_cpu_temp;
 volatile uint8_t ram_test_response0;
 volatile uint8_t ram_test_response1;
 volatile uint8_t bios_response_byte0;
 volatile uint8_t bios_response_byte1;
 
-challenge_struct challenge;
 state_struct state;
 state_struct state_previous;
 flags_struct flags;
@@ -76,7 +76,7 @@ void configureConexantEncoder() {
   i2c_write_burst_blocking(i2c0, 0x8A, config, len);
 }
 
-void gpio_callback(uint gpio, uint32_t events) {
+void smc_gpio_callback(unsigned int gpio, uint32_t events) {
   uint32_t int_status = pico_hal::disableInterrupts();
   // bit 3 - AV mode changed
   // InterruptReason_av_mode_changed = 0b00001000,   // 0x08
@@ -113,17 +113,17 @@ void gpio_callback(uint gpio, uint32_t events) {
 
   case pins::VIDEO_MODE_0:
     debug::print_message("ISR: vm0");
-    update_video_mode();
+    Video::update();
     break;
 
   case pins::VIDEO_MODE_1:
     debug::print_message("ISR: vm1");
-    update_video_mode();
+    Video::update();
     break;
 
   case pins::VIDEO_MODE_2:
     debug::print_message("ISR: vm2");
-    update_video_mode();
+    Video::update();
     break;
 
   case pins::TRAY_STATE_0:
@@ -167,27 +167,26 @@ void wait_for_isr() {
 
 void init_irqs() {
   debug::print_message("MAIN: Set gpio IRQs");
-  gpio_set_irq_enabled_with_callback(pins::SW_POWER, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::SW_EJECT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::DVD_EJECT, GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::POWER_OK, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_0, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_1, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_2, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_0, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_1, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_2, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::SW_POWER, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::SW_EJECT, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::DVD_EJECT, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::POWER_OK, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_0, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_1, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_2, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_0, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_1, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
+  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_2, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
 }
 
 void update_LEDs() {
-  const bool overheated = checkStatusBit(overheated);
-  const bool av_missing = utils::checkBitNo(flags.bitfield_DATA_71, 6);
-  const bool off = utils::checkBitNo(flags.bitfield_DATA_70, 3);
-  const bool manual_control = utils::checkBitNo(flags.bitfield_DATA_70, 2);
-  const bool dvd_eject = utils::checkBitNo(flags.bitfield_DATA_6F, 5);
-  fsm_leds.setManualControl(manual_control);
-  fsm_leds.update(overheated, av_missing, off, dvd_eject);
-  // fsm_leds.printState();
+  Led::setManualControl(utils::checkBitNo(flags.bitfield_DATA_70, 2));
+  Led::setOverheat(checkStatusBit(overheated));
+  Led::setAvMissing(utils::checkBitNo(flags.bitfield_DATA_71, 6));
+  Led::setPowerOff(utils::checkBitNo(flags.bitfield_DATA_70, 3));
+  Led::setQuickGreenBlink(utils::checkBitNo(flags.bitfield_DATA_6F, 5));
+  Led::update();
+  // Led::printState();
 }
 
 void main_loop() {
@@ -214,10 +213,9 @@ void main_loop() {
 
   state.fan_control = fan_control_state::initial;
   state.dvd_tray = dvd_tray_state::initial;
-  state.video_mode = 0;
+  Video::init();
   state.audio_clamp = audio_state::clamped;
-  state.boot_challenge = boot_challenge_state::initial;
-  fsm_leds.reset_phase_counter();
+  Led::resetPhaseCounter();
   state.smi_power = smi_power_state::initial;
   state.tray_eject = 1;
 
@@ -226,6 +224,8 @@ void main_loop() {
   uint32_t loop_count = 0;
 
   pico_hal::enableWatchdog();
+
+  BootChallenge::challenge_struct& challenge = BootChallenge::getChallengeStructRef();
 
   do {
     state_previous = state;
@@ -252,15 +252,15 @@ void main_loop() {
 
       while (true) {
         update_PLL_SYSRESET();
-        update_boot_challenge();
+        BootChallenge::update();
         update_dvd_tray();
         update_eject_tray();
-        update_video_mode();
+        Video::update();
         update_pwr_sw();
         update_eject_sw();
         update_dvd_tray_eject();
-        update_dvd_tray3();
-        update_audio_clamp();
+        update_dvd_tray_three();
+        AudioClamp::update();
         update_LEDs();
         update_fan_temp();
 
@@ -282,12 +282,12 @@ void main_loop() {
       // jump_index_sub_code_828 = 0;
       state.fan_control = fan_control_state::initial;
       state.dvd_tray = dvd_tray_state::initial;
-      state.video_mode = 0;
+      Video::init();
       state.audio_clamp = audio_state::clamped;
       // jump_index_sub_code_5AF = 0;
-      state.boot_challenge = boot_challenge_state::initial;
-      state.dvd_tray_3 = update_dvd_tray3::initial; // jump_index_sub_code_519
-      fsm_leds.reset_phase_counter();
+      BootChallenge::resetState();
+      state.dvd_tray_three = update_dvd_tray_three_state::initial; // jump_index_sub_code_519
+      Led::resetPhaseCounter();
       state.smi_power = smi_power_state::initial;
       state.tray_eject = 1;
       pico_hal::petWatchdog();
@@ -307,34 +307,30 @@ void main_loop() {
 
     busy_wait_ms(40);
 
-    // debug::print_state_changes(state, state_previous);
     pico_hal::petWatchdog();
     loop_count++;
   } while (true);
 }
 
 void globals_init() {
+  AudioClamp::init();
+  BootChallenge::init();
+  Led::init();
+  Video::init();
+
   flags = {0};
-  challenge = {0};
   something_with_cpu_temp = true;
 
-  /* Version counter initialization */
-  version_byte = 1;
-
-  /* Initialize control state variables */
   state.standby_power = power_standby_state::initial;
   state.fan_control = fan_control_state::initial;
-  state.boot_challenge = boot_challenge_state::initial;
-  state.audio_clamp = audio_state::clamped;
   state.pll_reset = pll_sysreset_state::initial;
   state.update_eject_tray = update_eject_tray_state::initial;
-  state.dvd_tray_3 = update_dvd_tray3::initial;
+  state.dvd_tray_three = update_dvd_tray_three_state::initial;
   state.pwr_sw = power_switch_state::wait_for_button_press;
   state.eject_sw = eject_switch_state::wait_for_button_press;
   state.smi_power = smi_power_state::decision_state;
   state.dvd_tray = dvd_tray_state::initial;
   state.tray_eject = 0;
-  state.video_mode = 0;
 
   /* Initialize flags */
   resetInterruptReason();
@@ -364,7 +360,6 @@ void globals_init() {
   timers.power_timeout2 = 0;
   timers.power_timeout3 = 0;
   timers.boot_response_timeout = 0;
-  timers.audio_clamp_timeout = 0;
   timers.fan_control_timeout1 = 0;
   timers.fan_control_timeout2 = 0;
 }

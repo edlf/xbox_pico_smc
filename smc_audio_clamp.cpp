@@ -3,16 +3,22 @@
 #include "utils.hpp"
 
 namespace SMC {
+namespace AudioClamp {
 
-void update_audio_clamp() {
-  // Done, untested
+uint16_t audio_clamp_timeout;
 
+void init() {
+  state.audio_clamp = audio_state::clamped;
+  audio_clamp_timeout = 0;
+}
+
+void update() {
   switch (state.audio_clamp) {
   case audio_state::clamped:
     // Audio clamped
     pico_hal::audio_clamp_on();
     utils::clearBitNo(flags.bitfield_DATA_6F, 0);
-    timers.audio_clamp_timeout = 44;
+    audio_clamp_timeout = 44;
 
     // Cable missing, keep audio clamped
     if (utils::checkBitNo(flags.bitfield_DATA_71, 6)) {
@@ -36,8 +42,8 @@ void update_audio_clamp() {
 
     if (!utils::checkBitNo(flags.bitfield_DATA_71, 6) && !utils::checkBitNo(flags.bitfield_DATA_6F, 0) && !utils::checkBitNo(flags.bitfield_DATA_6F, 7)) {
       if (!utils::checkBitNo(flags.bitfield_DATA_6F, 7)) {
-        timers.audio_clamp_timeout--;
-        if (timers.audio_clamp_timeout != 0) {
+        audio_clamp_timeout--;
+        if (audio_clamp_timeout != 0) {
           return;
         }
       }
@@ -66,4 +72,5 @@ void update_audio_clamp() {
   }
 }
 
+} // AudioClamp
 } // namespace SMC
