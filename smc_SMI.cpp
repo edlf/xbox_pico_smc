@@ -2,7 +2,42 @@
 #include "pico_hal.hpp"
 #include "utils.hpp"
 
+#include <vector>
+#include <string>
+
 namespace SMC {
+
+const std::vector<std::string> smi_state_names {
+  "Decision_state",
+  "Power off start",
+  "case2",
+  "case3",
+  "Interrupt event handled",
+  "case5",
+  "Request tray close",
+  "Leds off",
+  "Wait for tray to close",
+  "Initial",
+  "Overheat cooldown wait",
+  "case11",
+  "Going to reset",
+  "case13",
+  "Delay",
+  "case15",
+  "Delayed turning off",
+  "wait_state_for_initial"
+};
+
+void printStateSMI() {
+    const size_t smi_state = static_cast<size_t>(state.smi_power);
+    std::string msg = "SMI state [" + std::to_string(smi_state) + "]";
+
+    if (smi_state <= smi_state_names.size()) {
+        msg += " " + smi_state_names[smi_state];
+    }
+
+    debug::print_message(msg);
+}
 
 uint8_t update_SMI_and_power() {
   debug::print_message("update_SMI_and_power");

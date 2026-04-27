@@ -265,6 +265,7 @@ void main_loop() {
         update_fan_temp();
 
         power_standby_state = update_SMI_and_power();
+        printStateSMI();
         if ((power_standby_state & 1) != 0) {
           break;
         }

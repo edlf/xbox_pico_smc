@@ -7,6 +7,7 @@
 #include "smc_types.hpp"
 #include "fsm_led.hpp"
 #include "smc_video.hpp"
+#include "smc_SMI.hpp"
 
 // pico stuff
 #include "hardware/i2c.h"
@@ -57,8 +58,6 @@ void update_dvd_tray3();
 void update_dvd_tray();
 
 void update_PLL_SYSRESET();
-
-uint8_t update_SMI_and_power();
 
 void update_pwr_sw();
 void update_eject_sw();

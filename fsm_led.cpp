@@ -4,7 +4,23 @@
 #include "utils.hpp"
 #include "debug.hpp"
 
+#include <vector>
+#include <string>
+
 namespace SMC {
+
+const std::vector<std::string> led_state_names {
+  "Initial",
+  "Overheat",
+  "Manual control",
+  "Quick green blink",
+  "Solid green",
+  "Off",
+  "Tick update",
+  "Set GPIOs",
+  "Reset phase counter",
+  "Quick green/orange (Missing AV)"
+};
 
 FSM_Leds::FSM_Leds() {
   state = led_state::initial;
@@ -41,7 +57,14 @@ void FSM_Leds::setManualControl(const bool mc) {
 }
 
 void FSM_Leds::printState() {
-    debug::print_message("LED state [" + std::to_string(static_cast<int>(state)) + "]");
+    const size_t led_state = static_cast<size_t>(state);
+    std::string msg = "LED state [" + std::to_string(led_state) + "]";
+
+    if (led_state <= led_state_names.size()) {
+        msg += " " + led_state_names[led_state];
+    }
+
+    debug::print_message(msg);
 }
 
 void FSM_Leds::update(
@@ -50,7 +73,6 @@ void FSM_Leds::update(
   const bool power_off_bit,
   const bool quick_green_blink)
 {
-  // Done, untested
   switch (state) {
   case led_state::initial: // 0
     state_counter = 6;
@@ -61,7 +83,6 @@ void FSM_Leds::update(
     }
 
     if (av_missing) {
-      // AV cable missing
       state = led_state::quick_green_orange;
       return;
     }
@@ -76,7 +97,6 @@ void FSM_Leds::update(
       return;
     }
 
-    // DVD eject in progress?
     if (quick_green_blink) {
       state = led_state::quick_green_blink;
       return;
@@ -86,14 +106,13 @@ void FSM_Leds::update(
     break;
 
   case led_state::overheat: // 1
-    // System overheated - slow blinking
+    // System overheated: slow blinking
     red_phases = 3;
     green_phases = 3;
     state = led_state::tick_update;
     break;
 
   case led_state::manual_control: // 2
-    // Manual control mode
     red_phases = red_phases_manual;
     green_phases = green_phases_manual;
     state = led_state::tick_update;
@@ -107,21 +126,18 @@ void FSM_Leds::update(
     break;
 
   case led_state::solid_green: // 4
-    // Solid green
     red_phases = 0;
     green_phases = 0xF;
     state = led_state::tick_update;
     break;
 
   case led_state::off: // 5
-    // Off
     red_phases = 0;
     green_phases = 0;
     state = led_state::tick_update;
     break;
 
   case led_state::tick_update: // 6
-    // Counter tick
     state_counter--;
     if (state_counter != 0) {
       return;
@@ -130,7 +146,6 @@ void FSM_Leds::update(
     break;
 
   case led_state::set_gpios: // 7
-    // Actually set leds according to patterns
     if (utils::checkBitNo(red_phases, state_counter)) {
       pico_hal::led_red_on();
     } else {
