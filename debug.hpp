@@ -27,8 +27,6 @@ void print_welcome();
 void print_states(const SMC::state_struct& status);
 void print_state_changes(const SMC::state_struct& status, const SMC::state_struct& status_previous);
 
-void print_video_mode(const uint8_t vm);
-
 } // namespace debug
 
 #endif // __DEBUG__

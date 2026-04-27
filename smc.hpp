@@ -5,12 +5,42 @@
 #include <stdio.h>
 #include "debug.hpp"
 #include "smc_types.hpp"
+#include "fsm_led.hpp"
+#include "smc_video.hpp"
 
 // pico stuff
 #include "hardware/i2c.h"
 #include "i2c_slave/include/i2c_slave.h"
 
 namespace SMC {
+
+// TODO: remove hacks
+extern challenge_struct challenge;
+extern state_struct state;
+extern state_struct state_previous;
+extern flags_struct flags;
+extern sensors_struct sensors;
+extern timers_struct timers;
+extern config_struct config;
+extern bool something_with_cpu_temp;
+extern volatile uint8_t ram_test_response0;
+extern volatile uint8_t ram_test_response1;
+extern volatile uint8_t bios_response_byte0;
+extern volatile uint8_t bios_response_byte1;
+extern FSM_Leds fsm_leds;
+
+void configureConexantEncoder();
+
+void fireSystemInterrupt();
+
+void resetInterruptReason();
+void setInterruptReason(uint8_t ir);
+void clearInterruptReason(uint8_t ir);
+bool checkInterruptReason(uint8_t ir);
+void setStatusBit(uint8_t status_bit);
+void clearStatusBit(uint8_t status_bit);
+uint8_t checkStatusBit(uint8_t status_bit);
+
 void main_loop();
 void globals_init();
 void port_init();
@@ -32,8 +62,6 @@ uint8_t update_SMI_and_power();
 
 void update_pwr_sw();
 void update_eject_sw();
-
-void update_video_mode();
 
 void update_LEDs();
 

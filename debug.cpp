@@ -63,7 +63,6 @@ void print_states(const SMC::state_struct& state) {
             << "* audio_clamp       [" << static_cast<int>(state.audio_clamp)         << "]\n"
             << "* pwr_sw            [" << static_cast<int>(state.pwr_sw)              << "]\n"
             << "* boot_challenge    [" << static_cast<int>(state.boot_challenge)      << "]\n"
-            << "* leds              [" << static_cast<int>(state.leds)                << "]\n"
             << "* dvd_tray_3        [" << static_cast<int>(state.dvd_tray_3)          << "]\n"
             << "* pll_reset         [" << static_cast<int>(state.pll_reset)           << "]\n"
             << "* eject_sw          [" << static_cast<int>(state.eject_sw)            << "]\n"
@@ -75,14 +74,14 @@ void print_state_change(const std::string state_name, const uint8_t previous, co
   if (debugLevel == DebugLevel::All) {
     print_timestamp();
     std::cout <<  "(STATE) " << state_name;
-    
+
     constexpr size_t max_len = 20;
     size_t str_size = state_name.size();
     if (max_len > str_size) {
       std::string s(max_len - str_size, ' ');
       std::cout << s;
     }
-    
+
     std::cout << " " << std::to_string(previous) << " -> " << std::to_string(current) << std::endl;
   }
 }
@@ -115,9 +114,6 @@ void print_state_changes(const SMC::state_struct& state, const SMC::state_struct
   if (state.boot_challenge != state_previous.boot_challenge) {
     print_state_change("boot_challenge", static_cast<uint8_t>(state_previous.boot_challenge), static_cast<uint8_t>(state.boot_challenge));
   }
-  if (state.leds != state_previous.leds) {
-    print_state_change("leds", static_cast<uint8_t>(state_previous.leds), static_cast<uint8_t>(state.leds));
-  }
   if (state.dvd_tray_3 != state_previous.dvd_tray_3) {
     print_state_change("dvd_tray_3", static_cast<uint8_t>(state_previous.dvd_tray_3), static_cast<uint8_t>(state.dvd_tray_3));
   }
@@ -129,39 +125,6 @@ void print_state_changes(const SMC::state_struct& state, const SMC::state_struct
   }
   if (state.update_eject_tray != state_previous.update_eject_tray) {
     print_state_change("update_eject_tray", static_cast<uint8_t>(state_previous.update_eject_tray), static_cast<uint8_t>(state.update_eject_tray));
-  }
-  // printf("---------------- State changes end ----------------\n");
-}
-
-void print_video_mode(const uint8_t vm) {
-  uint8_t temp = (vm >> 1);
-  switch (temp) {
-    case 0:
-      print_message("Advanced SCART Cable");
-      break;
-    case 1:
-      print_message("High Definition AV Pack");
-      break;
-    case 2:
-      print_message("VGA / progressive RGB");
-      break;
-    case 3:
-      print_message("RF Adapter");
-      break;
-    case 4:
-      print_message("Advanced AV Pack");
-      break;
-    case 5:
-      print_message("Unknown mode 5");
-      break;
-    case 6:
-      print_message("Standard AV Cable");
-      break;
-    case 7:
-      print_message("No cable connected");
-      break;
-    default:
-      print_warn("Invalid video mode");
   }
 }
 

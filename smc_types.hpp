@@ -84,19 +84,6 @@ enum class power_switch_state {
   release_debounce
 };
 
-enum class led_state {
-  initial,
-  overheat,
-  manual_control,
-  quick_green_blink,
-  solid_green,
-  off,
-  tick_update,
-  set_gpios,
-  reset_phase_counter,
-  quick_green_orange
-};
-
 enum class audio_state {
   clamped,
   tick_timer,
@@ -187,7 +174,6 @@ typedef struct {
   power_switch_state pwr_sw;
   eject_switch_state eject_sw;
   audio_state audio_clamp;
-  led_state leds;
   power_standby_state standby_power;
   fan_control_state fan_control;
   pll_sysreset_state pll_reset;
@@ -260,44 +246,6 @@ typedef struct {
   uint8_t status_byte3;
   uint8_t status_byte4;
 } challenge_struct;
-
-typedef struct {
-  uint8_t state_counter;
-  uint8_t green_phases_manual;
-  uint8_t red_phases_manual;
-  uint8_t green_phases;
-  uint8_t red_phases;
-} led_struct;
-
-namespace Command {
-constexpr uint8_t FIRMWARE_REVISION = 0x01;
-constexpr uint8_t RESET = 0x02;
-constexpr uint8_t TRAY_STATE = 0x03;
-constexpr uint8_t VIDEO_MODE = 0x04;
-constexpr uint8_t FAN_OVERRIDE = 0x05;
-constexpr uint8_t REQUEST_FAN_SPEED = 0x06;
-constexpr uint8_t LED_OVERRIDE = 0x07;
-constexpr uint8_t LED_STATES = 0x08;
-constexpr uint8_t CPU_TEMPERATURE = 0x09;
-constexpr uint8_t AIR_TEMPERATURE = 0x0A;
-constexpr uint8_t AUDIO_CLAMP = 0x0B;
-constexpr uint8_t DVD_TRAY_OPERATION = 0x0C;
-constexpr uint8_t OS_RESUME = 0x0D;
-constexpr uint8_t WRITE_ERROR_CODE = 0x0E;
-constexpr uint8_t READ_ERROR_CODE = 0x0F;
-constexpr uint8_t READ_FAN_SPEED = 0x10;
-constexpr uint8_t INTERRUPT_REASON = 0x11;
-constexpr uint8_t WRITE_RAM_TEST_RESULTS = 0x12;
-constexpr uint8_t WRITE_RAM_TYPE = 0x13;
-constexpr uint8_t READ_RAM_TEST_RESULTS = 0x14;
-constexpr uint8_t READ_RAM_TYPE = 0x15;
-constexpr uint8_t LAST_REGISTER_WRITTEN = 0x16;
-constexpr uint8_t LAST_BYTE_WRITTEN = 0x17;
-constexpr uint8_t SOFTWARE_INTERRUPT = 0x18;
-constexpr uint8_t OVERRIDE_RESET_ON_TRAY_OPEN = 0x19;
-constexpr uint8_t OS_READY = 0x1A;
-constexpr uint8_t SCRATCH = 0x1B;
-}; // namespace Command
 
 } // namespace SMC
 

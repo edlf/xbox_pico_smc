@@ -21,8 +21,8 @@ void smi_pin_on();
 void smi_pin_off();
 void audio_clamp_on();
 void audio_clamp_off();
-void power_on_assert();
-void power_on_deassert();
+void turn_on_psu();
+void turn_off_psu();
 void PLL_on();
 void PLL_off();
 void dvd_eject_on();
@@ -58,6 +58,8 @@ void timer1_disable();
 
 // I2C
 void setupI2C();
+
+void shutdown_xbox();
 
 //
 void panic(const std::string message);

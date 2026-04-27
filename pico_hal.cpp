@@ -59,13 +59,13 @@ void audio_clamp_off() {
   gpio_put(pins::AUDIO_CLAMP, 0);
 }
 
-void power_on_assert() {
-  debug::print_message("GPIO: Assert POWER ON");
+void turn_on_psu() {
+  debug::print_message("GPIO: Turn on xbox PSU");
   gpio_put(pins::POWER_ON, 1);
 }
 
-void power_on_deassert() {
-  debug::print_message("GPIO: Deassert POWER ON");
+void turn_off_psu() {
+  debug::print_message("GPIO: Turn off xbox PSU");
   gpio_put(pins::POWER_ON, 0);
 }
 
@@ -363,15 +363,23 @@ void setupI2C() {
   // 0x36
 }
 
+void shutdown_xbox() {
+  pico_hal::assertSystemReset();
+  pico_hal::PLL_off();
+  pico_hal::led_green_off();
+  pico_hal::led_red_off();
+  pico_hal::set_fan_off();
+  pico_hal::audio_clamp_off();
+  pico_hal::turn_off_psu();
+}
+
 void panic(const std::string message) {
   // Disable all interrupts + timers
   (void) save_and_disable_interrupts();
   timer0_disable();
   timer1_disable();
 
-  // Kill power to system
-  assertSystemReset();
-  power_on_deassert();
+  shutdown_xbox();
 
   debug::print_critical(message + " Waiting for watchdog to reboot");
 
