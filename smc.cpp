@@ -1,13 +1,6 @@
 #include "smc.hpp"
-#include "smc_types.hpp"
 #include "debug.hpp"
 #include "utils.hpp"
-#include "smc_audio_clamp.hpp"
-#include "smc_fan.hpp"
-#include "smc_boot_challenge.hpp"
-#include "smc_smbus.hpp"
-#include "smc_dvd.hpp"
-#include "smc_front_panel_sw.hpp"
 
 // Pico stuff
 #include "hardware/i2c.h"
@@ -248,7 +241,7 @@ void main_loop() {
       challenge.status_byte3 = challenge.status_byte1 ^ sensors.CPU_temperature;
 
       while (true) {
-        update_PLL_SYSRESET();
+        PLL_Reset::update();
         BootChallenge::update();
         Dvd::updateDvdTray();
         Dvd::updateEjectTray();
@@ -316,7 +309,7 @@ void globals_init() {
 
   state.standby_power = power_standby_state::initial;
   Fan::init();
-  state.pll_reset = pll_sysreset_state::initial;
+  PLL_Reset::init();
   Dvd::init();
   FrontPanelSW::init();
   state.smi_power = smi_power_state::decision_state;

@@ -2,6 +2,7 @@
 #include "smc_audio_clamp.hpp"
 #include "smc_dvd.hpp"
 #include "smc.hpp"
+#include "smc_pll_reset.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
 
@@ -318,7 +319,7 @@ uint8_t update_SMI_and_power() {
 
   case smi_power_state::delay:
     /* Delay state */
-    if (state.pll_reset == pll_sysreset_state::state1) {
+    if (PLL_Reset::isState1()) {
       if (--timers.power_timeout == 0) {
         /* Proceed */
       }

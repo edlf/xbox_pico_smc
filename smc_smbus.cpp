@@ -1,7 +1,3 @@
-#include "smc_smbus.hpp"
-#include "smc_audio_clamp.hpp"
-#include "smc_smbus.hpp"
-#include "smc_fan.hpp"
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
@@ -138,10 +134,10 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // data: 0x00 = warm reset, 0x01 = cold reset
     if (data == 0x00) {
       // Warm reset - keep power state
-      state.pll_reset = pll_sysreset_state::warm_reset_1;
+      PLL_Reset::setWarmReset1();
     } else if (data == 0x01) {
       // Cold reset - power cycle
-      state.pll_reset = pll_sysreset_state::cold_reset;
+      PLL_Reset::setColdReset();
     }
     break;
 

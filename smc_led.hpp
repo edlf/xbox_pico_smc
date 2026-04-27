@@ -1,7 +1,7 @@
 #ifndef __SMC_LED__
 #define __SMC_LED__
 
-#include "smc_types.hpp"
+#include <cstdint>
 
 namespace SMC {
 namespace Led {

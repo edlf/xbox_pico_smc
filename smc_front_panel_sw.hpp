@@ -1,8 +1,6 @@
 #ifndef __SMC_FRONT_PANEL_SW__
 #define __SMC_FRONT_PANEL_SW__
 
-#include "smc_types.hpp"
-
 namespace SMC {
 namespace FrontPanelSW {
 

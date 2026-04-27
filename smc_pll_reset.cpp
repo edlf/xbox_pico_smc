@@ -1,3 +1,4 @@
+#include "smc_pll_reset.hpp"
 #include "smc.hpp"
 #include "smc_fan.hpp"
 #include "pico_hal.hpp"
@@ -5,9 +6,28 @@
 #include "pico/stdlib.h" // TODO move busywait to pico_hal
 
 namespace SMC {
+namespace PLL_Reset {
 
-void update_PLL_SYSRESET() {
-  switch (state.pll_reset) {
+pll_sysreset_state state;
+
+void init() {
+  state = pll_sysreset_state::initial;
+}
+
+bool isState1() {
+  return (state == pll_sysreset_state::state1);
+}
+
+void setWarmReset1() {
+  state = pll_sysreset_state::warm_reset_1;
+}
+
+void setColdReset() {
+  state = pll_sysreset_state::cold_reset;
+}
+
+void update() {
+  switch (state) {
   case pll_sysreset_state::initial:
     pico_hal::assertSystemReset();
     flags.bitfield_DATA_70 &= ~0x01; // Clear flags
@@ -15,7 +35,7 @@ void update_PLL_SYSRESET() {
     flags.bitfield_DATA_70 &= ~0x04;
     flags.bitfield_DATA_72 |= 0x04; // Set PLL control flags
     flags.bitfield_DATA_72 |= 0x02;
-    state.pll_reset = pll_sysreset_state::state1;
+    state = pll_sysreset_state::state1;
     break;
 
   case pll_sysreset_state::state1:
@@ -24,12 +44,12 @@ void update_PLL_SYSRESET() {
 
     if (flags.bitfield_DATA_70 & 0x01) {
       /* Cold reset path - go back to state 0 */
-      state.pll_reset = pll_sysreset_state::initial;
+      state = pll_sysreset_state::initial;
     } else if (flags.bitfield_DATA_70 & 0x02) {
       /* Check PORTC.1 (POWOK signal) */
       if (pico_hal::get_power_ok()) {
         /* POWOK is high */
-        state.pll_reset = pll_sysreset_state::cold_reset;
+        state = pll_sysreset_state::cold_reset;
       }
     } else {
       /* Normal transition to wait state */
@@ -41,15 +61,15 @@ void update_PLL_SYSRESET() {
     /* Wait state - checking for timing conditions */
     if (!pico_hal::get_power_ok()) {
       /* POWOK low - return to state 0 */
-      state.pll_reset = pll_sysreset_state::initial;
+      state = pll_sysreset_state::initial;
     } else if (flags.bitfield_DATA_70 & 0x01) {
       /* Reset condition detected */
-      state.pll_reset = pll_sysreset_state::initial;
+      state = pll_sysreset_state::initial;
     } else {
       /* Decrement timer and check for completion */
       if (Fan::control_timeout == 0) {
         Fan::control_timeout = 2;
-        state.pll_reset = pll_sysreset_state::cold_reset;
+        state = pll_sysreset_state::cold_reset;
       }
     }
     break;
@@ -71,7 +91,7 @@ void update_PLL_SYSRESET() {
 
     // TODO: Send SMBus write command
 
-    state.pll_reset = pll_sysreset_state::state8;
+    state = pll_sysreset_state::state8;
     break;
 
   case pll_sysreset_state::warm_reset_2:
@@ -82,7 +102,7 @@ void update_PLL_SYSRESET() {
     /* Wait for encoder communication */
     busy_wait_ms(132); // Delay ~832 cycles
 
-    state.pll_reset = pll_sysreset_state::state8;
+    state = pll_sysreset_state::state8;
     break;
 
   case pll_sysreset_state::warm_reset_1:
@@ -92,7 +112,7 @@ void update_PLL_SYSRESET() {
     flags.bitfield_DATA_72 |= 0x04; // Maintain PLL control state
     flags.bitfield_DATA_72 |= 0x02;
     flags.bitfield_DATA_70 &= ~0x04;
-    state.pll_reset = pll_sysreset_state::warm_reset_2;
+    state = pll_sysreset_state::warm_reset_2;
     break;
 
   case pll_sysreset_state::state6:
@@ -104,7 +124,7 @@ void update_PLL_SYSRESET() {
     pico_hal::PLL_off();
     pico_hal::assertSystemReset();
     Fan::control_timeout = 1;
-    state.pll_reset = pll_sysreset_state::state7;
+    state = pll_sysreset_state::state7;
     break;
 
   case pll_sysreset_state::state7:
@@ -114,26 +134,27 @@ void update_PLL_SYSRESET() {
     }
 
     pico_hal::PLL_on();
-    state.pll_reset = pll_sysreset_state::warm_reset_2;
+    state = pll_sysreset_state::warm_reset_2;
     break;
 
   case pll_sysreset_state::state8:
     /* Final state - wait for completion or reset request */
     if (!pico_hal::get_power_ok()) {
-      state.pll_reset = pll_sysreset_state::initial;
+      state = pll_sysreset_state::initial;
     } else if (flags.bitfield_DATA_70 & 0x01) {
       /* Something needs resetting */
-      state.pll_reset = pll_sysreset_state::initial;
+      state = pll_sysreset_state::initial;
     } else if (flags.bitfield_DATA_73 & 0x01) {
       /* System reset requested */
-      state.pll_reset = pll_sysreset_state::warm_reset_1; // Go to warm reset path
+      state = pll_sysreset_state::warm_reset_1; // Go to warm reset path
     }
     break;
 
   default:
-    state.pll_reset = pll_sysreset_state::initial;
+    state = pll_sysreset_state::initial;
     break;
   }
 }
 
+} // namespace PLL_Reset
 } // namespace SMC

@@ -5,9 +5,16 @@
 #include <stdio.h>
 #include "debug.hpp"
 #include "smc_types.hpp"
+#include "smc_front_panel_sw.hpp"
+#include "smc_dvd.hpp"
 #include "smc_led.hpp"
 #include "smc_video.hpp"
+#include "smc_boot_challenge.hpp"
 #include "smc_SMI.hpp"
+#include "smc_audio_clamp.hpp"
+#include "smc_smbus.hpp"
+#include "smc_fan.hpp"
+#include "smc_pll_reset.hpp"
 
 namespace SMC {
 
@@ -44,8 +51,6 @@ void isr();
 void smc_gpio_callback(unsigned int gpio, uint32_t events);
 
 uint8_t update_power_standby();
-
-void update_PLL_SYSRESET();
 
 void update_LEDs();
 

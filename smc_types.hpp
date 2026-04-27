@@ -84,22 +84,9 @@ enum class power_standby_state {
   powered_up
 };
 
-enum class pll_sysreset_state {
-  initial,
-  state1,
-  state2,
-  cold_reset,
-  warm_reset_2,
-  warm_reset_1,
-  state6,
-  state7,
-  state8
-};
-
 // State Machines
 typedef struct {
   power_standby_state standby_power;
-  pll_sysreset_state pll_reset;
   smi_power_state smi_power;
 } state_struct;
 

@@ -1,6 +1,7 @@
 #ifndef __PIN_ASSIGNMENTS__
 #define __PIN_ASSIGNMENTS__
 
+#include <cstdint>
 #include "hardware/i2c.h"
 
 namespace pins {
