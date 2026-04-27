@@ -1,3 +1,5 @@
+#include "smc_SMI.hpp"
+#include "smc_audio_clamp.hpp"
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
@@ -229,7 +231,7 @@ uint8_t update_SMI_and_power() {
 
   case smi_power_state::wait_tray_close:
     /* Wait for tray to close */
-    if (state.audio_clamp == audio_state::clamped && state.tray_eject == 1) {
+    if (AudioClamp::isClamped() && state.tray_eject == 1) {
       timers.power_timeout = 0xFF;
       state.smi_power = smi_power_state::case15;
     } else if (--timers.power_timeout == 0) {

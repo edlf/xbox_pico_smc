@@ -4,8 +4,18 @@
 namespace SMC {
 namespace AudioClamp {
 
+enum class audio_state {
+  clamped,
+  tick_timer,
+  unclamped
+};
+
 void init();
 void update();
+bool isClamped();
+void clamp();
+void unclamp();
+void printState();
 
 } // AudioClamp
 } // SMC

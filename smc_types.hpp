@@ -84,12 +84,6 @@ enum class power_switch_state {
   release_debounce
 };
 
-enum class audio_state {
-  clamped,
-  tick_timer,
-  unclamped
-};
-
 enum class power_standby_state {
   initial,
   read_av,
@@ -157,7 +151,6 @@ enum class update_dvd_tray_three_state {
 typedef struct {
   power_switch_state pwr_sw;
   eject_switch_state eject_sw;
-  audio_state audio_clamp;
   power_standby_state standby_power;
   fan_control_state fan_control;
   pll_sysreset_state pll_reset;

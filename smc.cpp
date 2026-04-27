@@ -214,7 +214,7 @@ void main_loop() {
   state.fan_control = fan_control_state::initial;
   state.dvd_tray = dvd_tray_state::initial;
   Video::init();
-  state.audio_clamp = audio_state::clamped;
+  AudioClamp::init();
   Led::resetPhaseCounter();
   state.smi_power = smi_power_state::initial;
   state.tray_eject = 1;
@@ -283,7 +283,7 @@ void main_loop() {
       state.fan_control = fan_control_state::initial;
       state.dvd_tray = dvd_tray_state::initial;
       Video::init();
-      state.audio_clamp = audio_state::clamped;
+      AudioClamp::init();
       // jump_index_sub_code_5AF = 0;
       BootChallenge::resetState();
       state.dvd_tray_three = update_dvd_tray_three_state::initial; // jump_index_sub_code_519

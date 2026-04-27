@@ -59,7 +59,6 @@ void print_states(const SMC::state_struct& state) {
             << "* fan_control       [" << static_cast<int>(state.fan_control)         << "]\n"
             << "* dvd_tray          [" << static_cast<int>(state.dvd_tray)            << "]\n"
             << "* tray_eject        [" << static_cast<int>(state.tray_eject)          << "]\n"
-            << "* audio_clamp       [" << static_cast<int>(state.audio_clamp)         << "]\n"
             << "* pwr_sw            [" << static_cast<int>(state.pwr_sw)              << "]\n"
             << "* dvd_tray_three    [" << static_cast<int>(state.dvd_tray_three)      << "]\n"
             << "* pll_reset         [" << static_cast<int>(state.pll_reset)           << "]\n"

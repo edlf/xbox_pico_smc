@@ -1,4 +1,6 @@
 #include "smc_smbus.hpp"
+#include "smc_audio_clamp.hpp"
+#include "smc_smbus.hpp"
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
@@ -189,11 +191,9 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
   case Command::AUDIO_CLAMP: // 0x0B
     // data: 0 = unclamp, non-zero = clamp
     if (data == 0) {
-      state.audio_clamp = audio_state::unclamped;
-      pico_hal::audio_clamp_off();
+      AudioClamp::unclamp();
     } else {
-      state.audio_clamp = audio_state::clamped;
-      pico_hal::audio_clamp_on();
+      AudioClamp::clamp();
     }
     break;
 
