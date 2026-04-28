@@ -1,6 +1,7 @@
 #ifndef __HAL__
 #define __HAL__
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -27,10 +28,14 @@ void turn_on_psu();
 void turn_off_psu();
 void PLL_on();
 void PLL_off();
-void dvd_eject_on();
-void dvd_eject_off();
+void dvd_eject_assert();
+void dvd_eject_release();
+void rtc_dump_on();
+void rtc_dump_off();
 
 uint8_t get_tray_state();
+bool get_dvd_eject_line(); // Actual line level, low = eject asserted
+bool get_dvd_active();
 
 // PSU
 bool get_power_ok();
@@ -39,9 +44,14 @@ bool get_power_ok();
 uint8_t get_video_mode();
 
 // FAN
-void set_fan_on();
-void set_fan_off();
-void set_fan_pwm(uint8_t level);
+constexpr uint8_t FAN_MAX_SPEED = 50;
+void set_fan_speed(uint8_t speed); // 0-50, same scale as SMBus 0x10
+void fan_pin_low();                // Pin state while the Xbox is off
+// SMBus master transfer (write tx, then read rx after a repeated START),
+// bit-banged on the SMBus slave's pins like the PIC
+enum class I2CMasterResult { ok, bus_busy, nack, arbitration_lost, timeout };
+I2CMasterResult i2c_master_transfer(uint8_t address, const uint8_t* tx, size_t tx_len, uint8_t* rx, size_t rx_len);
+void i2c_bus_recovery();
 
 // Interface
 void assertSystemReset();
@@ -49,21 +59,11 @@ void liftSystemReset();
 void enableWatchdog();
 void petWatchdog();
 bool rebootCauseWatchdog();
-uint32_t disableInterrupts();
-void reenableInterrupts(uint32_t status);
-void timer0_init(uint32_t delay_us);
-void timer0_wait();
-void timer0_disable();
+// Original SMC main loop tick: Timer1 preload 0xE795, 1:8 @ 10 MHz = 20 ms
+constexpr uint32_t TICK_US = 20000;
 void timer1_init(uint32_t delay_us);
 void timer1_wait();
-void timer1_disable();
 void disable_and_discard_interrupts();
-
-// I2C
-void setupI2C();
-
-// Time
-uint32_t get_ms_since_boot();
 
 } // namespace hal
 

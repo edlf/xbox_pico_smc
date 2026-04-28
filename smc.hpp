@@ -22,13 +22,10 @@ namespace SMC {
 // TODO: remove hacks
 extern flags_struct flags;
 extern sensors_struct sensors;
-extern timers_struct timers;
-extern bool something_with_cpu_temp;
 extern volatile uint8_t ram_test_response0;
 extern volatile uint8_t ram_test_response1;
 extern volatile uint8_t bios_response_byte0;
 extern volatile uint8_t bios_response_byte1;
-extern uint32_t loop_start_time;
 
 Encoder DetectVideoEncoder(void);
 void configureEncoder();
@@ -50,9 +47,9 @@ void main_loop();
 void globals_init();
 void port_init();
 
-void init_irqs();
-void isr();
 void smc_gpio_callback(unsigned int gpio, uint32_t events);
+void setPowerOkIrq(bool enabled);
+extern volatile uint32_t dvd_eject_edges; // Debug
 
 void update_LEDs();
 

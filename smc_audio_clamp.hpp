@@ -13,8 +13,6 @@ enum class audio_state {
 void init();
 void update();
 bool isClamped();
-void clamp();
-void unclamp();
 void printState();
 
 } // AudioClamp

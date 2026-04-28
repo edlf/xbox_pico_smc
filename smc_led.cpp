@@ -10,11 +10,9 @@ namespace SMC {
 
 namespace Led {
 
-static uint32_t last_update = 0;
-constexpr uint32_t led_cycle_ms = 250;
-
 static led_state state;
 static uint8_t state_counter;
+static uint8_t led_phase; // Phase bit shown next, 3 down to 0
 static uint8_t green_phases_manual;
 static uint8_t red_phases_manual;
 static uint8_t green_phases;
@@ -39,9 +37,9 @@ const std::vector<std::string> state_names {
 };
 
 void init() {
-  last_update = 0;
-  state = led_state::initial;
+  state = led_state::resetPhaseCounter;
   state_counter = 0;
+  led_phase = 0;
   green_phases_manual = 0;
   red_phases_manual = 0;
   green_phases = 0;
@@ -53,17 +51,17 @@ void resetPhaseCounter() {
     state = led_state::resetPhaseCounter;
 }
 
-void resetState() {
-    state = led_state::initial;
-    manual_control = false;
+void clearPhases() {
+    green_phases = 0;
+    red_phases = 0;
 }
 
 void setGreenPhases(const uint8_t phase) {
-    green_phases = phase;
+    green_phases_manual = phase;
 }
 
 void setRedPhases(const uint8_t phase) {
-    red_phases = phase;
+    red_phases_manual = phase;
 }
 
 void setManualControl(const bool i) {
@@ -99,12 +97,6 @@ void printState() {
 
 void update()
 {
-  if ((loop_start_time - last_update) < led_cycle_ms) {
-    return;
-  }
-
-  last_update = loop_start_time;
-
   switch (state) {
   case led_state::initial: // 0
     state_counter = 6;
@@ -178,19 +170,18 @@ void update()
     break;
 
   case led_state::set_gpios: // 7
-    if (utils::checkBitNo(red_phases, state_counter)) {
+    if (utils::checkBitNo(red_phases, led_phase)) {
       hal::led_red_on();
     } else {
       hal::led_red_off();
     }
-    if (utils::checkBitNo(green_phases, state_counter)) {
+    if (utils::checkBitNo(green_phases, led_phase)) {
       hal::led_green_on();
     } else {
       hal::led_green_off();
     }
 
-    state_counter--;
-    if (state_counter == -1) {
+    if (led_phase-- == 0) {
       state = led_state::resetPhaseCounter;
     } else {
       state = led_state::initial;
@@ -198,7 +189,7 @@ void update()
     break;
 
   case led_state::resetPhaseCounter: // 8
-    state_counter = 3; // ? gets overwritten by the initial state with 6...
+    led_phase = 3;
     state = led_state::initial;
     break;
 

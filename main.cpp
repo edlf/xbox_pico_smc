@@ -1,7 +1,6 @@
 #include "hardware/i2c.h"
 #include "hardware/pwm.h"
 #include "hardware/watchdog.h"
-#include "i2c_slave/include/i2c_slave.h"
 #include "pico/stdlib.h"
 #include <stdio.h>
 

@@ -22,7 +22,9 @@ enum class led_state {
 void init();
 void update();
 void resetPhaseCounter();
-void resetState();
+// LEDs off until the next pattern is picked
+void clearPhases();
+// Phases shown while LEDs are under manual control (SMBus 0x08, boot error codes)
 void setGreenPhases(const uint8_t);
 void setRedPhases(const uint8_t);
 void setManualControl(const bool);

@@ -35,8 +35,8 @@ pico_sdk_init()
 
 # add_compile_definitions(SYS_CLK_MHZ=200)
 
-# Add I2C slave library
-add_subdirectory(i2c_slave)
+# Build without DVD drive support for drive-less systems: -DSMC_DVD_SUPPORT=OFF
+option(SMC_DVD_SUPPORT "Support a DVD drive (tray, eject)" ON)
 
 # Add executable. Default name is the project name, version 0.1
 add_executable(OG_SMC utils.cpp
@@ -55,6 +55,8 @@ add_executable(OG_SMC utils.cpp
                       smc_SMI.cpp
                       smc_power_standby.cpp
                       smc_video.cpp)
+
+target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>)
 
 pico_set_program_name(OG_SMC "OG_SMC")
 pico_set_program_version(OG_SMC "0.1")
@@ -77,7 +79,7 @@ target_include_directories(OG_SMC PRIVATE
 target_link_libraries(OG_SMC
         hardware_i2c
         hardware_watchdog
-        i2c_slave
+        pico_i2c_slave
         )
 
 pico_add_extra_outputs(OG_SMC)

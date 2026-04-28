@@ -59,20 +59,10 @@ typedef struct {
 
 typedef struct {
   uint8_t CPU_temperature;
-  uint8_t CPU_temperature_previous;
   uint8_t board_temperature;
-  uint8_t CPU_temp_predicted;
   uint8_t tray_status;
-  uint8_t tray_status_raw;
   uint8_t vmode;
-  uint8_t vmode_raw;
 } sensors_struct;
-
-typedef struct {
-  uint16_t power_timeout;
-  uint16_t power_timeout3;
-  uint16_t smbus_attempt_counter;
-} timers_struct;
 
 enum class Encoder {
   Conexant,

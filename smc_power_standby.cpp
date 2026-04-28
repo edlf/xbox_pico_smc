@@ -11,9 +11,22 @@ namespace SMC {
 namespace PowerStandby {
 
 power_standby_state state;
+uint16_t power_timeout3 = 0;
 
 void init(){
   state = power_standby_state::initial;
+}
+
+void setPowerTimeout3(uint16_t val) {
+  power_timeout3 = val;
+}
+
+void powerTimeout3Decrement() {
+  power_timeout3--;
+}
+
+uint16_t getPowerTimeout3() {
+  return power_timeout3;
 }
 
 uint8_t update() {
@@ -21,9 +34,9 @@ uint8_t update() {
   switch (state) {
   case power_standby_state::initial: // State 0
     hal::led_red_off();
-    hal::led_green_on();
-    hal::set_fan_off();
-    hal::timer1_init(500);
+    hal::led_green_off();
+    hal::fan_pin_low();
+    hal::timer1_init(hal::TICK_US);
     sensors.tray_status = 0;
     sensors.vmode = 0x0A;
     state = power_standby_state::read_av;
@@ -46,20 +59,19 @@ uint8_t update() {
 
   case power_standby_state::turn_on_power_no_av: // State 3
     hal::turn_on_psu();
-    hal::set_fan_on();
-    timers.power_timeout3 = 50;
+    hal::set_fan_speed(0); // Pin high, like the PIC on power-up
+    power_timeout3 = 50;
     clearStatusBit(power_change_requested);
     state = power_standby_state::powered_up_wait_power_ok;
     break;
 
   case power_standby_state::powered_up_wait_power_ok: // State 4
     hal::petWatchdog();
-    hal::timer0_init(500);
 
     if (hal::get_power_ok()) {
       state = power_standby_state::powered_up;
     } else {
-      if (--timers.power_timeout3 == 0) {
+      if (--power_timeout3 == 0) {
         panic("POWER_OK timeout");
       } else {
         hal::timer1_wait();
@@ -86,18 +98,18 @@ uint8_t update() {
   case power_standby_state::turn_on_power_alternative: // State 7
     flags.bitfield_DATA_73 |= 0x02;                    // Set eject flag
     hal::turn_on_psu();
-    hal::set_fan_on();
-    timers.power_timeout3 = 0x32; // 50 cycles
+    hal::set_fan_speed(0); // Pin high, like the PIC on power-up
+    power_timeout3 = 0x32; // 50 cycles
     state = power_standby_state::powered_up_wait_power_ok_alternative;
     break;
 
   case power_standby_state::powered_up_wait_power_ok_alternative:
     hal::petWatchdog();
-    hal::timer1_init(500);
+    hal::timer1_init(hal::TICK_US);
 
     if (hal::get_power_ok()) {
       state = power_standby_state::powered_up_alt;
-    } else if (--timers.power_timeout3 == 0) {
+    } else if (--power_timeout3 == 0) {
       panic("POWER_OK timeout");
     } else {
       hal::timer1_wait();
@@ -108,7 +120,7 @@ uint8_t update() {
     clearStatusBit(eject_change_requested);
     setInterruptReason(InterruptReason_eject_sw_pressed);
     utils::setBitNo(flags.bitfield_DATA_6D, 5);
-    isr();
+    fireSystemInterrupt();
     state = power_standby_state::powered_up;
     break;
 
@@ -117,6 +129,7 @@ uint8_t update() {
     utils::clearBitNo(flags.bitfield_DATA_70, 2);
     setStatusBit(first_execution);
     clearStatusBit(video_mode_changed);
+    utils::clearBitNo(flags.bitfield_DATA_71, 6);
     utils::clearBitNo(flags.bitfield_DATA_6F, 0);
     utils::clearBitNo(flags.bitfield_DATA_6F, 7);
     setStatusBit(audio_clamp_timer);
@@ -124,9 +137,8 @@ uint8_t update() {
     Dvd::initDdvdTray();
     ram_test_response0 = 0;
     ram_test_response1 = 0;
-    hal::timer1_init(500);
-    hal::setupI2C();
-    gpio_set_irq_enabled_with_callback(pins::POWER_OK, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
+    hal::timer1_init(hal::TICK_US);
+    setPowerOkIrq(true);
     return 1;
     break;
 

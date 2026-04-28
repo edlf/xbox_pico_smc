@@ -1,6 +1,7 @@
 #include "smc.hpp"
 #include "hal.hpp"
 #include "utils.hpp"
+#include "pin_assignments.hpp"
 
 namespace SMC {
 
@@ -32,27 +33,80 @@ constexpr uint8_t SOFTWARE_INTERRUPT = 0x18;
 constexpr uint8_t OVERRIDE_RESET_ON_TRAY_OPEN = 0x19;
 constexpr uint8_t OS_READY = 0x1A;
 constexpr uint8_t SCRATCH = 0x1B;
+constexpr uint8_t CHALLENGE_BYTE0 = 0x1C;
+constexpr uint8_t CHALLENGE_BYTE1 = 0x1D;
+constexpr uint8_t CHALLENGE_BYTE2 = 0x1E;
+constexpr uint8_t CHALLENGE_BYTE3 = 0x1F;
+constexpr uint8_t CHALLENGE_RESPONSE0 = 0x20;
+constexpr uint8_t CHALLENGE_RESPONSE1 = 0x21;
 }; // namespace Command
 
-// SMBus state
-static bool command_received = false;
+// SMBus state. Like the PIC, the command byte is kept after the transaction
+// ends: a read byte is "write command, repeated START, read", and the START
+// must not make us forget the command.
+static bool expecting_command = true; // Next received byte is a command byte
 static uint8_t smbus_command = 0;
-static uint8_t smbus_data = 0;
-static uint8_t smbus_version_counter = 0;
+static uint8_t last_write_command = 0; // SMBus 0x16, only updated by writes
+static uint8_t last_write_data = 0;    // SMBus 0x17, only updated by writes
+static uint8_t smbus_version_counter = 1; // 1-3 = 'P', '0', '1'
+static uint8_t scratch_register = 0;      // SMBus 0x1B, kernel boot flags kept across reboots
+
+// Transactions are printed from the main loop (printSMBusLog): printing in
+// the IRQ would stretch the SMBus clock for milliseconds per byte
+struct SMBusLogEntry {
+  bool write;
+  uint8_t command;
+  uint8_t data;
+};
+static constexpr uint8_t smbus_log_size = 32;
+static SMBusLogEntry smbus_log[smbus_log_size];
+static volatile uint8_t smbus_log_head = 0; // Written by the IRQ
+static volatile uint8_t smbus_log_tail = 0; // Written by the main loop
+
+static void logTransaction(bool write, uint8_t command, uint8_t data) {
+  const uint8_t next = (smbus_log_head + 1) % smbus_log_size;
+  if (next == smbus_log_tail) {
+    return; // Full, drop
+  }
+  smbus_log[smbus_log_head] = {write, command, data};
+  smbus_log_head = next;
+}
+
+// Same as the PIC's RAM_init (0xB58), called at boot and on power off
+void resetSMBusRegisters() {
+  smbus_command = 0;
+  last_write_command = 0;
+  last_write_data = 0;
+  smbus_version_counter = 1;
+  scratch_register = 0;
+  bios_response_byte0 = 0; // Error code, SMBus 0x0E/0x0F
+}
+
+void printSMBusLog() {
+  while (smbus_log_tail != smbus_log_head) {
+    const SMBusLogEntry entry = smbus_log[smbus_log_tail];
+    smbus_log_tail = (smbus_log_tail + 1) % smbus_log_size;
+    debug::print_message(std::string("SMBUS: ") + (entry.write ? "Write" : "Read ") + " cmd [" +
+                         std::to_string(entry.command) + "] data [" + std::to_string(entry.data) + "]");
+  }
+}
 
 uint8_t smbus_read_handler(uint8_t command) {
   uint8_t response = 0;
-  bool bad_command = false;
 
   switch (command) {
   case Command::FIRMWARE_REVISION: // 0x01
-    // Multi-byte response: 'P', '0', '1'
-    if (smbus_version_counter == 0) {
-      response = 'P';
-    } else if (smbus_version_counter == 1) {
+    // One character per read, the index survives between transactions and
+    // is only reset by writing 0x01 (same as the PIC, 0x07A)
+    if (smbus_version_counter == 2) {
       response = '0';
-    } else if (smbus_version_counter == 2) {
+      smbus_version_counter = 3;
+    } else if (smbus_version_counter == 3) {
       response = '1';
+      smbus_version_counter = 1;
+    } else {
+      response = 'P';
+      smbus_version_counter++;
     }
     break;
 
@@ -94,18 +148,40 @@ uint8_t smbus_read_handler(uint8_t command) {
     break;
 
   case Command::LAST_REGISTER_WRITTEN: // 0x16
-    response = smbus_command;
+    response = last_write_command;
     break;
 
   case Command::LAST_BYTE_WRITTEN: // 0x17
-    response = smbus_data;
+    response = last_write_data;
     break;
 
   case Command::SCRATCH: // 0x1B
-    response = Fan::getCustomFanSpeed();
+    response = scratch_register;
     break;
 
-  case Command::READ_ERROR_CODE:             // 0x0F
+  case Command::READ_ERROR_CODE: // 0x0F
+    // Written by 0x0E, or set by the boot challenge on failure
+    response = bios_response_byte0;
+    break;
+
+  case Command::CHALLENGE_BYTE0: // 0x1C
+    response = BootChallenge::getChallengeStructRef().input_byte0;
+    break;
+
+  case Command::CHALLENGE_BYTE1: // 0x1D
+    response = BootChallenge::getChallengeStructRef().input_byte1;
+    break;
+
+  case Command::CHALLENGE_BYTE2: // 0x1E
+    response = BootChallenge::getChallengeStructRef().input_byte2;
+    break;
+
+  case Command::CHALLENGE_BYTE3: // 0x1F
+    response = BootChallenge::getChallengeStructRef().input_byte3;
+    break;
+
+  case Command::CHALLENGE_RESPONSE0: // 0x20
+  case Command::CHALLENGE_RESPONSE1: // 0x21
   case Command::AUDIO_CLAMP:                 // 0x0B
   case Command::DVD_TRAY_OPERATION:          // 0x0C
   case Command::OS_RESUME:                   // 0x0D
@@ -121,65 +197,57 @@ uint8_t smbus_read_handler(uint8_t command) {
   case Command::OVERRIDE_RESET_ON_TRAY_OPEN: // 0x19
   case Command::OS_READY:                    // 0x1A
     // Unsupported/write-only commands - return 0
-    break;
   default:
-    bad_command = true;
     break;
-  }
-
-  if (bad_command) {
-    debug::print_warn("SMBUS: Invalid read command: [" + std::to_string(command) + "]");
-  } else {
-    debug::print_message("SMBUS: Read handler cmd: ["
-       + std::to_string(command) + "] response ["
-       + std::to_string(response) + "]");
   }
 
   return response;
 }
 
 void smbus_write_handler(uint8_t command, uint8_t data) {
-  debug::print_message("SMBUS: Write handler cmd: [" + std::to_string(command) + "] data [" + std::to_string(data) + "]");
-
   switch (command) {
   case Command::RESET: // 0x02
-    // data: 0x00 = warm reset, 0x01 = cold reset
-    if (data == 0x00) {
-      // Warm reset - keep power state
-      PLL_Reset::setWarmReset1();
-    } else if (data == 0x01) {
-      // Cold reset - power cycle
-      PLL_Reset::setColdReset();
+    // Same as the PIC (0x13B): bit 0 = reset, bit 6 = power cycle,
+    // bit 7 = power off
+    if (data & 0x01) {
+      flags.bitfield_DATA_73 |= 0x01;
+      flags.bitfield_DATA_71 |= 0x08;
+    }
+    if (data & 0x40) {
+      setStatusBit(Status::power_change_requested);
+      flags.bitfield_DATA_73 |= 0x40;
+    }
+    if (data & 0x80) {
+      setStatusBit(Status::power_change_requested);
+      flags.bitfield_DATA_6F |= 0x02;
     }
     break;
 
   case Command::VIDEO_MODE: // 0x04
-    // Set video mode (0=NTSC, 1=PAL, etc)
-    sensors.vmode = data;
-    setStatusBit(Status::video_mode_changed);
-    setInterruptReason(InterruptReason_av_mode_changed);
+    // No-op on the PIC, the mode comes from the AV connector
     break;
 
   case Command::FAN_OVERRIDE: // 0x05
-    // data: bit 0 = enable override, bit 1-7 = unused
-    if (data & 0x01) {
-      Fan::enableCustomFanSpeed();
-    } else {
-      Fan::disableCustomFanSpeed();
+    // Same as the PIC (0x14A): bit 0 = use the speed from 0x06 (6F.2), only
+    // accepted when that speed is valid
+    if (!(data & 0x01)) {
+      utils::clearBitNo(flags.bitfield_DATA_6F, 2);
+    } else if (Fan::getCustomFanSpeed() <= hal::FAN_MAX_SPEED) {
+      utils::setBitNo(flags.bitfield_DATA_6F, 2);
     }
     break;
 
   case Command::REQUEST_FAN_SPEED: // 0x06
-    // Set requested fan speed (0-50)
-    Fan::setFanSpeed(data);
+    // Speed used while 0x05 override is on (0-50)
+    Fan::setCustomSpeed(data);
     break;
 
   case Command::LED_OVERRIDE: // 0x07
-    // data: bit 0 = enable override
+    // Same as the PIC (0x159): bit 0 = show the 0x08 pattern (70.2)
     if (data & 0x01) {
-      Led::setManualControl(true);
+      utils::setBitNo(flags.bitfield_DATA_70, 2);
     } else {
-      Led::resetState();
+      utils::clearBitNo(flags.bitfield_DATA_70, 2);
     }
     break;
 
@@ -190,29 +258,46 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::AUDIO_CLAMP: // 0x0B
-    // data: 0 = unclamp, non-zero = clamp
-    if (data == 0) {
-      AudioClamp::unclamp();
+    // Same as the PIC (0x16B): bit 0 = 1 clamp (6F.0), 0 unclamp (6F.7),
+    // carried out by AudioClamp::update
+    if (data & 0x01) {
+      utils::setBitNo(flags.bitfield_DATA_6F, 0);
     } else {
-      AudioClamp::clamp();
+      utils::setBitNo(flags.bitfield_DATA_6F, 7);
     }
     break;
 
   case Command::DVD_TRAY_OPERATION: // 0x0C
-    // data: 0x00 = close, 0x01 = eject
-    if (data == 0x00) {
-      // Close tray
-      hal::dvd_eject_off();
-    } else if (data == 0x01) {
-      // Eject tray
-      hal::dvd_eject_on();
-      setInterruptReason(InterruptReason_dvd_tray0);
+    // Same as the PIC (0x170): bit 0 = 1 load (6F.4), 0 eject (6F.3), carried
+    // out by Dvd::updateDvdTrayEject
+    if (data & 0x01) {
+      utils::setBitNo(flags.bitfield_DATA_6F, 4);
+    } else {
+      utils::setBitNo(flags.bitfield_DATA_6F, 3);
     }
     break;
 
   case Command::OS_RESUME: // 0x0D
-    // Mark system as resuming from sleep/standby
-    clearStatusBit(Status::prepare_for_shutdown);
+    // Same as the PIC (0x175): the OS answering a power/eject SMI, only
+    // while one is being handled (6F.6). Without it the SMC resets the Xbox.
+    if (!utils::checkBitNo(flags.bitfield_DATA_6F, 6)) {
+      break;
+    }
+    if (data & 0x01) {
+      utils::setBitNo(flags.bitfield_DATA_6F, 1); // Power off
+    }
+    if (data & 0x08) {
+      utils::setBitNo(flags.bitfield_DATA_71, 3); // Reset
+    }
+    if (data & 0x02) {
+      utils::setBitNo(flags.bitfield_DATA_70, 5); // Busy, keep waiting
+    }
+    if (data & 0x04) {
+      utils::setBitNo(flags.bitfield_DATA_70, 4); // Handled, no reset
+    }
+    if (!(data & 0x02)) {
+      utils::clearBitNo(flags.bitfield_DATA_6F, 6);
+    }
     break;
 
   case Command::WRITE_ERROR_CODE: // 0x0E
@@ -221,8 +306,23 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::WRITE_RAM_TEST_RESULTS: // 0x12
-    // Store RAM test results (bit 0 = pass/fail)
+    // Same as the PIC (0x188): 71.4 = results submitted, 71.5 = passed
+    utils::setBitNo(flags.bitfield_DATA_71, 4);
+    utils::clearBitNo(flags.bitfield_DATA_71, 5);
     ram_test_response0 = data;
+    if (ram_test_response1 == 0xFF || ram_test_response1 == 0x00 ||
+        (ram_test_response1 == 0x0F && ram_test_response0 == 0xF0)) {
+      utils::setBitNo(flags.bitfield_DATA_71, 5);
+    }
+    break;
+
+  case Command::CHALLENGE_RESPONSE0: // 0x20
+    BootChallenge::getChallengeStructRef().response0 = data;
+    break;
+
+  case Command::CHALLENGE_RESPONSE1: // 0x21
+    BootChallenge::getChallengeStructRef().response1 = data;
+    utils::setBitNo(flags.bitfield_DATA_73, 4); // Response complete
     break;
 
   case Command::WRITE_RAM_TYPE: // 0x13
@@ -231,36 +331,41 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::SOFTWARE_INTERRUPT: // 0x18
-    // Trigger SMI interrupt signal to BIOS
-    fireSystemInterrupt();
-    if (data == 0x00) {
-      // Clear the interrupt after delivery
-      hal::smi_pin_off();
-    }
+    // No-op on the PIC
     break;
 
   case Command::OVERRIDE_RESET_ON_TRAY_OPEN: // 0x19
-    // data: 0 = reset on tray open, non-zero = don't reset
-    if (data == 0x00) {
-      utils::clearBitNo(flags.bitfield_DATA_71, 0); // Allow reset on tray open
+    // Same as the PIC (0x1A8): bit 0 disables reset-on-eject (72.1), allowed
+    // once per boot (72.2 is re-armed by the PLL/reset state machine)
+    if (data & 0x01) {
+      if (utils::checkBitNo(flags.bitfield_DATA_72, 2)) {
+        utils::setBitNo(flags.bitfield_DATA_72, 1);
+      }
     } else {
-      utils::setBitNo(flags.bitfield_DATA_71, 0); // Override reset on tray open
+      utils::clearBitNo(flags.bitfield_DATA_72, 1);
     }
+    utils::clearBitNo(flags.bitfield_DATA_72, 2);
     break;
 
   case Command::OS_READY: // 0x1A
-    // Mark OS as fully booted and ready
-    clearStatusBit(Status::first_execution);
-    setStatusBit(Status::prepare_for_shutdown); // Clear prepare_for_shutdown
+    // Same as the PIC (0x1B1): bit 0 enables interrupts (72.6), which lets a
+    // power off go through the OS instead of cutting power right away
+    if (data & 0x01) {
+      utils::setBitNo(flags.bitfield_DATA_72, 6);
+    }
     break;
 
   case Command::SCRATCH: // 0x1B
-    // TODO: This looks broken AF
-    // Write to scratch register (general purpose storage)
-    Fan::setCustomSpeed(data);
+    // Plain storage for the kernel (bit 1 = display fatal error after the
+    // reboot, bit 3 = boot to dashboard, ...)
+    scratch_register = data;
     break;
 
-  case Command::FIRMWARE_REVISION:     // 0x01 (read-only, ignore writes)
+  case Command::FIRMWARE_REVISION: // 0x01
+    // Restart the version string
+    smbus_version_counter = 1;
+    break;
+
   case Command::TRAY_STATE:            // 0x03 (read-only, ignore writes)
   case Command::CPU_TEMPERATURE:       // 0x09 (read-only, ignore writes)
   case Command::AIR_TEMPERATURE:       // 0x0A (read-only, ignore writes)
@@ -270,56 +375,48 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
   case Command::READ_RAM_TYPE:         // 0x15 (read-only, ignore writes)
   case Command::LAST_REGISTER_WRITTEN: // 0x16 (read-only, ignore writes)
   case Command::LAST_BYTE_WRITTEN:     // 0x17 (read-only, ignore writes)
+  case Command::CHALLENGE_BYTE0:       // 0x1C (read-only, ignore writes)
+  case Command::CHALLENGE_BYTE1:       // 0x1D (read-only, ignore writes)
+  case Command::CHALLENGE_BYTE2:       // 0x1E (read-only, ignore writes)
+  case Command::CHALLENGE_BYTE3:       // 0x1F (read-only, ignore writes)
     // Read-only commands - silently ignore writes
     break;
 
   default:
-    debug::print_warn("Unknown SMBUS write command");
     break;
   }
 }
 
 void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
-  debug::print_message("SMBUS Interrupt");
-
-  uint8_t data;
-
   switch (event) {
-  case I2C_SLAVE_RECEIVE: // master has written data
-    data = i2c_read_byte_raw(i2c);
+  case I2C_SLAVE_RECEIVE: { // master has written data
+    const uint8_t data = i2c_read_byte_raw(i2c);
 
-    if (!command_received) {
-      // This is the command byte
+    if (expecting_command) {
       smbus_command = data;
-      smbus_data = 0;
-      command_received = true;
-      smbus_version_counter = 0;
+      expecting_command = false;
     } else {
-      // This is a data byte (write operation)
-      smbus_data = data;
-      smbus_write_handler(smbus_command, smbus_data);
+      // Data byte of a write
+      last_write_command = smbus_command;
+      last_write_data = data;
+      smbus_write_handler(smbus_command, data);
+      logTransaction(true, smbus_command, data);
     }
     break;
+  }
 
-  case I2C_SLAVE_REQUEST: // master is requesting data
-    if (command_received) {
-      uint8_t response = smbus_read_handler(smbus_command);
-
-      // For FIRMWARE_REVISION, increment counter for multi-byte response
-      if (smbus_command == Command::FIRMWARE_REVISION) {
-        smbus_version_counter++;
-        if (smbus_version_counter > 2) {
-          smbus_version_counter = 0;
-        }
-      }
-
-      i2c_write_byte_raw(i2c, response);
-    }
+  case I2C_SLAVE_REQUEST: { // master is requesting data
+    // Always answer: with an empty TX FIFO the slave stretches the clock and
+    // holds the bus
+    const uint8_t response = smbus_read_handler(smbus_command);
+    i2c_write_byte_raw(i2c, response);
+    logTransaction(false, smbus_command, response);
     break;
+  }
 
   case I2C_SLAVE_FINISH: // master has sent Stop or Restart
-    command_received = false;
-    smbus_version_counter = 0;
+    // The first byte written after a (repeated) START is a command byte
+    expecting_command = true;
     break;
 
   default:
@@ -327,19 +424,47 @@ void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
   }
 }
 
-void read_temperatures() {
-  // Function only valid for 1.0-1.4
+// Like the PIC, we master the bus we're a slave on (video encoder,
+// temperature sensor), see hal::i2c_master_transfer
+static bool masterTransfer(uint8_t address, const uint8_t* tx, size_t tx_len, uint8_t* rx, size_t rx_len) {
+  const hal::I2CMasterResult result = hal::i2c_master_transfer(address, tx, tx_len, rx, rx_len);
+  if (result == hal::I2CMasterResult::ok) {
+    return true;
+  }
 
-  // TODO: CPU
-  sensors.CPU_temperature = 55;
-  sensors.CPU_temperature_previous = sensors.CPU_temperature;
-  sensors.board_temperature = 55;
-  // if (i2c_read(I2C_TEMP_SENSOR_ADDRESS, 0x01, &(sensors.CPU_temperature))) {
-  //   sensors.CPU_temperature_previous = sensors.CPU_temperature;
-  // }
+  static const char* const reasons[] = {"ok", "bus busy", "nack", "arbitration lost", "timeout"};
+  debug::print_warn("I2C: Transfer to address " + std::to_string(address) + " failed: " +
+                    reasons[static_cast<int>(result)]);
+  return false;
+}
 
-  // Board, near MCPX for 1.0-1.4
-  // i2c_read(I2C_TEMP_SENSOR_ADDRESS, 0x02, &(sensors.board_temperature));
+bool smbusMasterWrite(uint8_t address, const uint8_t* data, size_t len) {
+  return masterTransfer(address, data, len, nullptr, 0);
+}
+
+bool smbusMasterReadByte(uint8_t address, uint8_t reg, uint8_t& value) {
+  return masterTransfer(address, &reg, 1, &value, 1);
+}
+
+// Same as the PIC (0xE71): CPU from register 0x01 and board from 0x00 of the
+// ADM1032 at 0x4C (1.0-1.4). 74.0 is set when a read fails, and the values
+// that couldn't be read keep their previous value.
+bool read_temperatures() {
+  uint8_t value;
+  flags.bitfield_DATA_74 &= ~0x01;
+
+  if (!smbusMasterReadByte(I2C_TEMP_SENSOR_ADDRESS, 0x01, value)) {
+    flags.bitfield_DATA_74 |= 0x01;
+    return false;
+  }
+  sensors.CPU_temperature = value;
+
+  if (!smbusMasterReadByte(I2C_TEMP_SENSOR_ADDRESS, 0x00, value)) {
+    flags.bitfield_DATA_74 |= 0x01;
+    return false;
+  }
+  sensors.board_temperature = value;
+  return true;
 }
 
 } // namespace SMC

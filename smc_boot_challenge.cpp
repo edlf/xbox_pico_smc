@@ -1,5 +1,7 @@
 #include "smc_boot_challenge.hpp"
 #include "smc.hpp"
+#include "hal.hpp"
+#include "pico/stdlib.h"
 
 #include <vector>
 #include <string>
@@ -22,41 +24,133 @@ const std::vector<std::string> state_names {
   "Reboot"
 };
 
-uint8_t failure_count;
-uint8_t rtc_time;
+// Error codes readable via SMBus 0x0F
+constexpr uint8_t ERROR_RAM_TEST_FAILED = 0x04;
+constexpr uint8_t ERROR_CHALLENGE_FAILED = 0x01;
+
 challenge_struct challenge;
 boot_challenge_state state;
-uint16_t boot_response_timeout;
+uint8_t boot_response_timeout;
+uint8_t failure_count;     // Failed boots since the last power cycle
+uint8_t failure_countdown; // Power cycles left before locking up (FRAG)
+uint8_t rtc_dump_time;
 
 void init() {
+  // Same as the PIC's RAM_init (0xB58)
   challenge = {0};
-  boot_response_timeout = 0;
   state = boot_challenge_state::initial;
+  boot_response_timeout = 0;
+  failure_count = 0;
+  failure_countdown = 3;
+  rtc_dump_time = 0;
 }
 
-void resetState() {
-  state = boot_challenge_state::initial;
+// The PIC uses its free running timers as entropy: TMR0 runs at the
+// instruction clock, TMR1L at 1/8 of it
+static uint8_t fastTimerByte() {
+  return (uint8_t)time_us_32();
+}
+
+static uint8_t slowTimerByte() {
+  return (uint8_t)(time_us_32() >> 3);
+}
+
+// Called on every standby loop iteration (0x23B)
+void seedStandby() {
+  challenge.input_byte0++;
+  challenge.input_byte1 = fastTimerByte();
+  if (challenge.input_byte1 == 0) {
+    challenge.input_byte1 = 1;
+  }
+}
+
+// Called when the Xbox has powered up (0x250), and to reseed after a reset
+void seedPowerUp() {
+  challenge.input_byte2 = slowTimerByte() + challenge.input_byte0;
+  challenge.input_byte3 = sensors.CPU_temperature ^ challenge.input_byte1;
 }
 
 void compute() {
-  // Done, untested
-  challenge.response0 = 0x33;
-  challenge.response1 = 0xed;
+  // Same as the PIC (0xBF6)
+  challenge.expected0 = 0x33;
+  challenge.expected1 = 0xED;
 
-  uint8_t challenge_loop_count = 4;
+  for (uint8_t i = 0; i < 4; i++) {
+    challenge.expected0 = ((uint8_t)(challenge.input_byte0 << 2) ^ (uint8_t)(challenge.input_byte1 + 0x39) ^
+                           (uint8_t)(challenge.input_byte2 >> 2) ^ (uint8_t)(challenge.input_byte3 + 0x63) ^
+                           challenge.expected1) +
+                          challenge.expected0;
+    challenge.expected1 = ((uint8_t)(challenge.input_byte0 + 0x0B) ^ (uint8_t)(challenge.input_byte1 >> 2) ^
+                           (uint8_t)(challenge.input_byte2 + 0x1B) ^ challenge.expected0) +
+                          challenge.expected1;
+  }
+}
+
+static void clearRamTestResult() {
+  flags.bitfield_DATA_71 &= ~0x10;
+  flags.bitfield_DATA_71 &= ~0x20;
+}
+
+// While running: restart on a reset request, or once a pending reset
+// (70.0) is no longer held back by overheating or a shutdown
+static void waitForReset() {
+  if (flags.bitfield_DATA_73 & 0x01) {
+    clearRamTestResult();
+    state = boot_challenge_state::initial;
+  } else if ((flags.bitfield_DATA_70 & 0x01) && !checkStatusBit(overheated) &&
+             !checkStatusBit(prepare_for_shutdown)) {
+    clearRamTestResult();
+    state = boot_challenge_state::initial;
+  }
+}
+
+static void lockUp() {
+  flags.bitfield_DATA_70 |= 0x01;
+  flags.bitfield_DATA_70 &= ~0x02;
+  state = boot_challenge_state::lock_up;
+}
+
+// Power cycles the Xbox while dumping the RTC, as the PIC does after repeated
+// boot failures (0x987). Blocks the main loop like the original.
+static bool powerCycleWithRtcDump() {
+  auto tick = [] {
+    hal::timer1_wait();
+    hal::petWatchdog();
+  };
+
+  setPowerOkIrq(false);
+  hal::turn_off_psu();
+  tick();
+
+  uint8_t tries = 50;
   do {
-    challenge.response0 =
-        (challenge.input_byte0 << 2 ^ challenge.input_byte1 + 0x39 ^ challenge.input_byte2 >> 2 ^ challenge.input_byte3 + 99U ^ challenge.response1) +
-        challenge.response0;
-    challenge.status_byte0 = challenge.input_byte0 + 0xbU;
-    challenge.status_byte1 = challenge.input_byte1 >> 2;
-    challenge.status_byte2 = challenge.input_byte2 + 0x1b;
-    challenge.status_byte3 = 0;
-    challenge.status_byte4 = challenge.response1;
-    challenge.response1 =
-        (challenge.input_byte0 + 0xbU ^ challenge.input_byte1 >> 2 ^ challenge.input_byte2 + 0x1b ^ challenge.response0) + challenge.response1;
-    challenge_loop_count = challenge_loop_count + 0xff;
-  } while (challenge_loop_count != 0);
+    tick();
+    if (!hal::get_power_ok()) {
+      break;
+    }
+  } while (--tries != 0);
+  if (tries == 0) {
+    return false;
+  }
+
+  hal::rtc_dump_on();
+  for (uint8_t i = 0; i < 100; i++) {
+    tick();
+  }
+  hal::rtc_dump_off();
+  tick();
+
+  hal::turn_on_psu();
+  tries = 50;
+  while (!hal::get_power_ok()) {
+    tick();
+    if (--tries == 0) {
+      return false;
+    }
+  }
+
+  setPowerOkIrq(true);
+  return true;
 }
 
 void update() {
@@ -68,14 +162,11 @@ void update() {
     break;
 
   case boot_challenge_state::wait_for_ram_test_result:
-    /* Wait for RAM test result submission */
     if (flags.bitfield_DATA_71 & 0x10) {
-      /* RAM test results submitted */
+      /* RAM test results submitted, 71.5 = passed */
       if (flags.bitfield_DATA_71 & 0x20) {
-        /* RAM test passed */
         state = boot_challenge_state::ram_test_ok;
       } else {
-        /* RAM test failed */
         state = boot_challenge_state::ram_test_failed;
       }
     } else if (--boot_response_timeout == 0) {
@@ -88,111 +179,102 @@ void update() {
     break;
 
   case boot_challenge_state::ram_test_failed:
-    Led::setRedPhases(15);
-    Led::setGreenPhases(5);
-    Led::setManualControl(true);
+    Led::setRedPhases(0x0F);
+    Led::setGreenPhases(0x05);
+    bios_response_byte0 = ERROR_RAM_TEST_FAILED;
     state = boot_challenge_state::boot_failed;
     break;
 
   case boot_challenge_state::challenge_failed_or_no_ram_test_result:
-    Led::setRedPhases(10);
-    Led::setGreenPhases(5);
-    Led::setManualControl(true);
+    Led::setRedPhases(0x0A);
+    Led::setGreenPhases(0x05);
+    bios_response_byte0 = ERROR_CHALLENGE_FAILED;
     state = boot_challenge_state::boot_failed;
     break;
 
   case boot_challenge_state::challenge_wait_for_reply:
-    if (flags.bitfield_DATA_73 & 0x01) {
-      /* System reset requested */
-      flags.bitfield_DATA_71 &= ~0x10;
-      flags.bitfield_DATA_71 &= ~0x20;
-      state = boot_challenge_state::initial;
-    } else if (flags.bitfield_DATA_70 & 0x01) {
-      /* System overheated - stay in this state */
-      return;
-    } else if ((flags.bitfield_DATA_70 & 0x01) == 0) {
-      /* System not overheated */
+    if (!(flags.bitfield_DATA_73 & 0x01) && !(flags.bitfield_DATA_70 & 0x01)) {
       boot_response_timeout = 2;
       state = boot_challenge_state::check_response;
+    } else {
+      waitForReset();
     }
     break;
 
   case boot_challenge_state::boot_failed:
     failure_count++;
-
-    if (failure_count >= 3) {
-      flags.bitfield_DATA_70 |= 0x04; // Manual LED control
-      flags.bitfield_DATA_72 |= 0x20; // FRAG flag
-      flags.bitfield_DATA_73 |= 0x04; // Locked state
-      state = boot_challenge_state::lock_up;
-    } else {
+    if (failure_count <= 3) {
       state = boot_challenge_state::retry_boot;
+    } else if (--failure_countdown != 0) {
+      failure_count = 0;
+      rtc_dump_time = 4;
+      flags.bitfield_DATA_70 |= 0x01;
+      flags.bitfield_DATA_70 &= ~0x02;
+      state = boot_challenge_state::reboot;
+    } else {
+      lockUp();
     }
     break;
 
   case boot_challenge_state::lock_up:
-    flags.bitfield_DATA_70 |= 0x01;
-    flags.bitfield_DATA_70 |= 0x02;
-    flags.bitfield_DATA_70 &= ~0x04;
-    flags.bitfield_DATA_71 &= ~0x10;
-    flags.bitfield_DATA_71 &= ~0x20;
-    flags.bitfield_DATA_72 &= ~0x01;
-    flags.bitfield_DATA_72 &= ~0x02;
-    return;
+    /* FRAG: manual LEDs (error code), stays here until power off */
+    flags.bitfield_DATA_70 |= 0x04;
+    flags.bitfield_DATA_72 |= 0x20;
+    flags.bitfield_DATA_73 |= 0x04;
+    break;
 
   case boot_challenge_state::retry_boot:
+    /* Reset the Xbox and try again */
     flags.bitfield_DATA_70 |= 0x01;
     flags.bitfield_DATA_70 |= 0x02;
     flags.bitfield_DATA_70 &= ~0x04;
-    flags.bitfield_DATA_71 &= ~0x10;
-    flags.bitfield_DATA_71 &= ~0x20;
-    sensors.CPU_temperature = 0;
-    sensors.board_temperature = 0;
+    clearRamTestResult();
+    ram_test_response0 = 0;
+    ram_test_response1 = 0;
     state = boot_challenge_state::initial;
     break;
 
   case boot_challenge_state::check_response:
     if (flags.bitfield_DATA_73 & 0x10) {
-      /* Response received */
       flags.bitfield_DATA_73 &= ~0x10;
-
-      /* Verify both response bytes match expected values */
       if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
         state = boot_challenge_state::challenge_passed;
-      } else {
-        state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
+        break;
       }
-    } else if (--boot_response_timeout == 0) {
-      state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
+    } else if (--boot_response_timeout != 0) {
+      break;
     }
+
+    /* Wrong answer or timeout: go straight to a power cycle */
+    failure_count = 4;
+    state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
     break;
 
   case boot_challenge_state::challenge_passed:
     if (flags.bitfield_DATA_73 & 0x01) {
-      // System reset requested
-      flags.bitfield_DATA_71 &= ~0x10;
-      flags.bitfield_DATA_71 &= ~0x20;
-
-      /* TODO: Update challenge bytes for next boot */
+      /* Reset requested: new challenge for the next boot */
+      clearRamTestResult();
+      challenge.input_byte1 = fastTimerByte();
+      seedPowerUp();
       state = boot_challenge_state::initial;
-    } else if (flags.bitfield_DATA_70 & 0x01) {
-      /* System overheated - stay in this state */
-      return;
+    } else {
+      waitForReset();
     }
     break;
 
   case boot_challenge_state::reboot:
-    if (--failure_count != 0) {
+    if (--rtc_dump_time != 0) {
+      return;
+    }
+    if (powerCycleWithRtcDump()) {
       state = boot_challenge_state::retry_boot;
     } else {
-      rtc_time = 4;
-      flags.bitfield_DATA_70 |= 0x01;
-      flags.bitfield_DATA_70 &= ~0x02;
-      state = boot_challenge_state::reboot;
+      lockUp();
     }
     break;
 
   default:
+    state = boot_challenge_state::initial;
     break;
   }
 }

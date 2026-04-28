@@ -6,214 +6,278 @@
 namespace SMC {
 namespace Fan {
 
+// Same as the PIC's fan/temperature control (0x36F). Speeds are 0-50 and
+// every count is in 20 ms ticks.
+constexpr uint8_t min_fan_speed = 10;
+constexpr uint8_t max_fan_speed = hal::FAN_MAX_SPEED;
+constexpr uint8_t start_fan_speed = 30;
+
+// Thresholds in °C, hex as in the PIC
+constexpr uint8_t critical_cpu_temp = 0x58;      // 88: overheated
+constexpr uint8_t critical_board_temp = 0x4B;    // 75
+constexpr uint8_t hot_cpu_temp = 0x4A;           // 74: +3 speed
+constexpr uint8_t hot_predicted_temp = 0x56;     // 86: +3 speed
+constexpr uint8_t warm_predicted_temp = 0x4A;    // 74: +1 speed
+constexpr uint8_t warm_board_temp = 0x3C;        // 60: +1 speed
+constexpr uint8_t cool_predicted_temp = 0x49;    // 73: below and steady, maybe -1
+constexpr uint8_t cool_board_temp = 0x39;        // 57
+constexpr uint8_t shutdown_cpu_temp = 0x61;      // 97: still overheated, give up
+constexpr uint8_t shutdown_board_temp = 0x54;    // 84
+
+// Faked readings when the sensor can't be read, forcing an overheat shutdown
+constexpr uint8_t failed_read_cpu_temp = 0x59;
+constexpr uint8_t failed_read_board_temp = 0x4C;
+
+constexpr uint8_t sample_count = 3;   // Median of 3 readings on 3 ticks
+constexpr uint8_t read_retries = 20;  // Ticks to retry a failed reading
+
 uint8_t fan_speed;
 uint8_t custom_fan_speed;
-constexpr uint8_t min_fan_speed = 10;
-constexpr uint8_t max_fan_speed = 50;
-
-uint8_t cpu_temperature_history[temperature_history_length];
-uint8_t board_temperature_history[temperature_history_length];
-
-uint16_t control_timeout;
-uint16_t control_timeout2;
-
 fan_control_state state;
+uint8_t timeout1; // 0x47
+uint8_t timeout2; // 0x46
+
+uint8_t samples_left;  // 0x59
+uint8_t retry_timeout; // 0x5A
+uint8_t cpu_samples[sample_count];
+uint8_t board_samples[sample_count];
+bool bus_recovery_allowed; // 0xBD.1, re-armed by every good reading
+
+uint8_t previous_cpu_temperature;
+uint8_t cpu_temperature_increase;
+uint8_t cpu_temperature_predicted;
 
 void init() {
+  // Same as the PIC's RAM_init (0xB58)
   state = fan_control_state::initial;
-  custom_fan_speed = min_fan_speed; /* Default custom fan speed */
-  control_timeout = 0;
+  fan_speed = 0;
+  custom_fan_speed = 0x33; // > 50, so SMBus 0x05 can't enable it before 0x06
+  timeout1 = 0;
+  timeout2 = 0;
+  samples_left = 0;
+  retry_timeout = 0;
+  for (uint8_t i = 0; i < sample_count; i++) {
+    cpu_samples[i] = 0;
+    board_samples[i] = 0;
+  }
+  bus_recovery_allowed = true;
+  previous_cpu_temperature = 0x17;
+  cpu_temperature_increase = 0;
+  cpu_temperature_predicted = 0x17;
+}
+
+static void setSpeed(uint8_t speed) {
+  // Like the PIC's set_fan_speed (0xE85), anything above 50 becomes 50
+  if (speed > max_fan_speed) {
+    speed = max_fan_speed;
+  }
+  fan_speed = speed;
+  hal::set_fan_speed(fan_speed);
+}
+
+// Called by the main loop once the Xbox is off (0x279)
+void powerOff() {
+  setSpeed(0);
+  hal::fan_pin_low();
+}
+
+static uint8_t median(uint8_t* samples) {
+  // Sort of 3 values, same result as the PIC's bubble sort (0xB05)
+  for (uint8_t pass = 0; pass < sample_count - 1; pass++) {
+    for (uint8_t i = 0; i < sample_count - 1 - pass; i++) {
+      if (samples[i + 1] < samples[i]) {
+        const uint8_t t = samples[i];
+        samples[i] = samples[i + 1];
+        samples[i + 1] = t;
+      }
+    }
+  }
+  return samples[1];
+}
+
+static void predictCpuTemperature() {
+  // Same as the PIC (0xE33): add a margin based on how fast the CPU heats up
+  if (sensors.CPU_temperature >= previous_cpu_temperature) {
+    cpu_temperature_increase = sensors.CPU_temperature - previous_cpu_temperature;
+  } else {
+    cpu_temperature_increase = 0;
+  }
+
+  uint8_t margin;
+  switch (cpu_temperature_increase) {
+  case 0:  margin = 0;    break;
+  case 1:  margin = 2;    break;
+  case 2:  margin = 8;    break;
+  case 3:  margin = 0x12; break;
+  default: margin = 0x19; break;
+  }
+
+  const uint16_t predicted = sensors.CPU_temperature + margin;
+  cpu_temperature_predicted = (predicted > 0x7F) ? 0x7F : predicted;
+  previous_cpu_temperature = sensors.CPU_temperature;
 }
 
 void update_fan_temp() {
-  static uint8_t temperature_history_counter = 0;
-  static uint8_t temperature_sample_rate = 0;
-
   switch (state) {
   case fan_control_state::initial:
-    fan_speed = 0;
-    applyFanSpeed();
+    setSpeed(0);
     clearStatusBit(overheated);
     if (!checkStatusBit(prepare_for_shutdown)) {
-      state = fan_control_state::state1;
+      state = fan_control_state::start;
     }
     break;
 
-  case fan_control_state::state1:
-    fan_speed = 30;
-    applyFanSpeed();
-    control_timeout2 = 5;
-    state = fan_control_state::state10;
+  case fan_control_state::start:
+    setSpeed(start_fan_speed);
+    timeout2 = 5;
+    state = fan_control_state::start_delay;
     break;
 
   case fan_control_state::decision_state:
-    control_timeout2 = 14;
-    control_timeout = 32;
+    timeout2 = 0x14;
+    timeout1 = 0x32; // Next decision in 50 * 20 ticks = 20 s
 
-    /* Check if CPU temp > 88 or board temp > 75 (critical) */
-    if (sensors.CPU_temperature > 88 || sensors.board_temperature > 75) {
+    if (sensors.CPU_temperature > critical_cpu_temp || sensors.board_temperature > critical_board_temp) {
       state = fan_control_state::overheated;
-    } else if (flags.bitfield_DATA_6F & 0x02) {
-      /* Custom fan speed requested */
+    } else if (flags.bitfield_DATA_6F & 0x04) {
       state = fan_control_state::custom_fan_speed;
-    } else if (sensors.CPU_temperature > 74 || sensors.CPU_temp_predicted > 86) {
-      /* CPU is warming up */
+    } else if (sensors.CPU_temperature > hot_cpu_temp || cpu_temperature_predicted > hot_predicted_temp) {
+      state = fan_control_state::cpu_hot;
+    } else if (cpu_temperature_predicted > warm_predicted_temp || sensors.board_temperature > warm_board_temp) {
       state = fan_control_state::board_hot;
-    } else if (sensors.CPU_temp_predicted > 74) {
-      /* Predicted temp is in caution range */
-      state = fan_control_state::board_hot;
-    } else if (sensors.board_temperature > 60) {
-      /* Board getting warm */
-      state = fan_control_state::board_hot;
-    } else if (sensors.CPU_temp_predicted > 73) {
-      /* Check CPU temp increase trend */
-      if (!something_with_cpu_temp) { // CPU not heating up
-        state = fan_control_state::state9;
-      } else {
-        /* Board temperature check */
-        if (sensors.board_temperature < 57) {
-          state = fan_control_state::board_cool;
-        } else {
-          state = fan_control_state::state9;
-        }
-      }
+    } else if (cpu_temperature_predicted < cool_predicted_temp && cpu_temperature_increase == 0 &&
+               sensors.board_temperature < cool_board_temp) {
+      state = fan_control_state::board_cool;
     } else {
-      state = fan_control_state::state9; // Normal
+      state = fan_control_state::wait;
     }
     break;
 
   case fan_control_state::overheated:
-    fan_speed = max_fan_speed;
-    applyFanSpeed();
-    flags.bitfield_DATA_70 |= 0x01; // System error flag
+    debug::print_warn("FAN: Overheated, CPU " + std::to_string(sensors.CPU_temperature) + " board " +
+                      std::to_string(sensors.board_temperature));
+    setSpeed(max_fan_speed);
+    flags.bitfield_DATA_70 |= 0x01;
     flags.bitfield_DATA_70 &= ~0x02;
-    setStatusBit(overheated);
-    control_timeout = 0xFA;
-    control_timeout2 = 0xB3;
+    setStatusBit(overheated); // SMI shuts the Xbox down once this clears
+    timeout1 = 0xFA;
+    timeout2 = 0xB3;
     state = fan_control_state::overheated_cooldown;
     break;
 
   case fan_control_state::overheated_cooldown:
-    /* Waiting for overheated timeout to expire before reading temps */
-    if (--control_timeout == 0) {
-      read_temperatures();
-      /* Check if temperature decreased enough to exit overheated state */
-      if (sensors.CPU_temperature < 97 && sensors.board_temperature < 84) {
-        if (sensors.CPU_temperature < 49 && sensors.board_temperature < 39) {
-          state = fan_control_state::state5;
-        } else {
-          clearStatusBit(overheated);
-        }
-      }
+    if (--timeout1 != 0) {
+      return;
+    }
+    read_temperatures();
+    if (sensors.CPU_temperature > shutdown_cpu_temp || sensors.board_temperature > shutdown_board_temp) {
+      /* Still far too hot, shut down now */
+      clearStatusBit(overheated);
+    } else if (sensors.CPU_temperature >= cool_predicted_temp || sensors.board_temperature >= cool_board_temp) {
+      /* Still warm, keep cooling */
+      state = fan_control_state::overheated_wait;
+    } else {
+      /* Cooled down, shut down */
+      clearStatusBit(overheated);
     }
     break;
 
-  case fan_control_state::state5:
-    /* Temperature decremented - check for further cooling */
-    if (--control_timeout2 == 0) {
-      hal::set_fan_on();
-      control_timeout = 0xFA;
+  case fan_control_state::overheated_wait:
+    if (--timeout2 != 0) {
+      timeout1 = 0xFA;
       state = fan_control_state::overheated_cooldown;
     } else {
-      hal::set_fan_on();
-      state = fan_control_state::overheated_cooldown;
+      clearStatusBit(overheated);
     }
     break;
 
   case fan_control_state::custom_fan_speed:
-    fan_speed = custom_fan_speed;
-    applyFanSpeed();
-    state = fan_control_state::state9;
+    setSpeed(custom_fan_speed);
+    state = fan_control_state::wait;
     break;
 
   case fan_control_state::board_cool:
-    fan_speed--;
-    if (fan_speed < min_fan_speed) {
-      setFanSpeed(min_fan_speed);
-    }
-    applyFanSpeed();
-    state = fan_control_state::state9;
+    setSpeed(fan_speed - 1 < min_fan_speed ? min_fan_speed : fan_speed - 1);
+    state = fan_control_state::wait;
     break;
 
   case fan_control_state::board_hot:
     if (fan_speed != max_fan_speed) {
-      fan_speed++;
+      setSpeed(fan_speed + 1);
     }
-    applyFanSpeed();
-    state = fan_control_state::state9;
+    state = fan_control_state::wait;
     break;
 
-  case fan_control_state::state9:
-    /* Check for custom fan speed timeout */
-    if (flags.bitfield_DATA_6F & 0x02) {
-      fan_speed = custom_fan_speed;
-      applyFanSpeed();
+  case fan_control_state::wait:
+    if (flags.bitfield_DATA_6F & 0x04) {
+      setSpeed(custom_fan_speed);
     }
-    /* Decrement main timeout */
-    if (--control_timeout == 0) {
-      if (--control_timeout2 == 0) {
-        state = fan_control_state::state13; // Go to sample state
-      } else {
-        control_timeout = 32; // Reset
-        state = fan_control_state::overheated_cooldown;
-      }
+    if (--timeout1 != 0) {
+      return;
     }
-    break;
-
-  case fan_control_state::state10:
-    /* Initial fan speed delay */
-    if (--control_timeout2 == 0) {
-      setFanSpeed(min_fan_speed);
-      applyFanSpeed();
-      state = fan_control_state::state13;
-    }
-    break;
-
-  case fan_control_state::state11:
-    /* Read and sample temperatures */
-    read_temperatures();
-    if ((flags.bitfield_DATA_74 & 0x01) == 0) {
-      /* First time - initialize temperature history */
-      something_with_cpu_temp = true;
-
-      if (temperature_history_counter >= temperature_history_length) {
-        temperature_history_counter = 0;
-      }
-
-      cpu_temperature_history[temperature_history_counter] = sensors.CPU_temperature;
-      board_temperature_history[temperature_history_counter] = sensors.board_temperature;
-
-      control_timeout = 14;
-      if (++temperature_history_counter != 0) {
-        return;
-      }
+    if (--timeout2 != 0) {
+      timeout1 = 0x32;
     } else {
-      /* Retrieve and process temperature history */
-      if (!something_with_cpu_temp) {
-        state = fan_control_state::decision_state;
+      state = fan_control_state::start_sampling;
+    }
+    break;
+
+  case fan_control_state::start_delay:
+    if (--timeout2 != 0) {
+      return;
+    }
+    setSpeed(min_fan_speed);
+    state = fan_control_state::start_sampling;
+    break;
+
+  case fan_control_state::sample_temperatures:
+    if (!read_temperatures()) {
+      if (--retry_timeout != 0) {
         return;
       }
-      something_with_cpu_temp != something_with_cpu_temp;
-
-      busy_wait_ms(2); // Short delay
-      // TODO call predict_CPU_temperature()
-
-      control_timeout = 14;
-      state = fan_control_state::decision_state;
+      if (bus_recovery_allowed) {
+        /* Try once to free the bus, then retry */
+        bus_recovery_allowed = false;
+        hal::i2c_bus_recovery();
+        retry_timeout = read_retries;
+        return;
+      }
+      /* Sensor is gone: treat it as an overheat */
+      debug::print_warn("FAN: Temperature sensor not responding, forcing overheat");
+      sensors.CPU_temperature = failed_read_cpu_temp;
+      sensors.board_temperature = failed_read_board_temp;
+      state = fan_control_state::overheated;
+      return;
     }
+
+    bus_recovery_allowed = true;
+    cpu_samples[samples_left - 1] = sensors.CPU_temperature;
+    board_samples[samples_left - 1] = sensors.board_temperature;
+    retry_timeout = read_retries;
+    if (--samples_left != 0) {
+      return;
+    }
+
+    sensors.CPU_temperature = median(cpu_samples);
+    sensors.board_temperature = median(board_samples);
+    predictCpuTemperature();
+    debug::print_message("FAN: CPU " + std::to_string(sensors.CPU_temperature) + " board " +
+                         std::to_string(sensors.board_temperature) + " predicted " +
+                         std::to_string(cpu_temperature_predicted) + " speed " + std::to_string(fan_speed));
+    state = fan_control_state::decision_state;
     break;
 
   case fan_control_state::cpu_hot:
-    state = fan_control_state::overheated_cooldown;
+    if (fan_speed != max_fan_speed) {
+      setSpeed(fan_speed + 3);
+    }
+    state = fan_control_state::wait;
     break;
 
-  case fan_control_state::state13:
-    /* Sample rate countdown before reading temperatures */
-    if (--control_timeout2 == 0) {
-      setFanSpeed(min_fan_speed);
-      applyFanSpeed();
-      state = fan_control_state::state13; // Stay in this state
-    }
+  case fan_control_state::start_sampling:
+    samples_left = sample_count;
+    retry_timeout = read_retries;
+    state = fan_control_state::sample_temperatures;
     break;
 
   default:
@@ -222,26 +286,8 @@ void update_fan_temp() {
   }
 }
 
-void setFanSpeed(const uint8_t in) {
-  // Done, untested
-  if (in > max_fan_speed) {
-    fan_speed = max_fan_speed;
-  }
-
-  fan_speed = in;
-}
-
 uint8_t getFanSpeed() {
   return fan_speed;
-}
-
-void applyFanSpeed() {
-  if (fan_speed == 0) {
-    hal::set_fan_off();
-  } else {
-    hal::set_fan_pwm(fan_speed);
-    hal::set_fan_on();
-  }
 }
 
 void setCustomSpeed(const uint8_t in) {
@@ -250,14 +296,6 @@ void setCustomSpeed(const uint8_t in) {
 
 uint8_t getCustomFanSpeed() {
   return custom_fan_speed;
-}
-
-void enableCustomFanSpeed() {
-  state = fan_control_state::custom_fan_speed;
-}
-
-void disableCustomFanSpeed() {
-  state = fan_control_state::decision_state;
 }
 
 } // namespace Fan

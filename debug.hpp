@@ -8,12 +8,13 @@
 
 namespace debug {
 
+// Ordered by verbosity: a level prints its own messages and everything above it
 enum class DebugLevel {
-    All,
+    Silent,
     Critical,
     Errors,
     Warnings,
-    Silent
+    All
 };
 
 void print_critical(const std::string&);

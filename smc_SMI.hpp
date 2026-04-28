@@ -28,11 +28,11 @@ enum class smi_power_state {
 };
 
 void init();
+// True once after a power cycle (SMBus 0x02 bit 6), the main loop then
+// presses the power button for the host
+bool takePowerOnRequest();
 void printState();
 uint8_t update();
-void setStateCase11();
-void setStateGoingToReset();
-bool isXboxPowered();
 
 } // namespace SMI
 } // namespace SMC

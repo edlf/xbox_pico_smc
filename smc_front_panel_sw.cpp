@@ -26,9 +26,6 @@ const std::vector<std::string> state_names {
 
 switch_state pwr_state = switch_state::wait_for_button_press;
 switch_state eject_state = switch_state::wait_for_button_press;
-uint32_t pwr_last_update = 0;
-uint32_t eject_last_update = 0;
-constexpr uint32_t debounce_delay_ms = 50;
 
 void init() {
   pwr_state = switch_state::wait_for_button_press;
@@ -41,22 +38,14 @@ void update() {
 }
 
 void updatePower() {
-  if ((loop_start_time - pwr_last_update) < debounce_delay_ms) {
-    return;
-  }
-
-  pwr_last_update = loop_start_time;
-
   switch (pwr_state) {
   case switch_state::wait_for_button_press:
-    SMI::init(); // set state to initial
     if (hal::power_button_pressed()) {
       pwr_state = switch_state::debouncing;
     }
     break;
 
   case switch_state::debouncing:
-    // TODO: state.smi_power = smi_power_state::overheat_cooldown_wait;
     if (hal::power_button_pressed()) {
       setStatusBit(power_change_requested);
       pwr_state = switch_state::wait_for_button_release;
@@ -66,14 +55,12 @@ void updatePower() {
     break;
 
   case switch_state::wait_for_button_release:
-    SMI::setStateCase11();
     if (!hal::power_button_pressed()) {
       pwr_state = switch_state::release_debounce;
     }
     break;
 
   case switch_state::release_debounce:
-    SMI::setStateGoingToReset();
     if (hal::power_button_pressed()) {
       pwr_state = switch_state::wait_for_button_release;
     } else {
@@ -84,12 +71,6 @@ void updatePower() {
 }
 
 void updateEject() {
-  if ((loop_start_time - eject_last_update) < debounce_delay_ms) {
-    return;
-  }
-
-  eject_last_update = loop_start_time;
-
   switch (eject_state) {
   case switch_state::wait_for_button_press:
     if (hal::eject_button_pressed()) {
@@ -99,7 +80,8 @@ void updateEject() {
 
   case switch_state::debouncing:
     if (hal::eject_button_pressed()) {
-      setStatusBit(power_change_requested);
+      setStatusBit(eject_change_requested);
+      utils::setBitNo(flags.bitfield_DATA_72, 7);
       eject_state = switch_state::wait_for_button_release;
     } else {
       eject_state = switch_state::wait_for_button_press;

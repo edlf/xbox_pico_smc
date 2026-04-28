@@ -22,6 +22,9 @@ enum class power_standby_state {
 
 void init();
 uint8_t update();
+void setPowerTimeout3(uint16_t val);
+uint16_t getPowerTimeout3();
+void powerTimeout3Decrement();
 
 } // namespace PowerStandby
 } // namespace SMC

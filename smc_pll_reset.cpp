@@ -1,152 +1,140 @@
 #include "smc_pll_reset.hpp"
 #include "smc.hpp"
-#include "smc_fan.hpp"
 #include "hal.hpp"
 #include "utils.hpp"
-#include "pico/stdlib.h" // TODO move busywait to hal
+#include "pico/stdlib.h"
+
+#include <vector>
+#include <string>
 
 namespace SMC {
 namespace PLL_Reset {
 
 pll_sysreset_state state;
+uint8_t timeout; // Own counter, 0x49 on the PIC
+
+const std::vector<std::string> state_names {
+  "initial",
+  "state1",
+  "state2",
+  "cold_reset",
+  "warm_reset_2",
+  "warm_reset_1",
+  "state6",
+  "state7",
+  "state8"
+};
 
 void init() {
   state = pll_sysreset_state::initial;
+  timeout = 0;
 }
 
 bool isState1() {
   return (state == pll_sysreset_state::state1);
 }
 
-void setWarmReset1() {
-  state = pll_sysreset_state::warm_reset_1;
+void printState() {
+    const size_t bc_state = static_cast<size_t>(state);
+    std::string msg = "PLL Reset state [" + std::to_string(bc_state) + "]";
+
+    if (bc_state <= state_names.size()) {
+        msg += " " + state_names[bc_state];
+    }
+
+    debug::print_message(msg);
 }
 
-void setColdReset() {
-  state = pll_sysreset_state::cold_reset;
+// Same order as the PIC (0x601): release SYSRESET, give the encoder ~0.9 ms
+// to come out of reset, then configure it
+static void releaseResetAndConfigureEncoder() {
+  hal::liftSystemReset();
+  flags.bitfield_DATA_73 |= 0x08;
+  busy_wait_us(900);
+  configureEncoder();
+  state = pll_sysreset_state::state8;
 }
 
 void update() {
   switch (state) {
   case pll_sysreset_state::initial:
     hal::assertSystemReset();
-    flags.bitfield_DATA_70 &= ~0x01; // Clear flags
+    flags.bitfield_DATA_70 &= ~0x01;
     flags.bitfield_DATA_72 &= ~0x40;
     flags.bitfield_DATA_70 &= ~0x04;
-    flags.bitfield_DATA_72 |= 0x04; // Set PLL control flags
+    flags.bitfield_DATA_72 |= 0x04;
     flags.bitfield_DATA_72 |= 0x02;
     state = pll_sysreset_state::state1;
     break;
 
   case pll_sysreset_state::state1:
     hal::PLL_off();
-    Fan::control_timeout = 0;
-
+    timeout = 0;
     if (flags.bitfield_DATA_70 & 0x01) {
-      /* Cold reset path - go back to state 0 */
       state = pll_sysreset_state::initial;
-    } else if (flags.bitfield_DATA_70 & 0x02) {
-      /* Check PORTC.1 (POWOK signal) */
-      if (hal::get_power_ok()) {
-        /* POWOK is high */
-        state = pll_sysreset_state::cold_reset;
-      }
-    } else {
-      /* Normal transition to wait state */
-      return;
+    } else if ((flags.bitfield_DATA_70 & 0x02) && hal::get_power_ok()) {
+      /* Powered up: enable the PLL, release reset 2 ticks later */
+      timeout = 2;
+      state = pll_sysreset_state::cold_reset;
     }
     break;
 
   case pll_sysreset_state::state2:
-    /* Wait state - checking for timing conditions */
-    if (!hal::get_power_ok()) {
-      /* POWOK low - return to state 0 */
+    /* Not reachable on the PIC either */
+    if (!hal::get_power_ok() || (flags.bitfield_DATA_70 & 0x01)) {
       state = pll_sysreset_state::initial;
-    } else if (flags.bitfield_DATA_70 & 0x01) {
-      /* Reset condition detected */
-      state = pll_sysreset_state::initial;
-    } else {
-      /* Decrement timer and check for completion */
-      if (Fan::control_timeout == 0) {
-        Fan::control_timeout = 2;
-        state = pll_sysreset_state::cold_reset;
-      }
+    } else if (--timeout == 0) {
+      state = pll_sysreset_state::cold_reset;
     }
     break;
 
   case pll_sysreset_state::cold_reset:
     hal::PLL_on();
-
-    if (--Fan::control_timeout != 0) {
-      return; // Wait for timeout
+    if (--timeout != 0) {
+      return;
     }
-
-    Fan::control_timeout = 1;
-    configureConexantEncoder();
-    hal::liftSystemReset();
-    flags.bitfield_DATA_73 |= 0x08; // Set initialization flag
-
-    /* Wait for encoder communication */
-    busy_wait_ms(132);
-
-    // TODO: Send SMBus write command
-
-    state = pll_sysreset_state::state8;
+    timeout = 1;
+    releaseResetAndConfigureEncoder();
     break;
 
   case pll_sysreset_state::warm_reset_2:
-    hal::liftSystemReset();
-    configureConexantEncoder();
-    flags.bitfield_DATA_73 |= 0x08; // Set initialization flag
-
-    /* Wait for encoder communication */
-    busy_wait_ms(132); // Delay ~832 cycles
-
-    state = pll_sysreset_state::state8;
+    releaseResetAndConfigureEncoder();
     break;
 
   case pll_sysreset_state::warm_reset_1:
     hal::assertSystemReset();
     flags.bitfield_DATA_73 &= ~0x01; // Clear reset request
     flags.bitfield_DATA_72 &= ~0x40;
-    flags.bitfield_DATA_72 |= 0x04; // Maintain PLL control state
+    flags.bitfield_DATA_72 |= 0x04;
     flags.bitfield_DATA_72 |= 0x02;
     flags.bitfield_DATA_70 &= ~0x04;
     state = pll_sysreset_state::warm_reset_2;
     break;
 
   case pll_sysreset_state::state6:
-    /* PLL disable wait - decrement counter */
-    if (--Fan::control_timeout != 0) {
+    if (--timeout != 0) {
       return;
     }
-
     hal::PLL_off();
     hal::assertSystemReset();
-    Fan::control_timeout = 1;
+    timeout = 1;
     state = pll_sysreset_state::state7;
     break;
 
   case pll_sysreset_state::state7:
-    /* PLL enable wait - wait before re-enabling PLL */
-    if (--Fan::control_timeout != 0) {
+    if (--timeout != 0) {
       return;
     }
-
     hal::PLL_on();
     state = pll_sysreset_state::warm_reset_2;
     break;
 
   case pll_sysreset_state::state8:
-    /* Final state - wait for completion or reset request */
-    if (!hal::get_power_ok()) {
-      state = pll_sysreset_state::initial;
-    } else if (flags.bitfield_DATA_70 & 0x01) {
-      /* Something needs resetting */
+    /* Running - wait for power loss or a reset request */
+    if (!hal::get_power_ok() || (flags.bitfield_DATA_70 & 0x01)) {
       state = pll_sysreset_state::initial;
     } else if (flags.bitfield_DATA_73 & 0x01) {
-      /* System reset requested */
-      state = pll_sysreset_state::warm_reset_1; // Go to warm reset path
+      state = pll_sysreset_state::warm_reset_1;
     }
     break;
 

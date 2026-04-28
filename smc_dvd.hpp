@@ -1,6 +1,14 @@
 #ifndef __SMC_DVD__
 #define __SMC_DVD__
 
+#include <cstdint>
+
+// Set by CMake (option SMC_DVD_SUPPORT). Without it there are no tray state
+// machines, and the tray is reported as closed and empty.
+#ifndef SMC_DVD_SUPPORT
+#define SMC_DVD_SUPPORT 1
+#endif
+
 namespace SMC {
 namespace Dvd {
 
@@ -31,6 +39,7 @@ void updateEjectTray();
 void updateDvdTrayThree();
 void updateDvdTray();
 bool isTrayClosing();
+uint8_t readTrayState(); // Tray state pins, PORTB & 0x70 on the PIC
 
 } // namespace DVD
 } // namespace SMC

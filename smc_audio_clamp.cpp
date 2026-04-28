@@ -9,8 +9,13 @@
 namespace SMC {
 namespace AudioClamp {
 
+// Same as the PIC (0x573). Requests: 6F.0 = clamp, 6F.7 = unclamp (SMBus
+// 0x0B), 6E.3 = unclamp after a delay (set at power up). Missing AV cable
+// (71.6) or a shutdown (6E.5) always clamps.
+constexpr uint8_t unclamp_delay = 0x2C; // 44 ticks, ~0.9 s
+
 audio_state state;
-uint16_t audio_clamp_timeout;
+uint8_t audio_clamp_timeout;
 
 const std::vector<std::string> state_names {
   "Clamped",
@@ -23,58 +28,44 @@ void init() {
   audio_clamp_timeout = 0;
 }
 
+static bool mustClamp() {
+  return utils::checkBitNo(flags.bitfield_DATA_71, 6) || utils::checkBitNo(flags.bitfield_DATA_6F, 0) ||
+         checkStatusBit(prepare_for_shutdown);
+}
+
 void update() {
   switch (state) {
   case audio_state::clamped:
-    // Audio clamped
     hal::audio_clamp_on();
     utils::clearBitNo(flags.bitfield_DATA_6F, 0);
-    audio_clamp_timeout = 44;
+    audio_clamp_timeout = unclamp_delay;
 
-    // Cable missing, keep audio clamped
     if (utils::checkBitNo(flags.bitfield_DATA_71, 6)) {
-      return;
+      return; // No AV cable
     }
-
-    // Check if clamp off was requested
     if (utils::checkBitNo(flags.bitfield_DATA_6F, 7)) {
-      if (!checkStatusBit(audio_clamp_timer)) {
-        return;
-      }
+      state = audio_state::unclamped;
+    } else if (checkStatusBit(audio_clamp_timer)) {
       state = audio_state::tick_timer;
-      return;
     }
-    state = audio_state::unclamped;
     break;
 
   case audio_state::tick_timer:
-    // Audio clamped timer tick
     clearStatusBit(audio_clamp_timer);
-
-    if (!utils::checkBitNo(flags.bitfield_DATA_71, 6) && !utils::checkBitNo(flags.bitfield_DATA_6F, 0) && !utils::checkBitNo(flags.bitfield_DATA_6F, 7)) {
-      if (!utils::checkBitNo(flags.bitfield_DATA_6F, 7)) {
-        audio_clamp_timeout--;
-        if (audio_clamp_timeout != 0) {
-          return;
-        }
-      }
-
-      state = audio_state::unclamped;
-    } else {
+    if (mustClamp()) {
       state = audio_state::clamped;
+    } else if (utils::checkBitNo(flags.bitfield_DATA_6F, 7) || --audio_clamp_timeout == 0) {
+      state = audio_state::unclamped;
     }
     break;
 
   case audio_state::unclamped:
-    // Audio unclamped
     hal::audio_clamp_off();
     utils::clearBitNo(flags.bitfield_DATA_6F, 7);
     clearStatusBit(audio_clamp_timer);
-
-    if (checkStatusBit(prepare_for_shutdown) && !utils::checkBitNo(flags.bitfield_DATA_6F, 0) && !utils::checkBitNo(flags.bitfield_DATA_71, 6)) {
-      return;
+    if (mustClamp()) {
+      state = audio_state::clamped;
     }
-    state = audio_state::clamped;
     break;
 
   default:
@@ -87,23 +78,12 @@ bool isClamped() {
   return state == audio_state::clamped;
 }
 
-void clamp() {
-  state = audio_state::clamped;
-  hal::audio_clamp_on();
-}
-
-void unclamp() {
-  state = audio_state::unclamped;
-  hal::audio_clamp_off();
-}
-
-
 void printState() {
-    const size_t led_state = static_cast<size_t>(state);
-    std::string msg = "LED state [" + std::to_string(led_state) + "]";
+    const size_t audio_state = static_cast<size_t>(state);
+    std::string msg = "Audio clamp state [" + std::to_string(audio_state) + "]";
 
-    if (led_state <= state_names.size()) {
-        msg += " " + state_names[led_state];
+    if (audio_state <= state_names.size()) {
+        msg += " " + state_names[audio_state];
     }
 
     debug::print_message(msg);

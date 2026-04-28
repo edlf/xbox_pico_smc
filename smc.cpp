@@ -5,14 +5,13 @@
 // Pico stuff
 #include "hardware/i2c.h"
 #include "hardware/watchdog.h"
-#include "i2c_slave/include/i2c_slave.h"
+#include "pico/i2c_slave.h"
 #include "pico/stdlib.h"
 #include "hal.hpp"
 #include "pin_assignments.hpp"
 
 namespace SMC {
 
-bool something_with_cpu_temp;
 volatile uint8_t ram_test_response0;
 volatile uint8_t ram_test_response1;
 volatile uint8_t bios_response_byte0;
@@ -20,7 +19,6 @@ volatile uint8_t bios_response_byte1;
 
 flags_struct flags;
 sensors_struct sensors;
-timers_struct timers;
 
 void resetInterruptReason() {
   flags.interrupt_reason = 0;
@@ -31,7 +29,7 @@ void setInterruptReason(uint8_t ir) {
 }
 
 void clearInterruptReason(uint8_t ir) {
-  flags.interrupt_reason &= ir;
+  flags.interrupt_reason &= ~ir;
 }
 
 bool checkInterruptReason(uint8_t ir) {
@@ -47,7 +45,7 @@ void setStatusBit(uint8_t status_bit) {
 }
 
 void clearStatusBit(uint8_t status_bit) {
-  flags.status &= status_bit;
+  flags.status &= ~status_bit;
 }
 
 uint8_t checkStatusBit(uint8_t status_bit) {
@@ -57,13 +55,15 @@ uint8_t checkStatusBit(uint8_t status_bit) {
 void fireSystemInterrupt() {
   debug::print_message("SMC: Fire System Interrupt");
 
-  /* Pulse SMI signal (RA4) low to signal system interrupt */
+  /* Pulse SMI signal (RA4) low to signal system interrupt. The PIC holds it
+   * low for 5 instruction cycles (2 us @ 10 MHz), see 0x68C */
   hal::smi_pin_off();
-  sleep_ms(20);
+  busy_wait_us(2);
   hal::smi_pin_on();
 }
 
 void configureEncoder() {
+  debug::print_message("SMC: Configure Encoder");
   Encoder encoder = DetectVideoEncoder();
 
   switch (encoder) {
@@ -90,7 +90,9 @@ void configureConexantEncoder() {
 
   constexpr size_t len = 2;
   uint8_t config[len] = {0xBA, 0x3F};
-  i2c_write_burst_blocking(I2C_PORT, I2C_CONEXANT_ADDRESS, config, len);
+  if (!smbusMasterWrite(I2C_CONEXANT_ADDRESS, config, len)) {
+    debug::print_warn("Conexant encoder write failed");
+  }
 }
 
 void configureFocusEncoder() {
@@ -101,159 +103,62 @@ void configureXcaliburEncoder() {
   // TODO
 }
 
+// Mirrors the PIC's only external interrupt: CCP2 capture on a POWOK falling
+// edge, armed while the Xbox is powered (see setPowerOkIrq). Buttons, tray and
+// AV pins are polled by their state machines, like on the PIC.
+// Debug: every falling edge on the eject line, however short
+volatile uint32_t dvd_eject_edges = 0;
+
 void smc_gpio_callback(unsigned int gpio, uint32_t events) {
-  uint32_t int_status = hal::disableInterrupts();
-  // bit 3 - AV mode changed
-  // InterruptReason_av_mode_changed = 0b00001000,   // 0x08
-  // bit 4 - AV cable unplugged
-  // InterruptReason_av_unplugged = 0b00010000,      // 0x10
-
-  switch (gpio) {
-  case pins::SW_EJECT:
-    debug::print_message("ISR: Eject switch");
-    setInterruptReason(InterruptReason_eject_sw_pressed);
-    break;
-
-  case pins::POWER_OK:
-    debug::print_message("ISR: power OK");
-
-    // ISR got called, but somehow power good didnt stay enabled
-    if (!hal::get_power_ok()) {
-      // Power supply failure - shutdown sequence
-      shutdown_xbox();
-
-      // Clear the POWOK interrupt flag and wait for watchdog reset
-      resetInterruptReason();
-      resetStatus();
-
-      // Enter infinite loop waiting for watchdog timer to reset the system
-      panic("POWER_OK timeout");
-    }
-    break;
-
-  case pins::SW_POWER:
-    debug::print_message("ISR: Power switch");
-    setInterruptReason(InterruptReason_power_sw_pressed);
-    break;
-
-  case pins::VIDEO_MODE_0:
-    debug::print_message("ISR: AV Port Pin 0");
-    Video::update();
-    break;
-
-  case pins::VIDEO_MODE_1:
-    debug::print_message("ISR: AV Port Pin 1");
-    Video::update();
-    break;
-
-  case pins::VIDEO_MODE_2:
-    debug::print_message("ISR: AV Port Pin 2");
-    Video::update();
-    break;
-
-  case pins::TRAY_STATE_0:
-    debug::print_message("ISR: ts0");
-    setInterruptReason(InterruptReason_dvd_tray0);
-    break;
-
-  case pins::TRAY_STATE_1:
-    debug::print_message("ISR: ts1");
-    setInterruptReason(InterruptReason_dvd_tray1);
-    break;
-
-  case pins::TRAY_STATE_2:
-    debug::print_message("ISR: ts2");
-    setInterruptReason(InterruptReason_dvd_tray2);
-    break;
-
-  case pins::DVD_ACTIVE:
-    debug::print_message("ISR: dvd active");
-    break;
-
-  default:
-    debug::print_warn("ISR: Unknown interrupt");
-    setInterruptReason(InterruptReason_unused);
-    break;
+  if (gpio == pins::DVD_EJECT) {
+    dvd_eject_edges++;
+    return;
+  }
+  if (gpio != pins::POWER_OK) {
+    return;
   }
 
-  isr();
-  hal::reenableInterrupts(int_status);
+  debug::print_message("ISR: power OK");
+
+  // ISR got called, but somehow power good didnt stay enabled
+  if (!hal::get_power_ok()) {
+    // Power supply failure - shutdown sequence
+    shutdown_xbox();
+
+    // Enter infinite loop waiting for watchdog timer to reset the system
+    panic("POWER_OK lost");
+  }
 }
 
-void isr() {
-  resetInterruptReason();
-  resetStatus();
-}
-
-void wait_for_isr() {
-  do {
-  } while ((flags.interrupt_reason & 1) == 0);
-}
-
-void init_irqs() {
-  debug::print_message("MAIN: Set gpio IRQs");
-  gpio_set_irq_enabled_with_callback(pins::SW_POWER, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::SW_EJECT, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::DVD_EJECT, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::POWER_OK, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_0, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_1, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::VIDEO_MODE_2, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_0, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_1, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
-  gpio_set_irq_enabled_with_callback(pins::TRAY_STATE_2, GPIO_IRQ_EDGE_FALL | GPIO_IRQ_EDGE_RISE, true, &smc_gpio_callback);
+void setPowerOkIrq(bool enabled) {
+  gpio_acknowledge_irq(pins::POWER_OK, GPIO_IRQ_EDGE_FALL);
+  gpio_set_irq_enabled_with_callback(pins::POWER_OK, GPIO_IRQ_EDGE_FALL, enabled, &smc_gpio_callback);
 }
 
 void update_LEDs() {
   Led::setManualControl(utils::checkBitNo(flags.bitfield_DATA_70, 2));
   Led::setOverheat(checkStatusBit(overheated));
   Led::setAvMissing(utils::checkBitNo(flags.bitfield_DATA_71, 6));
-  Led::setPowerOff(utils::checkBitNo(flags.bitfield_DATA_70, 3));
+  // 70.3 is set while the system is powered
+  Led::setPowerOff(!utils::checkBitNo(flags.bitfield_DATA_70, 3));
   Led::setQuickGreenBlink(utils::checkBitNo(flags.bitfield_DATA_6F, 5));
   Led::update();
   // Led::printState();
 }
 
-// TODO: Shouldnt be needed in the end...
-void checkEmergencyOff() {
-  constexpr uint32_t hold_time = 5000;
-  static bool was_pressed = false;
-  static uint32_t last_press_time = 0;
-
-  const uint32_t current_time = hal::get_ms_since_boot();
-  const bool pwr_pressed = hal::power_button_pressed();
-
-  if (pwr_pressed && !was_pressed) {
-    was_pressed = true;
-    last_press_time = hal::get_ms_since_boot();
-    return;
-  }
-
-  if (was_pressed && pwr_pressed) {
-    if (current_time - last_press_time >= hold_time) {
-      shutdown_xbox();
-    }
-
-    return;
-  }
-
-  if (!pwr_pressed) {
-    was_pressed = false;
-  }
-}
-
-uint32_t loop_start_time = 0;
-
 void main_loop() {
   globals_init();
   hal::init();
+#if SMC_DVD_SUPPORT
+  gpio_set_irq_enabled_with_callback(pins::DVD_EJECT, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
+#endif
   hal::pico_led_on();
 
   // Make sure the xbox is turned off
   shutdown_xbox();
 
   // Initialize state machines
-  hal::set_fan_off();
+  hal::fan_pin_low();
   hal::audio_clamp_on();
   PowerStandby::init();
   FrontPanelSW::init();
@@ -266,42 +171,26 @@ void main_loop() {
   BootChallenge::init();
   PLL_Reset::init();
 
-  init_irqs();
-
   debug::print_message("MAIN: Set I2C interrupt");
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
 
   hal::enableWatchdog();
+  hal::timer1_init(hal::TICK_US);
 
-  timers.power_timeout3 = 1;
-  BootChallenge::challenge_struct& challenge = BootChallenge::getChallengeStructRef();
-
+  PowerStandby::setPowerTimeout3(1);
   do {
-    challenge.status_byte0 = challenge.status_byte0 + 1;
-    challenge.status_byte1 = 22; // TODO Feed number from timer
+    BootChallenge::seedStandby();
 
-    if (challenge.status_byte1 == 0) {
-      challenge.status_byte1 = 1;
+    // Power cycle: press the power button for the host
+    if (SMI::takePowerOnRequest()) {
+      setStatusBit(power_change_requested);
     }
-
-    // TODO: State machine/init/fan control related
-    // if ((DAT_DATA_00bd & 1) != 0) {
-    //   DAT_DATA_00bd = DAT_DATA_00bd & 0xfe;
-    //   clearStatusBit(eject_change_requested);
-    // }
 
     uint8_t power_standby_state = PowerStandby::update();
     if ((power_standby_state & 1) != 0) {
-      // Get timer + cpu temp for entropy
-      challenge.status_byte2 = challenge.status_byte0 + 22; // TODO Feed number from timer
-      challenge.status_byte3 = challenge.status_byte1 ^ sensors.CPU_temperature;
+      BootChallenge::seedPowerUp();
 
       while (true) {
-        loop_start_time = hal::get_ms_since_boot();
-
-        // TODO: This should be removed
-        checkEmergencyOff();
-
         PLL_Reset::update();
         BootChallenge::update();
         Dvd::updateDvdTray();
@@ -315,17 +204,17 @@ void main_loop() {
         Fan::update_fan_temp();
 
         power_standby_state = SMI::update();
+        printSMBusLog();
         // SMI::printState();
         if ((power_standby_state & 1) != 0) {
           break;
         }
 
-        busy_wait_ms(40);
-        wait_for_isr();
+        hal::timer1_wait();
         hal::petWatchdog();
       }
 
-      Fan::applyFanSpeed();
+      Fan::powerOff();
 
       PowerStandby::init();
       // jump_index_sub_code_828 = 0;
@@ -334,55 +223,49 @@ void main_loop() {
       Video::init();
       AudioClamp::init();
       // jump_index_sub_code_5AF = 0;
-      BootChallenge::resetState();
+      BootChallenge::init();
       Led::resetPhaseCounter();
       SMI::init();
       hal::petWatchdog();
 
       globals_init();
-      timers.power_timeout3 = 25;
+      PowerStandby::setPowerTimeout3(25);
 
       do {
-        wait_for_isr();
+        hal::timer1_wait();
         hal::petWatchdog();
         FrontPanelSW::updatePower();
-        timers.power_timeout3--;
-      } while (timers.power_timeout3 != 0);
+        PowerStandby::powerTimeout3Decrement();
+      } while (PowerStandby::getPowerTimeout3() != 0);
 
-      timers.power_timeout3 = 0;
-    } else {
-      loop_start_time = hal::get_ms_since_boot();
+      PowerStandby::setPowerTimeout3(0);
     }
 
-    busy_wait_ms(40);
-
+    printSMBusLog();
     hal::petWatchdog();
   } while (true);
 }
 
 void globals_init() {
   flags = {0};
-  something_with_cpu_temp = true;
 
   resetInterruptReason();
   resetStatus();
 
-  flags.bitfield_DATA_6F = 0x02; /* Set power-off flag initially */
+  resetSMBusRegisters();
+
+  // Same as the PIC's RAM_init (0xB58)
+  flags.bitfield_DATA_6F = 0;
   flags.bitfield_DATA_70 = 0;
   flags.bitfield_DATA_71 = 0;
-  flags.bitfield_DATA_72 = 0;
+  flags.bitfield_DATA_72 = 0x10; // First tray state change raises an interrupt
   flags.bitfield_DATA_73 = 0;
   flags.bitfield_DATA_74 = 0;
 
-  sensors.CPU_temperature = 0;
-  sensors.board_temperature = 0;
-  sensors.CPU_temp_predicted = 0;
+  sensors.CPU_temperature = 0x17;
+  sensors.board_temperature = 0x17;
   sensors.tray_status = 0;
   sensors.vmode = 0;
-  sensors.vmode_raw = 0;
-
-  timers.power_timeout = 0;
-  timers.power_timeout3 = 0;
 }
 
 void shutdown_xbox() {
@@ -390,15 +273,13 @@ void shutdown_xbox() {
   hal::PLL_off();
   hal::led_green_off();
   hal::led_red_off();
-  hal::set_fan_off();
+  hal::fan_pin_low();
   hal::audio_clamp_off();
   hal::turn_off_psu();
 }
 
 void panic(const std::string message) {
   hal::disable_and_discard_interrupts();
-  hal::timer0_disable();
-  hal::timer1_disable();
 
   shutdown_xbox();
 
@@ -406,9 +287,9 @@ void panic(const std::string message) {
 
   while (true) {
     hal::pico_led_on();
-    sleep_ms(500);
+    busy_wait_ms(500); // Interrupts are off, sleep_ms needs them
     hal::pico_led_off();
-    sleep_ms(500);
+    busy_wait_ms(500);
   }
 }
 

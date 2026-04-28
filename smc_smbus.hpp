@@ -5,12 +5,16 @@
 
 // pico stuff
 #include "hardware/i2c.h"
-#include "i2c_slave/include/i2c_slave.h"
+#include "pico/i2c_slave.h"
 
 namespace SMC {
 
 void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event);
-void read_temperatures();
+bool read_temperatures();
+bool smbusMasterWrite(uint8_t address, const uint8_t* data, size_t len);
+bool smbusMasterReadByte(uint8_t address, uint8_t reg, uint8_t& value);
+void printSMBusLog();
+void resetSMBusRegisters();
 
 }
 
