@@ -1,5 +1,4 @@
-#include "smc_led.hpp"
-#include "smc_types.hpp"
+#include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
 #include "debug.hpp"
@@ -11,17 +10,20 @@ namespace SMC {
 
 namespace Led {
 
+static uint32_t last_update = 0;
+constexpr uint32_t led_cycle_ms = 250;
+
 static led_state state;
 static uint8_t state_counter;
 static uint8_t green_phases_manual;
 static uint8_t red_phases_manual;
 static uint8_t green_phases;
 static uint8_t red_phases;
-static bool manual_control;
-static bool overheat;
-static bool av_missing;
-static bool power_off_bit;
-static bool quick_green_blink;
+static bool manual_control = false;
+static bool overheat = false;
+static bool av_missing = false;
+static bool power_off_bit = false;
+static bool quick_green_blink = false;
 
 const std::vector<std::string> state_names {
   "Initial",
@@ -37,6 +39,7 @@ const std::vector<std::string> state_names {
 };
 
 void init() {
+  last_update = 0;
   state = led_state::initial;
   state_counter = 0;
   green_phases_manual = 0;
@@ -96,6 +99,12 @@ void printState() {
 
 void update()
 {
+  if ((loop_start_time - last_update) < led_cycle_ms) {
+    return;
+  }
+
+  last_update = loop_start_time;
+
   switch (state) {
   case led_state::initial: // 0
     state_counter = 6;

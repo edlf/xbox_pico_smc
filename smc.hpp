@@ -28,6 +28,7 @@ extern volatile uint8_t ram_test_response0;
 extern volatile uint8_t ram_test_response1;
 extern volatile uint8_t bios_response_byte0;
 extern volatile uint8_t bios_response_byte1;
+extern uint32_t loop_start_time;
 
 void configureConexantEncoder();
 

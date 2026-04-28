@@ -1,7 +1,8 @@
 #include "smc.hpp"
 #include "pico_hal.hpp"
 #include "utils.hpp"
-#include "smc_front_panel_sw.hpp"
+
+#include "time.h"
 
 #include <vector>
 #include <string>
@@ -23,8 +24,11 @@ const std::vector<std::string> state_names {
   "Release debounce"
 };
 
-switch_state pwr_state;
-switch_state eject_state;
+switch_state pwr_state = switch_state::wait_for_button_press;
+switch_state eject_state = switch_state::wait_for_button_press;
+uint32_t pwr_last_update = 0;
+uint32_t eject_last_update = 0;
+constexpr uint32_t debounce_delay_ms = 50;
 
 void init() {
   pwr_state = switch_state::wait_for_button_press;
@@ -37,6 +41,12 @@ void update() {
 }
 
 void updatePower() {
+  if ((loop_start_time - pwr_last_update) < debounce_delay_ms) {
+    return;
+  }
+
+  pwr_last_update = loop_start_time;
+
   switch (pwr_state) {
   case switch_state::wait_for_button_press:
     SMI::init(); // set state to initial
@@ -74,6 +84,12 @@ void updatePower() {
 }
 
 void updateEject() {
+  if ((loop_start_time - eject_last_update) < debounce_delay_ms) {
+    return;
+  }
+
+  eject_last_update = loop_start_time;
+
   switch (eject_state) {
   case switch_state::wait_for_button_press:
     if (pico_hal::eject_button_pressed()) {

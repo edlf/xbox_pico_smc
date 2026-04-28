@@ -29,6 +29,7 @@ void update() {
 }
 
 void printMode(const uint8_t vm) {
+  // TODO this is only valid if xbox in on
   uint8_t temp = (vm >> 1);
   switch (temp) {
     case 0:

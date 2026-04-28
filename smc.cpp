@@ -180,13 +180,42 @@ void update_LEDs() {
   // Led::printState();
 }
 
+// TODO: Shouldnt be needed in the end...
+void checkEmergencyOff() {
+  constexpr uint32_t hold_time = 5000;
+  static bool was_pressed = false;
+  static uint32_t last_press_time = 0;
+
+  const uint32_t current_time = pico_hal::get_ms_since_boot();
+  const bool pwr_pressed = pico_hal::power_button_pressed();
+
+  if (pwr_pressed && !was_pressed) {
+    was_pressed = true;
+    last_press_time = pico_hal::get_ms_since_boot();
+    return;
+  }
+
+  if (was_pressed && pwr_pressed) {
+    if (current_time - last_press_time >= hold_time) {
+      pico_hal::shutdown_xbox();
+    }
+
+    return;
+  }
+
+  if (!pwr_pressed) {
+    was_pressed = false;
+  }
+}
+
+uint32_t loop_start_time = 0;
+
 void main_loop() {
+  // Fail safes
+  pico_hal::shutdown_xbox();
+
   globals_init();
   pico_hal::init();
-
-  // Fail safes
-  pico_hal::assertSystemReset();
-  pico_hal::turn_off_psu(); // Shut off system if we rebooted
 
   init_irqs();
   pico_hal::set_fan_off();
@@ -204,11 +233,12 @@ void main_loop() {
   Dvd::init();
   Video::init();
   AudioClamp::init();
-  Led::resetPhaseCounter();
+  Led::init();
   SMI::init();
+  BootChallenge::init();
+  PLL_Reset::init();
 
   timers.power_timeout3 = 1;
-
   uint32_t loop_count = 0;
 
   pico_hal::enableWatchdog();
@@ -238,6 +268,11 @@ void main_loop() {
       challenge.status_byte3 = challenge.status_byte1 ^ sensors.CPU_temperature;
 
       while (true) {
+        loop_start_time = pico_hal::get_ms_since_boot();
+
+        // TODO: This should be removed
+        checkEmergencyOff();
+
         PLL_Reset::update();
         BootChallenge::update();
         Dvd::updateDvdTray();
@@ -251,7 +286,7 @@ void main_loop() {
         Fan::update_fan_temp();
 
         power_standby_state = SMI::update();
-        SMI::printState();
+        // SMI::printState();
         if ((power_standby_state & 1) != 0) {
           break;
         }
@@ -286,6 +321,8 @@ void main_loop() {
       } while (timers.power_timeout3 != 0);
 
       timers.power_timeout3 = 0;
+    } else {
+      loop_start_time = pico_hal::get_ms_since_boot();
     }
 
     busy_wait_ms(40);
@@ -296,22 +333,10 @@ void main_loop() {
 }
 
 void globals_init() {
-  AudioClamp::init();
-  BootChallenge::init();
-  Led::init();
-  Video::init();
-
+  /* Initialize flags */
   flags = {0};
   something_with_cpu_temp = true;
 
-  PowerStandby::init();
-  Fan::init();
-  PLL_Reset::init();
-  Dvd::init();
-  FrontPanelSW::init();
-  SMI::init();
-
-  /* Initialize flags */
   resetInterruptReason();
   resetStatus();
   flags.bitfield_DATA_6F = 0x02; /* Set power-off flag initially */

@@ -33,14 +33,24 @@ void led_red_off() {
   gpio_put(pins::LED_RED, 0);
 }
 
+bool state_pll = false;
+
 void PLL_on() {
-  debug::print_message("GPIO: Assert PLL");
   gpio_put(pins::PLL_ENABLE, 1);
+
+  if (!state_pll) {
+    debug::print_message("GPIO: Assert PLL");
+    state_pll = true;
+  }
 }
 
 void PLL_off() {
-  debug::print_message("GPIO: Deassert PLL");
   gpio_put(pins::PLL_ENABLE, 0);
+
+  if (state_pll) {
+    debug::print_message("GPIO: Deassert PLL");
+    state_pll = false;
+  }
 }
 
 void smi_pin_on() {
@@ -59,14 +69,24 @@ void audio_clamp_off() {
   gpio_put(pins::AUDIO_CLAMP, 0);
 }
 
+bool state_psu = false;
+
 void turn_on_psu() {
-  debug::print_message("GPIO: Turn on xbox PSU");
   gpio_put(pins::POWER_ON, 1);
+
+  if (!state_psu) {
+    debug::print_message("GPIO: Turn on xbox PSU");
+    state_psu = true;
+  }
 }
 
 void turn_off_psu() {
-  debug::print_message("GPIO: Turn off xbox PSU");
   gpio_put(pins::POWER_ON, 0);
+
+  if (state_psu) {
+    debug::print_message("GPIO: Turn off xbox PSU");
+    state_psu = false;
+  }
 }
 
 void dvd_eject_on() {
@@ -127,16 +147,26 @@ bool eject_button_pressed() {
   return !gpio_get(pins::SW_EJECT);
 }
 
+bool state_fan = false;
+
 void set_fan_on() {
-  debug::print_message("GPIO: Fan ON");
   pwm_set_chan_level(pwm_slice, PWM_CHAN_A, 20);
   pwm_set_enabled(pwm_slice, true);
+
+  if (!state_fan) {
+    debug::print_message("GPIO: Fan ON");
+    state_fan = true;
+  }
 }
 
 void set_fan_off() {
-  debug::print_message("GPIO: Fan OFF");
   pwm_set_chan_level(pwm_slice, PWM_CHAN_A, 0);
   pwm_set_enabled(pwm_slice, false);
+
+  if (state_fan) {
+    debug::print_message("GPIO: Fan OFF");
+    state_fan = false;
+  }
 }
 
 void set_fan_pwm(uint8_t level) {
@@ -361,6 +391,10 @@ void timer1_disable() {
 // I2C
 void setupI2C() {
   // 0x36
+}
+
+uint32_t get_ms_since_boot() {
+  return to_ms_since_boot(get_absolute_time());
 }
 
 void shutdown_xbox() {

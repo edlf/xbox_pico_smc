@@ -60,7 +60,7 @@ void printState() {
 }
 
 uint8_t update() {
-  debug::print_message("update_SMI_and_power");
+  // debug::print_message("update_SMI_and_power");
   // Manages power interrupts and SMI signaling when Xbox is powered up
 
   // State starts at 9 when powered on, and stops at 9 when powered off

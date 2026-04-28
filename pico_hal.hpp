@@ -61,7 +61,11 @@ void setupI2C();
 
 void shutdown_xbox();
 
-//
+// Time
+uint32_t get_ms_since_boot();
+
+void shutdown_xbox();
+// Panic
 void panic(const std::string message);
 } // namespace pico_hal
 
