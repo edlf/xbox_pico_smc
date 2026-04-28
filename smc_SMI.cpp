@@ -3,7 +3,7 @@
 #include "smc_dvd.hpp"
 #include "smc.hpp"
 #include "smc_pll_reset.hpp"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "utils.hpp"
 
 #include <vector>
@@ -15,8 +15,8 @@ namespace SMI {
 const std::vector<std::string> smi_state_names {
   "Decision_state",
   "Power off start",
-  "case2",
-  "case3",
+  "Process power off conditions",
+  "Check ram test results",
   "Interrupt event handled",
   "case5",
   "Request tray close",
@@ -28,9 +28,9 @@ const std::vector<std::string> smi_state_names {
   "Going to reset",
   "case13",
   "Delay",
-  "case15",
+  "Wait for stable tray state",
   "Delayed turning off",
-  "wait_state_for_initial"
+  "Wait for power cycle"
 };
 
 smi_power_state state;
@@ -57,6 +57,10 @@ void printState() {
     }
 
     debug::print_message(msg);
+}
+
+bool isXboxPowered() {
+  return state != smi_power_state::initial;
 }
 
 uint8_t update() {
@@ -114,50 +118,48 @@ uint8_t update() {
       flags.bitfield_DATA_6F |= 0x40;
       setInterruptReason(InterruptReason_dvd_tray1);
       fireSystemInterrupt();
-      state = smi_power_state::case2;
+      state = smi_power_state::process_power_off_conditions;
     } else if (checkStatusBit(dvd_tray)) {
       /* DVD tray change */
       setInterruptReason(InterruptReason_dvd_tray0);
       fireSystemInterrupt();
-      state = smi_power_state::case2;
+      state = smi_power_state::process_power_off_conditions;
     } else if (flags.bitfield_DATA_73 & 0x20) {
       /* Boot challenge event */
       setInterruptReason(InterruptReason_dvd_tray2);
       fireSystemInterrupt();
-      state = smi_power_state::case2;
+      state = smi_power_state::process_power_off_conditions;
     } else if (checkStatusBit(video_mode_changed)) {
       /* Video mode changed */
       setInterruptReason(InterruptReason_av_mode_changed);
       fireSystemInterrupt();
-      state = smi_power_state::case2;
+      state = smi_power_state::process_power_off_conditions;
     } else if (flags.bitfield_DATA_71 & 0x80) {
       /* No AV cable */
       setInterruptReason(InterruptReason_av_unplugged);
       fireSystemInterrupt();
-      state = smi_power_state::case2;
+      state = smi_power_state::process_power_off_conditions;
     }
     break;
 
   case smi_power_state::start_power_off:
-    /* Starting to power off */
     flags.bitfield_DATA_70 &= ~0x08;
     if (flags.bitfield_DATA_72 & 0x20) {
       /* FRAG set - go to different state */
       state = smi_power_state::leds_off;
     } else {
-      state = smi_power_state::case2;
+      state = smi_power_state::process_power_off_conditions;
     }
     break;
 
-  case smi_power_state::case2:
-    /* Process power-off conditions */
+  case smi_power_state::process_power_off_conditions:
     timers.power_timeout = 25;
     power_timeout2 = 3;
 
     if (checkStatusBit(power_change_requested)) {
-      state = smi_power_state::case3;
+      state = smi_power_state::check_ram_test_results;
     } else if (flags.bitfield_DATA_72 & 0x01) {
-      state = smi_power_state::case3;
+      state = smi_power_state::check_ram_test_results;
     } else if (flags.bitfield_DATA_71 & 0x04) {
       if (flags.bitfield_DATA_72 & 0x02) {
         state = smi_power_state::case11;
@@ -177,8 +179,7 @@ uint8_t update() {
     }
     break;
 
-  case smi_power_state::case3:
-    /* Check RAM test results and proceed */
+  case smi_power_state::check_ram_test_results:
     if ((flags.bitfield_DATA_6F & 0x02) == 0) {
       if ((flags.bitfield_DATA_71 & 0x10) == 0) {
         state = smi_power_state::request_tray_close;
@@ -199,7 +200,6 @@ uint8_t update() {
     break;
 
   case smi_power_state::event_interrupt_handled:
-    /* Event/interrupt handled */
     if (flags.interrupt_reason & 0x08) {
       clearStatusBit(video_mode_changed);
     }
@@ -225,18 +225,16 @@ uint8_t update() {
     timers.power_timeout = 0xFF;
     flags.bitfield_DATA_70 &= ~0x20;
     flags.bitfield_DATA_6F |= 0x40;
-    state = smi_power_state::case3;
+    state = smi_power_state::check_ram_test_results;
     break;
 
   case smi_power_state::request_tray_close:
-    /* Request tray close and set timeout */
     setStatusBit(prepare_for_shutdown); // System shutting down
     timers.power_timeout = 25;
     state = smi_power_state::wait_tray_close;
     break;
 
   case smi_power_state::leds_off:
-    /* LEDs off */
     resetInterruptReason();
     flags.bitfield_DATA_70 |= 0x01;
     flags.bitfield_DATA_70 &= ~0x02;
@@ -248,18 +246,16 @@ uint8_t update() {
     break;
 
   case smi_power_state::wait_tray_close:
-    /* Wait for tray to close */
     if (AudioClamp::isClamped() && Dvd::isTrayClosing()) {
       timers.power_timeout = 0xFF;
-      state = smi_power_state::case15;
+      state = smi_power_state::wait_for_tray_stable;
     } else if (--timers.power_timeout == 0) {
       timers.power_timeout = 0xFF;
-      state = smi_power_state::case15;
+      state = smi_power_state::wait_for_tray_stable;
     }
     break;
 
   case smi_power_state::initial:
-    /* Initial state - system idle */
     flags.bitfield_DATA_72 &= ~0x20;
     flags.bitfield_DATA_70 &= ~0x08;
     clearStatusBit(video_mode_changed);
@@ -272,7 +268,7 @@ uint8_t update() {
     if (flags.bitfield_DATA_73 & 0x40) {
       /* Power cycle requested */
       flags.bitfield_DATA_73 &= ~0x40;
-      state = smi_power_state::wait_state_for_initial;
+      state = smi_power_state::wait_state_for_power_cycle;
     } else if ((checkStatusBit(first_execution)) == 0) {
       return 1; /* System powered off */
     }
@@ -283,7 +279,6 @@ uint8_t update() {
     break;
 
   case smi_power_state::overheat_cooldown_wait:
-    /* Wait for overheated status to end */
     if ((checkStatusBit(overheated)) == 0) {
       timers.power_timeout = 1;
       state = smi_power_state::delay;
@@ -312,7 +307,6 @@ uint8_t update() {
     break;
 
   case smi_power_state::going_to_reset:
-    /* Going to reset */
     flags.bitfield_DATA_71 &= ~0x08;
     flags.bitfield_DATA_73 |= 0x01; // Set reset request
     clearStatusBit(video_mode_changed);
@@ -332,7 +326,6 @@ uint8_t update() {
     break;
 
   case smi_power_state::delay:
-    /* Delay state */
     if (PLL_Reset::isState1()) {
       if (--timers.power_timeout == 0) {
         /* Proceed */
@@ -342,9 +335,8 @@ uint8_t update() {
     }
     break;
 
-  case smi_power_state::case15:
-    /* Get tray status and wait for stable state */
-    sensors.tray_status = pico_hal::get_tray_state();
+  case smi_power_state::wait_for_tray_stable:
+    sensors.tray_status = hal::get_tray_state();
 
     if ((sensors.tray_status == 0x00) || (sensors.tray_status == 0x40) || (sensors.tray_status == 0x60)) {
       state = smi_power_state::leds_off;
@@ -356,13 +348,12 @@ uint8_t update() {
   case smi_power_state::delayed_turning_off:
     /* Delayed turning power off */
     if (--timers.power_timeout == 0) {
-      pico_hal::turn_off_psu();
+      hal::turn_off_psu();
       state = smi_power_state::initial;
     }
     break;
 
-  case smi_power_state::wait_state_for_initial:
-    /* Wait state for power cycle */
+  case smi_power_state::wait_state_for_power_cycle:
     if (--timers.power_timeout == 0) {
       state = smi_power_state::initial;
     }

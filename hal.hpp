@@ -1,10 +1,10 @@
-#ifndef __PICO_HAL__
-#define __PICO_HAL__
+#ifndef __HAL__
+#define __HAL__
 
 #include <cstdint>
 #include <string>
 
-namespace pico_hal {
+namespace hal {
 void init();
 
 // Front panel
@@ -14,6 +14,8 @@ void led_red_on();
 void led_red_off();
 bool power_button_pressed();
 bool eject_button_pressed();
+void pico_led_on();
+void pico_led_off();
 
 void system_reset_on();
 void system_reset_off();
@@ -55,18 +57,14 @@ void timer0_disable();
 void timer1_init(uint32_t delay_us);
 void timer1_wait();
 void timer1_disable();
+void disable_and_discard_interrupts();
 
 // I2C
 void setupI2C();
 
-void shutdown_xbox();
-
 // Time
 uint32_t get_ms_since_boot();
 
-void shutdown_xbox();
-// Panic
-void panic(const std::string message);
-} // namespace pico_hal
+} // namespace hal
 
-#endif // __GPIO__
+#endif // __HAL__

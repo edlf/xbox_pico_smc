@@ -1,5 +1,5 @@
 #include "smc.hpp"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "utils.hpp"
 
 #include "time.h"
@@ -50,14 +50,14 @@ void updatePower() {
   switch (pwr_state) {
   case switch_state::wait_for_button_press:
     SMI::init(); // set state to initial
-    if (pico_hal::power_button_pressed()) {
+    if (hal::power_button_pressed()) {
       pwr_state = switch_state::debouncing;
     }
     break;
 
   case switch_state::debouncing:
     // TODO: state.smi_power = smi_power_state::overheat_cooldown_wait;
-    if (pico_hal::power_button_pressed()) {
+    if (hal::power_button_pressed()) {
       setStatusBit(power_change_requested);
       pwr_state = switch_state::wait_for_button_release;
     } else {
@@ -67,14 +67,14 @@ void updatePower() {
 
   case switch_state::wait_for_button_release:
     SMI::setStateCase11();
-    if (!pico_hal::power_button_pressed()) {
+    if (!hal::power_button_pressed()) {
       pwr_state = switch_state::release_debounce;
     }
     break;
 
   case switch_state::release_debounce:
     SMI::setStateGoingToReset();
-    if (pico_hal::power_button_pressed()) {
+    if (hal::power_button_pressed()) {
       pwr_state = switch_state::wait_for_button_release;
     } else {
       pwr_state = switch_state::wait_for_button_press;
@@ -92,13 +92,13 @@ void updateEject() {
 
   switch (eject_state) {
   case switch_state::wait_for_button_press:
-    if (pico_hal::eject_button_pressed()) {
+    if (hal::eject_button_pressed()) {
       eject_state = switch_state::debouncing;
     }
     break;
 
   case switch_state::debouncing:
-    if (pico_hal::eject_button_pressed()) {
+    if (hal::eject_button_pressed()) {
       setStatusBit(power_change_requested);
       eject_state = switch_state::wait_for_button_release;
     } else {
@@ -107,13 +107,13 @@ void updateEject() {
     break;
 
   case switch_state::wait_for_button_release:
-    if (!pico_hal::eject_button_pressed()) {
+    if (!hal::eject_button_pressed()) {
       eject_state = switch_state::release_debounce;
     }
     break;
 
   case switch_state::release_debounce:
-    if (pico_hal::eject_button_pressed()) {
+    if (hal::eject_button_pressed()) {
       eject_state = switch_state::wait_for_button_release;
     } else {
       eject_state = switch_state::wait_for_button_press;

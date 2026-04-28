@@ -1,5 +1,5 @@
 #include "smc.hpp"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "utils.hpp"
 
 namespace SMC {
@@ -42,6 +42,7 @@ static uint8_t smbus_version_counter = 0;
 
 uint8_t smbus_read_handler(uint8_t command) {
   uint8_t response = 0;
+  bool bad_command = false;
 
   switch (command) {
   case Command::FIRMWARE_REVISION: // 0x01
@@ -119,16 +120,27 @@ uint8_t smbus_read_handler(uint8_t command) {
   case Command::SOFTWARE_INTERRUPT:          // 0x18
   case Command::OVERRIDE_RESET_ON_TRAY_OPEN: // 0x19
   case Command::OS_READY:                    // 0x1A
-  default:
     // Unsupported/write-only commands - return 0
-    response = 0;
     break;
+  default:
+    bad_command = true;
+    break;
+  }
+
+  if (bad_command) {
+    debug::print_warn("SMBUS: Invalid read command: [" + std::to_string(command) + "]");
+  } else {
+    debug::print_message("SMBUS: Read handler cmd: ["
+       + std::to_string(command) + "] response ["
+       + std::to_string(response) + "]");
   }
 
   return response;
 }
 
 void smbus_write_handler(uint8_t command, uint8_t data) {
+  debug::print_message("SMBUS: Write handler cmd: [" + std::to_string(command) + "] data [" + std::to_string(data) + "]");
+
   switch (command) {
   case Command::RESET: // 0x02
     // data: 0x00 = warm reset, 0x01 = cold reset
@@ -190,10 +202,10 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // data: 0x00 = close, 0x01 = eject
     if (data == 0x00) {
       // Close tray
-      pico_hal::dvd_eject_off();
+      hal::dvd_eject_off();
     } else if (data == 0x01) {
       // Eject tray
-      pico_hal::dvd_eject_on();
+      hal::dvd_eject_on();
       setInterruptReason(InterruptReason_dvd_tray0);
     }
     break;
@@ -223,7 +235,7 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     fireSystemInterrupt();
     if (data == 0x00) {
       // Clear the interrupt after delivery
-      pico_hal::smi_pin_off();
+      hal::smi_pin_off();
     }
     break;
 
@@ -262,12 +274,14 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   default:
-    // Unknown command - silently ignore
+    debug::print_warn("Unknown SMBUS write command");
     break;
   }
 }
 
 void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
+  debug::print_message("SMBUS Interrupt");
+
   uint8_t data;
 
   switch (event) {

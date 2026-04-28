@@ -9,8 +9,8 @@ namespace SMI {
 enum class smi_power_state {
   decision_state,
   start_power_off,
-  case2,
-  case3,
+  process_power_off_conditions,
+  check_ram_test_results,
   event_interrupt_handled,
   case5,
   request_tray_close,
@@ -22,9 +22,9 @@ enum class smi_power_state {
   going_to_reset,
   case13,
   delay,
-  case15,
+  wait_for_tray_stable,
   delayed_turning_off,
-  wait_state_for_initial
+  wait_state_for_power_cycle
 };
 
 void init();
@@ -32,6 +32,7 @@ void printState();
 uint8_t update();
 void setStateCase11();
 void setStateGoingToReset();
+bool isXboxPowered();
 
 } // namespace SMI
 } // namespace SMC

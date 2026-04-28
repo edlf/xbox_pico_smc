@@ -30,7 +30,11 @@ extern volatile uint8_t bios_response_byte0;
 extern volatile uint8_t bios_response_byte1;
 extern uint32_t loop_start_time;
 
+Encoder DetectVideoEncoder(void);
+void configureEncoder();
 void configureConexantEncoder();
+void configureFocusEncoder();
+void configureXcaliburEncoder();
 
 void fireSystemInterrupt();
 
@@ -52,6 +56,8 @@ void smc_gpio_callback(unsigned int gpio, uint32_t events);
 
 void update_LEDs();
 
+void shutdown_xbox();
+void panic(const std::string message);
 }  // namespace SMC
 
 #endif  // __SMC__

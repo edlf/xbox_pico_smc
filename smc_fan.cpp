@@ -1,6 +1,6 @@
 #include "smc_fan.hpp"
 #include "smc.hpp"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "smc_smbus.hpp"
 
 namespace SMC {
@@ -111,11 +111,11 @@ void update_fan_temp() {
   case fan_control_state::state5:
     /* Temperature decremented - check for further cooling */
     if (--control_timeout2 == 0) {
-      pico_hal::set_fan_on();
+      hal::set_fan_on();
       control_timeout = 0xFA;
       state = fan_control_state::overheated_cooldown;
     } else {
-      pico_hal::set_fan_on();
+      hal::set_fan_on();
       state = fan_control_state::overheated_cooldown;
     }
     break;
@@ -237,10 +237,10 @@ uint8_t getFanSpeed() {
 
 void applyFanSpeed() {
   if (fan_speed == 0) {
-    pico_hal::set_fan_off();
+    hal::set_fan_off();
   } else {
-    pico_hal::set_fan_pwm(fan_speed);
-    pico_hal::set_fan_on();
+    hal::set_fan_pwm(fan_speed);
+    hal::set_fan_on();
   }
 }
 

@@ -42,7 +42,7 @@ add_subdirectory(i2c_slave)
 add_executable(OG_SMC utils.cpp
                       debug.cpp
                       main.cpp
-                      pico_hal.cpp
+                      hal.cpp
                       smc.cpp
                       smc_led.cpp
                       smc_boot_challenge.cpp

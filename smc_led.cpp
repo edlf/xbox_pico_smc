@@ -1,5 +1,5 @@
 #include "smc.hpp"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "utils.hpp"
 #include "debug.hpp"
 
@@ -179,14 +179,14 @@ void update()
 
   case led_state::set_gpios: // 7
     if (utils::checkBitNo(red_phases, state_counter)) {
-      pico_hal::led_red_on();
+      hal::led_red_on();
     } else {
-      pico_hal::led_red_off();
+      hal::led_red_off();
     }
     if (utils::checkBitNo(green_phases, state_counter)) {
-      pico_hal::led_green_on();
+      hal::led_green_on();
     } else {
-      pico_hal::led_green_off();
+      hal::led_green_off();
     }
 
     state_counter--;

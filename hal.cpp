@@ -6,11 +6,11 @@
 #include <stdio.h>
 #include <pico/sync.h>
 
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "pin_assignments.hpp"
 #include "debug.hpp"
 
-namespace pico_hal {
+namespace hal {
 
 // FAN PWM
 pwm_config pwm_cfg;
@@ -31,6 +31,14 @@ void led_red_on() {
 
 void led_red_off() {
   gpio_put(pins::LED_RED, 0);
+}
+
+void pico_led_on() {
+  gpio_put(pins::RP2040_LED, 1);
+}
+
+void pico_led_off() {
+  gpio_put(pins::RP2040_LED, 0);
 }
 
 bool state_pll = false;
@@ -116,7 +124,6 @@ uint8_t get_video_mode() {
     video_mode = video_mode | (1 << 3);
   }
 
-  // debug::print_message("GPIO: Get video mode " + std::to_string(video_mode));
   return video_mode;
 }
 
@@ -257,7 +264,7 @@ void init() {
 
 
   debug::print_message("GPIO: I2C Init");
-  i2c_init(i2c0, I2C_BAUDRATE);
+  i2c_init(I2C_PORT, I2C_BAUDRATE);
 }
 
 void assertSystemReset() {
@@ -397,32 +404,8 @@ uint32_t get_ms_since_boot() {
   return to_ms_since_boot(get_absolute_time());
 }
 
-void shutdown_xbox() {
-  pico_hal::assertSystemReset();
-  pico_hal::PLL_off();
-  pico_hal::led_green_off();
-  pico_hal::led_red_off();
-  pico_hal::set_fan_off();
-  pico_hal::audio_clamp_off();
-  pico_hal::turn_off_psu();
-}
-
-void panic(const std::string message) {
-  // Disable all interrupts + timers
+void disable_and_discard_interrupts() {
   (void) save_and_disable_interrupts();
-  timer0_disable();
-  timer1_disable();
-
-  shutdown_xbox();
-
-  debug::print_critical(message + " Waiting for watchdog to reboot");
-
-  while (true) {
-    gpio_put(pins::RP2040_LED, 1);
-    sleep_ms(500);
-    gpio_put(pins::RP2040_LED, 0);
-    sleep_ms(500);
-  }
 }
 
-} // namespace pico_hal
+} // namespace hal

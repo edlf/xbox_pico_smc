@@ -74,6 +74,13 @@ typedef struct {
   uint16_t smbus_attempt_counter;
 } timers_struct;
 
+enum class Encoder {
+  Conexant,
+  Focus,
+  Xcalibur,
+  NoEncoder
+};
+
 } // namespace SMC
 
 #endif // __SMC_TYPES__

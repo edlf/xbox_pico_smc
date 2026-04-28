@@ -1,11 +1,13 @@
 #include "smc_video.hpp"
 #include "smc.hpp"
 #include "debug.hpp"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 
 namespace SMC {
 namespace Video {
 
+bool override = false;
+uint8_t override_mode = 0b00000010;
 uint8_t video_mode;
 uint8_t previous_video_mode;
 
@@ -15,7 +17,15 @@ void init() {
 }
 
 void update() {
-  SMC::sensors.vmode_raw = pico_hal::get_video_mode();
+  if (!SMI::isXboxPowered()) {
+    return;
+  }
+
+  if (override) {
+    SMC::sensors.vmode_raw = override_mode;
+  } else {
+    SMC::sensors.vmode_raw = hal::get_video_mode();
+  }
 
   if (previous_video_mode != SMC::sensors.vmode_raw) {
     printMode(SMC::sensors.vmode_raw);
@@ -24,41 +34,56 @@ void update() {
 
   if (SMC::sensors.vmode_raw != SMC::sensors.vmode) {
     SMC::sensors.vmode = SMC::sensors.vmode_raw;
-    SMC::setStatusBit(SMC::video_mode_changed); // Set video mode change flag
+    SMC::setStatusBit(SMC::video_mode_changed);
   }
 }
 
 void printMode(const uint8_t vm) {
   // TODO this is only valid if xbox in on
+
+  std::string message = "VIDEO: AV Cable [";
+  bool recognized_cable = true;
+
   uint8_t temp = (vm >> 1);
   switch (temp) {
     case 0:
-      debug::print_message("Advanced SCART Cable");
+      message += "Advanced SCART Cable";
       break;
     case 1:
-      debug::print_message("High Definition AV Pack");
+      message += "High Definition AV Pack";
       break;
     case 2:
-      debug::print_message("VGA / progressive RGB");
+      message += "VGA / progressive RGB";
       break;
     case 3:
-      debug::print_message("RF Adapter");
+      message += "RF Adapter";
       break;
     case 4:
-      debug::print_message("Advanced AV Pack");
+      message += "Advanced AV Pack";
       break;
     case 5:
-      debug::print_message("Unknown mode 5");
+      message += "Unknown mode 5";
+      recognized_cable = false;
       break;
     case 6:
-      debug::print_message("Standard AV Cable");
+      message += "Standard AV Cable";
       break;
     case 7:
-      debug::print_message("No cable connected");
+      message += "No cable connected";
+      recognized_cable = false;
       break;
     default:
-      debug::print_warn("Invalid video mode");
+      message += "Invalid video mode";
+      recognized_cable = false;
       break;
+  }
+
+  message += "]";
+
+  if (recognized_cable) {
+    debug::print_message(message);
+  } else {
+    debug::print_warn(message);
   }
 }
 

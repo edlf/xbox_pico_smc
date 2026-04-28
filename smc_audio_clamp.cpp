@@ -1,6 +1,6 @@
 #include "smc_audio_clamp.hpp"
 #include "smc.hpp"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "utils.hpp"
 
 #include <vector>
@@ -27,7 +27,7 @@ void update() {
   switch (state) {
   case audio_state::clamped:
     // Audio clamped
-    pico_hal::audio_clamp_on();
+    hal::audio_clamp_on();
     utils::clearBitNo(flags.bitfield_DATA_6F, 0);
     audio_clamp_timeout = 44;
 
@@ -67,7 +67,7 @@ void update() {
 
   case audio_state::unclamped:
     // Audio unclamped
-    pico_hal::audio_clamp_off();
+    hal::audio_clamp_off();
     utils::clearBitNo(flags.bitfield_DATA_6F, 7);
     clearStatusBit(audio_clamp_timer);
 
@@ -89,12 +89,12 @@ bool isClamped() {
 
 void clamp() {
   state = audio_state::clamped;
-  pico_hal::audio_clamp_on();
+  hal::audio_clamp_on();
 }
 
 void unclamp() {
   state = audio_state::unclamped;
-  pico_hal::audio_clamp_off();
+  hal::audio_clamp_off();
 }
 
 

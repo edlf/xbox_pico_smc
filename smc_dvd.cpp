@@ -1,6 +1,6 @@
 #include "smc_dvd.hpp"
 #include "smc.hpp"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "utils.hpp"
 
 namespace SMC {
@@ -50,7 +50,7 @@ void updateDvdTray() {
     break;
 
   case dvd_tray_state::state2:
-    sensors.tray_status_raw = pico_hal::get_tray_state() & 0x70;
+    sensors.tray_status_raw = hal::get_tray_state() & 0x70;
     raw_tray_status_filtered = sensors.tray_status_raw;
     if ((sensors.tray_status ^ sensors.tray_status_raw) != 0) {
       dvd_tray = dvd_tray_state::state3;
@@ -58,7 +58,7 @@ void updateDvdTray() {
     break;
 
   case dvd_tray_state::state3:
-    tray_state = pico_hal::get_tray_state();
+    tray_state = hal::get_tray_state();
     sensors.tray_status_raw = tray_state & 0x70;
     if ((tray_state & 0x70) != raw_tray_status_filtered) {
       dvd_tray = dvd_tray_state::state2;
@@ -111,7 +111,7 @@ void updateEjectTray() {
     break;
 
   case update_eject_tray_state::tick_timer:
-    pico_hal::dvd_eject_off();
+    hal::dvd_eject_off();
     if (--eject_timeout == 0) {
       update_eject_tray = update_eject_tray_state::release_eject;
     }
@@ -119,7 +119,7 @@ void updateEjectTray() {
 
   case update_eject_tray_state::release_eject:
     utils::clearBitNo(flags.bitfield_DATA_72, 5);
-    pico_hal::dvd_eject_on();
+    hal::dvd_eject_on();
     update_eject_tray = update_eject_tray_state::initial;
     break;
 
@@ -151,7 +151,7 @@ void updateDvdTrayEject() {
         (flags.bitfield_DATA_6F & 0x10)) {          // Eject request from elsewhere
 
       /* Check current tray state via PORTB bits 4-6 */
-      uint8_t tray_state = pico_hal::get_tray_state();
+      uint8_t tray_state = hal::get_tray_state();
 
       /* Only proceed if tray is not already in eject state (0x70) or insert
        * state (0x20) */
@@ -206,7 +206,7 @@ void updateDvdTrayEject() {
 
     /* Check if explicit eject request is set */
     if (flags.bitfield_DATA_6F & 0x10) {
-      uint8_t tray_state = pico_hal::get_tray_state();
+      uint8_t tray_state = hal::get_tray_state();
 
       /* Only proceed if not already in eject/insert states */
       if (tray_state != 0x70 && tray_state != 0x20) {

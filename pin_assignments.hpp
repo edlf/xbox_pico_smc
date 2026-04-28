@@ -37,8 +37,13 @@ constexpr uint8_t YD_BOARD_RGB = 23;
 }  // namespace pins
 
 #define I2C_PORT i2c0
+
 constexpr uint32_t I2C_BAUDRATE = 100000U;  // 100 kHz
-constexpr uint8_t I2C_SLAVE_ADDRESS = 0x20;
-constexpr uint8_t I2C_TEMP_SENSOR_ADDRESS = 0x98;
+constexpr uint8_t I2C_SLAVE_ADDRESS = 0x10;
+constexpr uint8_t I2C_TEMP_SENSOR_ADDRESS = 0x4C;
+constexpr uint8_t I2C_EEPROM_ADDRESS = 0x54;
+constexpr uint8_t I2C_CONEXANT_ADDRESS = 0x45;
+constexpr uint8_t I2C_FOCUS_ADDRESS = 0x6A;
+constexpr uint8_t I2C_XCALIBUR = 0x70;
 
 #endif  // __PIN_ASSIGNMENTS__

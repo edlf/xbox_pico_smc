@@ -7,7 +7,7 @@
 #include "hardware/watchdog.h"
 #include "i2c_slave/include/i2c_slave.h"
 #include "pico/stdlib.h"
-#include "pico_hal.hpp"
+#include "hal.hpp"
 #include "pin_assignments.hpp"
 
 namespace SMC {
@@ -55,20 +55,54 @@ uint8_t checkStatusBit(uint8_t status_bit) {
 }
 
 void fireSystemInterrupt() {
+  debug::print_message("SMC: Fire System Interrupt");
+
   /* Pulse SMI signal (RA4) low to signal system interrupt */
-  pico_hal::smi_pin_off();
+  hal::smi_pin_off();
   sleep_ms(20);
-  pico_hal::smi_pin_on();
+  hal::smi_pin_on();
+}
+
+void configureEncoder() {
+  Encoder encoder = DetectVideoEncoder();
+
+  switch (encoder) {
+    case Encoder::Conexant:
+      configureConexantEncoder();
+      break;
+
+    case Encoder::Focus:
+      configureFocusEncoder();
+      break;
+
+    case Encoder::Xcalibur:
+      configureXcaliburEncoder();
+      break;
+
+    default:
+      debug::print_critical("No encoder returned");
+      break;
+  }
 }
 
 void configureConexantEncoder() {
+  debug::print_message("SMC: Configure Conexant Encoder");
+
   constexpr size_t len = 2;
   uint8_t config[len] = {0xBA, 0x3F};
-  i2c_write_burst_blocking(i2c0, 0x8A, config, len);
+  i2c_write_burst_blocking(I2C_PORT, I2C_CONEXANT_ADDRESS, config, len);
+}
+
+void configureFocusEncoder() {
+  // TODO
+}
+
+void configureXcaliburEncoder() {
+  // TODO
 }
 
 void smc_gpio_callback(unsigned int gpio, uint32_t events) {
-  uint32_t int_status = pico_hal::disableInterrupts();
+  uint32_t int_status = hal::disableInterrupts();
   // bit 3 - AV mode changed
   // InterruptReason_av_mode_changed = 0b00001000,   // 0x08
   // bit 4 - AV cable unplugged
@@ -76,25 +110,25 @@ void smc_gpio_callback(unsigned int gpio, uint32_t events) {
 
   switch (gpio) {
   case pins::SW_EJECT:
-    debug::print_message("ISRL: Eject switch");
+    debug::print_message("ISR: Eject switch");
     setInterruptReason(InterruptReason_eject_sw_pressed);
     break;
 
   case pins::POWER_OK:
+    debug::print_message("ISR: power OK");
+
     // ISR got called, but somehow power good didnt stay enabled
-    if (!pico_hal::get_power_ok()) {
+    if (!hal::get_power_ok()) {
       // Power supply failure - shutdown sequence
-      pico_hal::shutdown_xbox();
+      shutdown_xbox();
 
       // Clear the POWOK interrupt flag and wait for watchdog reset
       resetInterruptReason();
       resetStatus();
 
       // Enter infinite loop waiting for watchdog timer to reset the system
-      pico_hal::panic("POWER_OK timeout");
+      panic("POWER_OK timeout");
     }
-
-    debug::print_message("ISR: power OK");
     break;
 
   case pins::SW_POWER:
@@ -103,17 +137,17 @@ void smc_gpio_callback(unsigned int gpio, uint32_t events) {
     break;
 
   case pins::VIDEO_MODE_0:
-    debug::print_message("ISR: vm0");
+    debug::print_message("ISR: AV Port Pin 0");
     Video::update();
     break;
 
   case pins::VIDEO_MODE_1:
-    debug::print_message("ISR: vm1");
+    debug::print_message("ISR: AV Port Pin 1");
     Video::update();
     break;
 
   case pins::VIDEO_MODE_2:
-    debug::print_message("ISR: vm2");
+    debug::print_message("ISR: AV Port Pin 2");
     Video::update();
     break;
 
@@ -143,7 +177,7 @@ void smc_gpio_callback(unsigned int gpio, uint32_t events) {
   }
 
   isr();
-  pico_hal::reenableInterrupts(int_status);
+  hal::reenableInterrupts(int_status);
 }
 
 void isr() {
@@ -186,18 +220,18 @@ void checkEmergencyOff() {
   static bool was_pressed = false;
   static uint32_t last_press_time = 0;
 
-  const uint32_t current_time = pico_hal::get_ms_since_boot();
-  const bool pwr_pressed = pico_hal::power_button_pressed();
+  const uint32_t current_time = hal::get_ms_since_boot();
+  const bool pwr_pressed = hal::power_button_pressed();
 
   if (pwr_pressed && !was_pressed) {
     was_pressed = true;
-    last_press_time = pico_hal::get_ms_since_boot();
+    last_press_time = hal::get_ms_since_boot();
     return;
   }
 
   if (was_pressed && pwr_pressed) {
     if (current_time - last_press_time >= hold_time) {
-      pico_hal::shutdown_xbox();
+      shutdown_xbox();
     }
 
     return;
@@ -211,22 +245,16 @@ void checkEmergencyOff() {
 uint32_t loop_start_time = 0;
 
 void main_loop() {
-  // Fail safes
-  pico_hal::shutdown_xbox();
-
   globals_init();
-  pico_hal::init();
+  hal::init();
+  hal::pico_led_on();
 
-  init_irqs();
-  pico_hal::set_fan_off();
-  pico_hal::audio_clamp_on();
+  // Make sure the xbox is turned off
+  shutdown_xbox();
 
-  gpio_put(pins::RP2040_LED, 1);
-
-  debug::print_message("MAIN: Set I2C interrupt");
-  i2c_slave_init(i2c0, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
-
-  /* Initialize state variables */
+  // Initialize state machines
+  hal::set_fan_off();
+  hal::audio_clamp_on();
   PowerStandby::init();
   FrontPanelSW::init();
   Fan::init();
@@ -238,16 +266,17 @@ void main_loop() {
   BootChallenge::init();
   PLL_Reset::init();
 
+  init_irqs();
+
+  debug::print_message("MAIN: Set I2C interrupt");
+  i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
+
+  hal::enableWatchdog();
+
   timers.power_timeout3 = 1;
-  uint32_t loop_count = 0;
-
-  pico_hal::enableWatchdog();
-
   BootChallenge::challenge_struct& challenge = BootChallenge::getChallengeStructRef();
 
   do {
-    // printf("Loop %d\n", loop_count);
-
     challenge.status_byte0 = challenge.status_byte0 + 1;
     challenge.status_byte1 = 22; // TODO Feed number from timer
 
@@ -268,7 +297,7 @@ void main_loop() {
       challenge.status_byte3 = challenge.status_byte1 ^ sensors.CPU_temperature;
 
       while (true) {
-        loop_start_time = pico_hal::get_ms_since_boot();
+        loop_start_time = hal::get_ms_since_boot();
 
         // TODO: This should be removed
         checkEmergencyOff();
@@ -293,7 +322,7 @@ void main_loop() {
 
         busy_wait_ms(40);
         wait_for_isr();
-        pico_hal::petWatchdog();
+        hal::petWatchdog();
       }
 
       Fan::applyFanSpeed();
@@ -308,37 +337,36 @@ void main_loop() {
       BootChallenge::resetState();
       Led::resetPhaseCounter();
       SMI::init();
-      pico_hal::petWatchdog();
+      hal::petWatchdog();
 
       globals_init();
       timers.power_timeout3 = 25;
 
       do {
         wait_for_isr();
-        pico_hal::petWatchdog();
+        hal::petWatchdog();
         FrontPanelSW::updatePower();
         timers.power_timeout3--;
       } while (timers.power_timeout3 != 0);
 
       timers.power_timeout3 = 0;
     } else {
-      loop_start_time = pico_hal::get_ms_since_boot();
+      loop_start_time = hal::get_ms_since_boot();
     }
 
     busy_wait_ms(40);
 
-    pico_hal::petWatchdog();
-    loop_count++;
+    hal::petWatchdog();
   } while (true);
 }
 
 void globals_init() {
-  /* Initialize flags */
   flags = {0};
   something_with_cpu_temp = true;
 
   resetInterruptReason();
   resetStatus();
+
   flags.bitfield_DATA_6F = 0x02; /* Set power-off flag initially */
   flags.bitfield_DATA_70 = 0;
   flags.bitfield_DATA_71 = 0;
@@ -346,7 +374,6 @@ void globals_init() {
   flags.bitfield_DATA_73 = 0;
   flags.bitfield_DATA_74 = 0;
 
-  /* Initialize sensor/config variables */
   sensors.CPU_temperature = 0;
   sensors.board_temperature = 0;
   sensors.CPU_temp_predicted = 0;
@@ -354,9 +381,54 @@ void globals_init() {
   sensors.vmode = 0;
   sensors.vmode_raw = 0;
 
-  /* Initialize timer variables */
   timers.power_timeout = 0;
   timers.power_timeout3 = 0;
+}
+
+void shutdown_xbox() {
+  hal::assertSystemReset();
+  hal::PLL_off();
+  hal::led_green_off();
+  hal::led_red_off();
+  hal::set_fan_off();
+  hal::audio_clamp_off();
+  hal::turn_off_psu();
+}
+
+void panic(const std::string message) {
+  hal::disable_and_discard_interrupts();
+  hal::timer0_disable();
+  hal::timer1_disable();
+
+  shutdown_xbox();
+
+  debug::print_critical(message + " Waiting for watchdog to reboot");
+
+  while (true) {
+    hal::pico_led_on();
+    sleep_ms(500);
+    hal::pico_led_off();
+    sleep_ms(500);
+  }
+}
+
+Encoder DetectVideoEncoder(void)
+{
+  /* TODO: Based on XBLAST
+  if (I2CTransmitByteGetReturn(I2C_CONEXANT_ADDRESS, 0x00) != ERR_I2C_ERROR_BUS)
+  {
+    return Encoder::Conexant;
+  }
+  else if (I2CTransmitByteGetReturn(I2C_FOCUS_ADDRESS, 0x00) != ERR_I2C_ERROR_BUS)
+  {
+    return Encoder::Focus;
+  }
+  else
+  {
+    return Encoder::Xcalibur;
+  }
+  */
+  return Encoder::Conexant;
 }
 
 } // namespace SMC
