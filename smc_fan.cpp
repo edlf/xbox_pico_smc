@@ -15,11 +15,18 @@ constexpr uint8_t start_fan_speed = 30;
 // Thresholds in °C, hex as in the PIC
 constexpr uint8_t critical_cpu_temp = 0x58;      // 88: overheated
 constexpr uint8_t critical_board_temp = 0x4B;    // 75
+#if SMC_FIRMWARE_P11
+// P11 runs the fan faster: these three are 7 °C lower than P01
+constexpr uint8_t hot_cpu_temp = 0x43;           // 67: +3 speed
+constexpr uint8_t warm_predicted_temp = 0x43;    // 67: +1 speed
+constexpr uint8_t cool_predicted_temp = 0x42;    // 66: below and steady, maybe -1
+#else
 constexpr uint8_t hot_cpu_temp = 0x4A;           // 74: +3 speed
-constexpr uint8_t hot_predicted_temp = 0x56;     // 86: +3 speed
 constexpr uint8_t warm_predicted_temp = 0x4A;    // 74: +1 speed
-constexpr uint8_t warm_board_temp = 0x3C;        // 60: +1 speed
 constexpr uint8_t cool_predicted_temp = 0x49;    // 73: below and steady, maybe -1
+#endif
+constexpr uint8_t hot_predicted_temp = 0x56;     // 86: +3 speed
+constexpr uint8_t warm_board_temp = 0x3C;        // 60: +1 speed
 constexpr uint8_t cool_board_temp = 0x39;        // 57
 constexpr uint8_t shutdown_cpu_temp = 0x61;      // 97: still overheated, give up
 constexpr uint8_t shutdown_board_temp = 0x54;    // 84

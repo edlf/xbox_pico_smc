@@ -15,6 +15,8 @@ bool smbusMasterWrite(uint8_t address, const uint8_t* data, size_t len);
 bool smbusMasterReadByte(uint8_t address, uint8_t reg, uint8_t& value);
 void printSMBusLog();
 void resetSMBusRegisters();
+// Version reported on SMBus 0x01 ("P11" or "P01")
+extern const char version_string[];
 
 }
 

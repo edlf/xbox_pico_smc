@@ -96,6 +96,16 @@ void configureConexantEncoder() {
   }
 }
 
+// P11 (0x60C): ADM1032 configuration register = 0x00, running (not standby)
+// with the ALERT output enabled
+void configureTemperatureSensor() {
+  constexpr size_t len = 2;
+  uint8_t config[len] = {0x09, 0x00};
+  if (!smbusMasterWrite(I2C_TEMP_SENSOR_ADDRESS, config, len)) {
+    debug::print_warn("Temperature sensor write failed");
+  }
+}
+
 void configureFocusEncoder() {
   // TODO
 }
@@ -229,14 +239,26 @@ void main_loop() {
       hal::petWatchdog();
 
       globals_init();
-      PowerStandby::setPowerTimeout3(25);
 
-      do {
+#if SMC_FIRMWARE_P11
+      // P11 skips the wait when powering back on after a power cycle (0x2A2)
+      // and waits one tick less otherwise
+      const bool wait_after_power_off = !SMI::powerOnRequested();
+      PowerStandby::setPowerTimeout3(24);
+#else
+      const bool wait_after_power_off = true;
+      PowerStandby::setPowerTimeout3(25);
+#endif
+
+      while (wait_after_power_off) {
         hal::timer1_wait();
         hal::petWatchdog();
         FrontPanelSW::updatePower();
         PowerStandby::powerTimeout3Decrement();
-      } while (PowerStandby::getPowerTimeout3() != 0);
+        if (PowerStandby::getPowerTimeout3() == 0) {
+          break;
+        }
+      }
 
       PowerStandby::setPowerTimeout3(0);
     }

@@ -30,6 +30,7 @@ extern volatile uint8_t bios_response_byte1;
 Encoder DetectVideoEncoder(void);
 void configureEncoder();
 void configureConexantEncoder();
+void configureTemperatureSensor();
 void configureFocusEncoder();
 void configureXcaliburEncoder();
 

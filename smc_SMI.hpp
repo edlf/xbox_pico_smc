@@ -31,6 +31,10 @@ void init();
 // True once after a power cycle (SMBus 0x02 bit 6), the main loop then
 // presses the power button for the host
 bool takePowerOnRequest();
+// Same, without clearing it
+bool powerOnRequested();
+// P11 only: ticks off during a power cycle (SMBus 0x22), back to 25 in init()
+void setPowerCycleDelay(uint8_t ticks);
 void printState();
 uint8_t update();
 

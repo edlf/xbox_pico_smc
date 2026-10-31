@@ -114,6 +114,14 @@ void update()
       return;
     }
 
+#if SMC_FIRMWARE_P11
+    // P11 checks the SMBus LED override before the AV cable and power off
+    if (manual_control) {
+      state = led_state::manual_control;
+      return;
+    }
+#endif
+
     if (av_missing) {
       state = led_state::quick_green_orange;
       return;
@@ -124,10 +132,12 @@ void update()
       return;
     }
 
+#if !SMC_FIRMWARE_P11
     if (manual_control) {
       state = led_state::manual_control;
       return;
     }
+#endif
 
     if (quick_green_blink) {
       state = led_state::quick_green_blink;

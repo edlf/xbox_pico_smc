@@ -46,12 +46,18 @@ void printState() {
 }
 
 // Same order as the PIC (0x601): release SYSRESET, give the encoder ~0.9 ms
-// to come out of reset, then configure it
+// to come out of reset, then configure it. P11 (0x60C) waits ~3 ms and
+// configures the temperature sensor instead, leaving the encoder alone.
 static void releaseResetAndConfigureEncoder() {
   hal::liftSystemReset();
   flags.bitfield_DATA_73 |= 0x08;
+#if SMC_FIRMWARE_P11
+  busy_wait_us(3000);
+  configureTemperatureSensor();
+#else
   busy_wait_us(900);
   configureEncoder();
+#endif
   state = pll_sysreset_state::state8;
 }
 
@@ -108,6 +114,11 @@ void update() {
     flags.bitfield_DATA_72 |= 0x04;
     flags.bitfield_DATA_72 |= 0x02;
     flags.bitfield_DATA_70 &= ~0x04;
+#if SMC_FIRMWARE_P11
+    if (!utils::checkBitNo(flags.bitfield_DATA_6F, 5)) { // Tray not moving
+      Dvd::restartTrayDebounce();
+    }
+#endif
     state = pll_sysreset_state::warm_reset_2;
     break;
 

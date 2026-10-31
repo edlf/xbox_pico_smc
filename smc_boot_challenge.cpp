@@ -213,7 +213,7 @@ void update() {
 
   case boot_challenge_state::challenge_wait_for_reply:
     if (!(flags.bitfield_DATA_73 & 0x01) && !(flags.bitfield_DATA_70 & 0x01)) {
-      boot_response_timeout = 2;
+      boot_response_timeout = SMC_FIRMWARE_P11 ? 4 : 2; // 0x90A
       state = boot_challenge_state::check_response;
     } else {
       waitForReset();

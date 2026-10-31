@@ -104,6 +104,12 @@ void updateDvdTray() {
   }
 }
 
+void restartTrayDebounce() {
+  // Same as P11 (0x636): back to the tick state without reloading the timer,
+  // which is already 0, so it counts 256 ticks
+  dvd_tray = dvd_tray_state::tick_timer;
+}
+
 void updateEjectTray() {
   // Pulses the drive's eject line for 5 ticks when 72.3 is set (0xADE)
   switch (update_eject_tray) {
@@ -281,6 +287,8 @@ uint8_t readTrayState() {
 void updateDvdTray() {
   sensors.tray_status = no_drive_tray_state;
 }
+
+void restartTrayDebounce() {}
 
 void updateEjectTray() {}
 

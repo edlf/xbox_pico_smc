@@ -24,7 +24,10 @@ int main() {
                        " SMC_AV_PACK_MODE=" + std::to_string(SMC_AV_PACK_MODE) +
                        " SMC_LED_BRIGHTNESS=" + std::to_string(SMC_LED_BRIGHTNESS) +
                        " SMC_LED_RED_BREATHE=" + (SMC_LED_RED_BREATHE ? "ON" : "OFF") +
+                       " SMC_FIRMWARE=" + (SMC_FIRMWARE_P11 ? "P11" : "P01") +
+                       " SMC_REPORT_P01=" + (SMC_REPORT_P01 ? "ON" : "OFF") +
                        " SMC_WEB_INTERFACE=" + (SMC_WEB_INTERFACE ? "ON" : "OFF"));
+  debug::print_message(std::string("BUILD: Reported version (SMBus 0x01) ") + SMC::version_string);
   if (watchdog_caused_reboot()) {
     debug::print_critical("Rebooted by watchdog");
   }

@@ -71,6 +71,24 @@ endif()
 # -DSMC_LED_RED_BREATHE=ON
 option(SMC_LED_RED_BREATHE "Red LED breathes while on" OFF)
 
+# Behaviour of which original PIC firmware to follow: -DSMC_FIRMWARE=P11 or P01.
+# P11 (1.2/1.3) has lower fan thresholds, SMBus 0x22 (power cycle delay), a
+# shorter power cycle, LED overrides over the AV/off patterns and configures
+# the temperature sensor instead of the video encoder after reset.
+set(SMC_FIRMWARE P11 CACHE STRING "Original firmware to follow: P11 or P01")
+set_property(CACHE SMC_FIRMWARE PROPERTY STRINGS P11 P01)
+string(TOUPPER "${SMC_FIRMWARE}" SMC_FIRMWARE_SETTING)
+if(SMC_FIRMWARE_SETTING STREQUAL "P11")
+  set(SMC_FIRMWARE_P11 ON)
+elseif(SMC_FIRMWARE_SETTING STREQUAL "P01")
+  set(SMC_FIRMWARE_P11 OFF)
+else()
+  message(FATAL_ERROR "SMC_FIRMWARE must be P11 or P01, got '${SMC_FIRMWARE}'")
+endif()
+
+# Report "P01" on SMBus 0x01 while following P11: -DSMC_REPORT_P01=ON
+option(SMC_REPORT_P01 "Report version P01 on SMBus 0x01, whatever SMC_FIRMWARE is" OFF)
+
 # Wi-Fi access point with a status and control page, W boards only:
 # -DSMC_WEB_INTERFACE=AUTO (default: on for boards with Wi-Fi), ON or OFF.
 # [-DSMC_WIFI_SSID=... -DSMC_WIFI_PASSWORD=...] Connect to the network and
@@ -141,6 +159,8 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
                                           SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
                                           SMC_LED_RED_BREATHE=$<BOOL:${SMC_LED_RED_BREATHE}>
+                                          SMC_FIRMWARE_P11=$<BOOL:${SMC_FIRMWARE_P11}>
+                                          SMC_REPORT_P01=$<BOOL:${SMC_REPORT_P01}>
                                           SMC_WEB_INTERFACE=$<BOOL:${SMC_WEB_ENABLED}>
                                           SMC_BOARD="${PICO_BOARD}")
 

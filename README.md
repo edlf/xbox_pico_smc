@@ -2,7 +2,7 @@
 
 Original XBOX SMC implemented with a Rapsberry Pico.
 
-Very very experimental, currently it boots on 1.0 boards.
+Very very experimental, currently it boots on 1.0 boards (although the fan curve thats used is from 1.2-1.4 units since that one ramps the fans faster).
 
 ## Whats working
 - Power ON/OFF
@@ -11,8 +11,9 @@ Very very experimental, currently it boots on 1.0 boards.
 - DVD eject
 - Fan control
 - SMC boot challenge/override
+- Version override, since it reports P11 by default most xbox homebrew will report your 1.0/1.1 unit as 1.2/1.3
 - Logging via uart
-- Experimental WiFi control, requires external power to the pico (3.3v standby rail is not strong enough)
+- Experimental WiFi control, requires external power to the pico (the 3.3v standby rail is not strong enough)
 
 ## Notes
 - *Heavily* based on the work Prehistoricman did. [Xbox_SMC](https://github.com/Prehistoricman/Xbox_SMC)
