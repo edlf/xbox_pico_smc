@@ -1,11 +1,11 @@
 #include "smc_boot_challenge.hpp"
 #include "smc.hpp"
 #include "hal.hpp"
+#include "utils.hpp"
 #include "pico/stdlib.h"
 
 #include <vector>
 #include <string>
-#include <cstdio>
 
 namespace SMC {
 namespace BootChallenge {
@@ -87,14 +87,8 @@ void compute() {
   }
 }
 
-static std::string hex(uint8_t value) {
-  char text[5];
-  snprintf(text, sizeof(text), "0x%02X", value);
-  return text;
-}
-
 static std::string ramTestResult() {
-  return "result " + hex(ram_test_response0) + " type " + hex(ram_test_response1);
+  return "result " + utils::toHex(ram_test_response0) + " type " + utils::toHex(ram_test_response1);
 }
 
 static void clearRamTestResult() {
@@ -267,9 +261,9 @@ void update() {
         state = boot_challenge_state::challenge_passed;
         break;
       }
-      debug::print_warn("BOOT: Challenge failed, expected " + hex(challenge.expected0) + " " +
-                        hex(challenge.expected1) + " got " + hex(challenge.response0) + " " +
-                        hex(challenge.response1));
+      debug::print_warn("BOOT: Challenge failed, expected " + utils::toHex(challenge.expected0) + " " +
+                        utils::toHex(challenge.expected1) + " got " + utils::toHex(challenge.response0) + " " +
+                        utils::toHex(challenge.response1));
     } else if (--boot_response_timeout != 0) {
       break;
     } else {

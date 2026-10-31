@@ -34,8 +34,6 @@ void rtc_dump_on();
 void rtc_dump_off();
 
 uint8_t get_tray_state();
-bool get_dvd_eject_line(); // Actual line level, low = eject asserted
-bool get_dvd_active();
 
 // PSU
 bool get_power_ok();

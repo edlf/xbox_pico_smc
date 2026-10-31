@@ -49,7 +49,6 @@ void port_init();
 
 void smc_gpio_callback(unsigned int gpio, uint32_t events);
 void setPowerOkIrq(bool enabled);
-extern volatile uint32_t dvd_eject_edges; // Debug
 
 void update_LEDs();
 

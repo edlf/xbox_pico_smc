@@ -116,14 +116,6 @@ void rtc_dump_off() {
   gpio_put(pins::RTC_DUMP, 0);
 }
 
-bool get_dvd_eject_line() {
-  return gpio_get(pins::DVD_EJECT);
-}
-
-bool get_dvd_active() {
-  return gpio_get(pins::DVD_ACTIVE);
-}
-
 bool get_power_ok() {
   return gpio_get(pins::POWER_OK);
 }

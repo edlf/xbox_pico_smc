@@ -87,7 +87,7 @@ void printSMBusLog() {
     const SMBusLogEntry entry = smbus_log[smbus_log_tail];
     smbus_log_tail = (smbus_log_tail + 1) % smbus_log_size;
     debug::print_message(std::string("SMBUS: ") + (entry.write ? "Write" : "Read ") + " cmd [" +
-                         std::to_string(entry.command) + "] data [" + std::to_string(entry.data) + "]");
+                         utils::toHex(entry.command) + "] data [" + utils::toHex(entry.data) + "]");
   }
 }
 
@@ -433,7 +433,7 @@ static bool masterTransfer(uint8_t address, const uint8_t* tx, size_t tx_len, ui
   }
 
   static const char* const reasons[] = {"ok", "bus busy", "nack", "arbitration lost", "timeout"};
-  debug::print_warn("I2C: Transfer to address " + std::to_string(address) + " failed: " +
+  debug::print_warn("I2C: Transfer to address " + utils::toHex(address) + " failed: " +
                     reasons[static_cast<int>(result)]);
   return false;
 }

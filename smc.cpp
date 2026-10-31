@@ -106,14 +106,7 @@ void configureXcaliburEncoder() {
 // Mirrors the PIC's only external interrupt: CCP2 capture on a POWOK falling
 // edge, armed while the Xbox is powered (see setPowerOkIrq). Buttons, tray and
 // AV pins are polled by their state machines, like on the PIC.
-// Debug: every falling edge on the eject line, however short
-volatile uint32_t dvd_eject_edges = 0;
-
 void smc_gpio_callback(unsigned int gpio, uint32_t events) {
-  if (gpio == pins::DVD_EJECT) {
-    dvd_eject_edges++;
-    return;
-  }
   if (gpio != pins::POWER_OK) {
     return;
   }
@@ -149,9 +142,6 @@ void update_LEDs() {
 void main_loop() {
   globals_init();
   hal::init();
-#if SMC_DVD_SUPPORT
-  gpio_set_irq_enabled_with_callback(pins::DVD_EJECT, GPIO_IRQ_EDGE_FALL, true, &smc_gpio_callback);
-#endif
   hal::pico_led_on();
 
   // Make sure the xbox is turned off

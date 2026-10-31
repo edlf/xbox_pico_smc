@@ -42,26 +42,7 @@ uint8_t readTrayState() {
   return hal::get_tray_state() & 0x70;
 }
 
-// Debug: prints the drive's lines whenever they change, raw and every tick
-static void logDriveLines() {
-  static int16_t last = -1;
-  static uint32_t last_edges = 0;
-  const uint8_t tray = hal::get_tray_state() >> 4;
-  const bool eject = hal::get_dvd_eject_line();
-  const bool active = hal::get_dvd_active();
-  const int16_t now = (tray << 2) | (eject << 1) | active;
-  const uint32_t edges = dvd_eject_edges;
-  if (now != last || edges != last_edges) {
-    debug::print_message("DVD: Lines tray " + std::to_string(tray) + " eject " + std::to_string(eject) +
-                         " active " + std::to_string(active) + " eject falls " + std::to_string(edges));
-    last = now;
-    last_edges = edges;
-  }
-}
-
 void updateDvdTray() {
-  logDriveLines();
-
   // Debounces the tray state and raises tray interrupts (0x9D3)
   uint8_t tray_state;
 
