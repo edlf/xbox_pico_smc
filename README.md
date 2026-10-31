@@ -1,8 +1,10 @@
-# Original XBOX SMC reimplmentation
+# Original XBOX Pico SMC
 
 Original XBOX SMC implemented with a Rapsberry Pico.
 
 Very very experimental, currently it boots on 1.0 boards (although the fan curve thats used is from 1.2-1.4 units since that one ramps the fans faster).
+
+![Pico SMC](/images/test_board.jpg)
 
 ## Whats working
 - Power ON/OFF
@@ -18,3 +20,11 @@ Very very experimental, currently it boots on 1.0 boards (although the fan curve
 ## Notes
 - *Heavily* based on the work Prehistoricman did. [Xbox_SMC](https://github.com/Prehistoricman/Xbox_SMC)
 - Some AI assistance was used (claude), mostly for the web interface.
+
+## Thanks
+- Prehistoricman for all the work done on the SMC
+- Andr0 for designing the PXU (so I can safely work on this project without getting zapped) and the help with how the psu operates
+- Harcroft for all the help with xbox questions
+- Team Resurgent
+- Cerbios
+- To everyone in the xbox-scene community
