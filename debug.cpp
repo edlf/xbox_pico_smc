@@ -1,6 +1,6 @@
 #include "debug.hpp"
 #include <iostream>
-#include <iomanip>
+#include <iterator>
 #include "pico/time.h"
 
 namespace debug {
@@ -11,50 +11,43 @@ namespace debug {
 #endif
 DebugLevel debugLevel = static_cast<DebugLevel>(SMC_DEBUG_LEVEL);
 
-void print_timestamp() {
-    absolute_time_t time = get_absolute_time();
-    std::ios_base::fmtflags flags(std::cout.flags());
-    std::cout << "[";
-    std::cout << std::setfill('0') << std::setw(12);
-    std::cout << std::to_string(to_us_since_boot(time)) << "] ";
-    std::cout.flags(flags);
+struct LevelInfo {
+  const char* name; // SMC_DEBUG_LEVEL value
+  const char* tag;  // Shown in front of each message
+};
+
+// Indexed by DebugLevel
+constexpr LevelInfo levels[] = {
+    {"SILENT", ""},
+    {"CRITICAL", "(CRIT )"},
+    {"WARNINGS", "(WARN )"},
+    {"INFO", "(INFO )"},
+    {"DEBUG", "(DEBUG)"},
+};
+static_assert(std::size(levels) == static_cast<size_t>(DebugLevel::Debug) + 1, "One entry per DebugLevel");
+
+const LevelInfo& info(DebugLevel level) {
+  return levels[static_cast<size_t>(level)];
 }
 
-void print_critical(const std::string& msg) {
-  if (debugLevel >= DebugLevel::Critical) {
-    print_timestamp();
-    std::cout <<  "(CRIT ) " << msg << std::endl;
+bool enabled(DebugLevel level) {
+  return level != DebugLevel::Silent && debugLevel >= level;
+}
+
+void print(DebugLevel level, const std::string& msg) {
+  if (!enabled(level)) {
+    return;
   }
-}
-
-void print_warn(const std::string& msg) {
-  if (debugLevel >= DebugLevel::Warnings) {
-    print_timestamp();
-    std::cout <<  "(WARN ) " << msg << std::endl;
-  }
-}
-
-void print_message(const std::string& msg) {
-  if (debugLevel >= DebugLevel::Info) {
-    print_timestamp();
-    std::cout <<  "(INFO ) " << msg << std::endl;
-  }
-}
-
-void print_debug(const std::string& msg) {
-  if (debug_enabled()) {
-    print_timestamp();
-    std::cout <<  "(DEBUG) " << msg << std::endl;
-  }
-}
-
-bool debug_enabled() {
-  return debugLevel >= DebugLevel::Debug;
+  // [microseconds since boot] (TAG  ) message
+  // 12 digits, wrapping around after ~11.6 days
+  constexpr uint64_t timestamp_wrap_us = 1000000000000ULL;
+  char timestamp[sizeof("[000000000000] ")];
+  snprintf(timestamp, sizeof(timestamp), "[%012llu] ", to_us_since_boot(get_absolute_time()) % timestamp_wrap_us);
+  std::cout << timestamp << info(level).tag << " " << msg << std::endl;
 }
 
 const char* level_name() {
-  constexpr const char* names[] = {"SILENT", "CRITICAL", "WARNINGS", "INFO", "DEBUG"};
-  return names[static_cast<int>(debugLevel)];
+  return info(debugLevel).name;
 }
 
 void print_welcome() {

@@ -471,8 +471,7 @@ void start() {
   // Printed here, before the Wi-Fi is started, so it shows even if that fails
   char password[64];
   if (wifiPassword(password, sizeof(password))) {
-    debug::print_message(std::string("WEB: Access point \"") + SMC_WIFI_SSID + "\", password " + password +
-                         " (from the board ID, set SMC_WIFI_PASSWORD to choose one)");
+    debug::print_message(std::string("WEB: Access point \"") + SMC_WIFI_SSID + "\", password " + password);
   } else {
     debug::print_message(std::string("WEB: Access point \"") + SMC_WIFI_SSID + "\", password from SMC_WIFI_PASSWORD");
   }
