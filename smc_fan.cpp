@@ -150,7 +150,7 @@ void update_fan_temp() {
 
     if (sensors.CPU_temperature > critical_cpu_temp || sensors.board_temperature > critical_board_temp) {
       state = fan_control_state::overheated;
-    } else if (flags.bitfield_DATA_6F & 0x04) {
+    } else if (flags.fan_override) {
       state = fan_control_state::custom_fan_speed;
     } else if (sensors.CPU_temperature > hot_cpu_temp || cpu_temperature_predicted > hot_predicted_temp) {
       state = fan_control_state::cpu_hot;
@@ -168,8 +168,8 @@ void update_fan_temp() {
     debug::print_warn("FAN: Overheated, CPU " + std::to_string(sensors.CPU_temperature) + " board " +
                       std::to_string(sensors.board_temperature));
     setSpeed(max_fan_speed);
-    flags.bitfield_DATA_70 |= 0x01;
-    flags.bitfield_DATA_70 &= ~0x02;
+    flags.cold_reset_request = true;
+    flags.run_after_reset = false;
     setStatusBit(overheated); // SMI shuts the Xbox down once this clears
     timeout1 = 0xFA;
     timeout2 = 0xB3;
@@ -220,7 +220,7 @@ void update_fan_temp() {
     break;
 
   case fan_control_state::wait:
-    if (flags.bitfield_DATA_6F & 0x04) {
+    if (flags.fan_override) {
       setSpeed(custom_fan_speed);
     }
     if (--timeout1 != 0) {

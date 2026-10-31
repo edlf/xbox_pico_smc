@@ -81,19 +81,19 @@ void updateDvdTray() {
     debug::print_message("DVD: Tray state " + std::to_string(tray_status_raw >> 4));
     sensors.tray_status = tray_status_raw;
     if (tray_status_raw == 0x30) {
-      if (utils::checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
-        utils::setBitNo(flags.bitfield_DATA_71, 2);
+      if (flags.tray_events_enabled) {
+        flags.tray_opening_event = true;
       }
     } else if (tray_status_raw == 0) {
-      if (utils::checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
-        utils::setBitNo(flags.bitfield_DATA_73, 5);
+      if (flags.tray_events_enabled) {
+        flags.tray_state_00_event = true;
       }
     } else if ((tray_status_raw == 0x60) || (tray_status_raw == 0x40)) {
-      if (utils::checkBitNo(flags.bitfield_DATA_72, 4) != 0) {
+      if (flags.tray_events_enabled) {
         setStatusBit(Status::dvd_tray);
       }
     } else {
-      utils::setBitNo(flags.bitfield_DATA_72, 4);
+      flags.tray_events_enabled = true;
     }
     dvd_tray = dvd_tray_state::state2;
     break;
@@ -111,11 +111,11 @@ void restartTrayDebounce() {
 }
 
 void updateEjectTray() {
-  // Pulses the drive's eject line for 5 ticks when 72.3 is set (0xADE)
+  // Pulses the drive's eject line for 5 ticks when eject_pulse is set (0xADE)
   switch (update_eject_tray) {
   case update_eject_tray_state::initial:
     eject_timeout = 5;
-    if (utils::checkBitNo(flags.bitfield_DATA_72, 3) != 0) {
+    if (flags.eject_pulse) {
       debug::print_message(std::string("DVD: Eject pulse to ") + (tray_eject ? "close" : "open"));
       update_eject_tray = update_eject_tray_state::tick_timer;
     }
@@ -129,7 +129,7 @@ void updateEjectTray() {
     break;
 
   case update_eject_tray_state::release_eject:
-    utils::clearBitNo(flags.bitfield_DATA_72, 3);
+    flags.eject_pulse = false;
     hal::dvd_eject_release();
     update_eject_tray = update_eject_tray_state::initial;
     break;
@@ -149,28 +149,28 @@ static bool trayCanMove() {
 void updateDvdTrayEject() {
   // Decides when to pulse eject (0x4D0). While the tray is open the SMC closes
   // it on its own; while closed, the eject button only raises an SMI (via
-  // 6E.1) and the OS opens the tray with SMBus 0x0C.
+  // eject_change_requested) and the OS opens the tray with SMBus 0x0C.
   switch (tray_eject) {
   case 0: /* Tray open */
     if (sensors.tray_status == 0x50) {
       /* Tray is closing */
       clearStatusBit(eject_change_requested);
-      flags.bitfield_DATA_6F &= ~0x10;
+      flags.tray_load_request = false;
       tray_eject = 1;
       return;
     }
 
     /* Close on eject button, load request (SMBus 0x0C) or shutdown */
-    if (!checkStatusBit(eject_change_requested) && !(flags.bitfield_DATA_6F & 0x10) &&
+    if (!checkStatusBit(eject_change_requested) && !flags.tray_load_request &&
         !checkStatusBit(prepare_for_shutdown)) {
       return;
     }
     if (!trayCanMove()) {
       return;
     }
-    flags.bitfield_DATA_72 |= 0x08; // Pulse eject
+    flags.eject_pulse = true; // Pulse eject
     clearStatusBit(eject_change_requested);
-    flags.bitfield_DATA_6F &= ~0x10;
+    flags.tray_load_request = false;
     tray_eject = 1;
     break;
 
@@ -182,31 +182,31 @@ void updateDvdTrayEject() {
     if (sensors.tray_status == 0x30) {
       /* Tray is opening */
       clearStatusBit(eject_change_requested);
-      flags.bitfield_DATA_6F &= ~0x08;
+      flags.tray_eject_request = false;
       tray_eject = 0;
       return;
     }
 
     if (checkStatusBit(eject_change_requested)) {
-      if ((flags.bitfield_DATA_72 & 0x02) == 0) {
-        flags.bitfield_DATA_73 |= 0x02;
+      if (!flags.reset_on_eject_disabled) {
+        flags.tray_open_expected = true;
       }
 
       /* FRAG'd: no OS to ask, open the tray directly */
-      if (flags.bitfield_DATA_73 & 0x04) {
-        flags.bitfield_DATA_70 |= 0x02;
-        flags.bitfield_DATA_72 |= 0x08;
+      if (flags.frag_eject) {
+        flags.run_after_reset = true;
+        flags.eject_pulse = true;
         clearStatusBit(eject_change_requested);
       }
     }
 
     /* Eject request from the OS (SMBus 0x0C) */
-    if (!(flags.bitfield_DATA_6F & 0x08) || !trayCanMove()) {
+    if (!flags.tray_eject_request || !trayCanMove()) {
       return;
     }
-    flags.bitfield_DATA_72 |= 0x08; // Pulse eject
+    flags.eject_pulse = true; // Pulse eject
     clearStatusBit(eject_change_requested);
-    flags.bitfield_DATA_6F &= ~0x08;
+    flags.tray_eject_request = false;
     tray_eject = 0;
     break;
 
@@ -221,9 +221,9 @@ void updateDvdTrayThree() {
   switch (dvd_tray_three) {
   case update_dvd_tray_three_state::initial:
     dvd_tray_timeout = 0xFF;
-    utils::clearBitNo(flags.bitfield_DATA_6F, 5);
+    flags.tray_moving = false;
 
-    if (utils::checkBitNo(flags.bitfield_DATA_72, 7)) {
+    if (flags.eject_button_event) {
       dvd_tray_three = update_dvd_tray_three_state::eject;
     } else {
       if (!(sensors.tray_status == 0x70 ||
@@ -237,8 +237,8 @@ void updateDvdTrayThree() {
     break;
 
   case update_dvd_tray_three_state::wait:
-    utils::setBitNo(flags.bitfield_DATA_6F, 5);
-    utils::clearBitNo(flags.bitfield_DATA_72, 7);
+    flags.tray_moving = true;
+    flags.eject_button_event = false;
 
     if (sensors.tray_status == 0x10 ||
         sensors.tray_status == 0x40 ||
@@ -248,13 +248,13 @@ void updateDvdTrayThree() {
     break;
 
   case update_dvd_tray_three_state::eject:
-    utils::setBitNo(flags.bitfield_DATA_6F, 5);
+    flags.tray_moving = true;
 
-    if ((!utils::checkBitNo(flags.bitfield_DATA_73, 1) && sensors.tray_status == 0x50) ||
+    if ((!flags.tray_open_expected && sensors.tray_status == 0x50) ||
         sensors.tray_status == 0x30 ||
         sensors.tray_status == 0x20 ||
-        (utils::checkBitNo(flags.bitfield_DATA_72, 6) && --dvd_tray_timeout == 0)) {
-      utils::clearBitNo(flags.bitfield_DATA_73, 1);
+        (flags.os_ready && --dvd_tray_timeout == 0)) {
+      flags.tray_open_expected = false;
       dvd_tray_three = update_dvd_tray_three_state::wait;
     }
     break;

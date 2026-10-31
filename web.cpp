@@ -109,8 +109,8 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
 <div class="row"><button onclick="act('eject')">Eject button</button></div></div>
 <div class="card"><h2>AV pack</h2><div class="value" id="av">-</div></div>
 <div class="card"><h2>Fan</h2><div class="value" id="fan">-</div><div class="note" id="fanNote"></div>
-<div class="row"><input type="range" id="fanSpeed" min="10" max="50" value="25" oninput="fanValue.textContent=this.value"><span id="fanValue">25</span></div>
-<div class="row"><button onclick="act('fan&speed='+fanSpeed.value)">Set speed</button><button onclick="act('fan_auto')">Auto</button></div></div>
+<div class="row"><input type="range" id="fanSpeed" min="10" max="50" value="10" oninput="fanTouched=true;fanValue.textContent=this.value"><span id="fanValue">-</span></div>
+<div class="row"><button onclick="fanTouched=false;act('fan&speed='+fanSpeed.value)">Set speed</button><button onclick="fanTouched=false;act('fan_auto')">Auto</button></div></div>
 <div class="card"><h2>LEDs</h2><div class="value" id="led">-</div>
 <div class="row"><select id="ledPattern">
 <option value="0,15">Green</option><option value="15,0">Red</option><option value="15,15">Orange</option>
@@ -122,6 +122,7 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
 const AV=["Advanced SCART","High Definition AV Pack","VGA","RF adapter","Advanced AV (S-Video)","Unknown (5)","Standard AV","No cable"];
 const TRAY=["Closed","Open","Unloading","Opening","No disc","Closing","Disc detected","Drive off"];
 const $=id=>document.getElementById(id);
+let fanTouched=false; // The slider follows the fan speed until it's moved
 async function act(cmd){
   if(cmd=="reset"&&!confirm("Reset the Xbox?"))return;
   try{const r=await fetch("/action?cmd="+cmd,{method:"POST"});if(!r.ok)alert(await r.text());}catch(e){alert("Not connected");}
@@ -140,6 +141,7 @@ async function tick(){
     $("trayNote").textContent=s.dvd&&s.powered?(s.trayClosed?"Closed":"Open"):"";
     $("av").textContent=!s.powered?"-":s.avMissing?"No cable":AV[s.av];
     $("fan").textContent=s.fan+" / 50";
+    if(!fanTouched&&s.fan>=10){$("fanSpeed").value=s.fan;$("fanValue").textContent=s.fan;}
     $("fanNote").innerHTML=s.fanOverride?'<span class="warn">Manual</span>':"Automatic";
     $("led").innerHTML=s.ledOverride?'<span class="warn">Manual</span> (red '+s.ledRed+', green '+s.ledGreen+')':"Automatic";
   }catch(e){$("conn").textContent="Disconnected";}
@@ -399,26 +401,26 @@ void runCommand(const CommandMessage& message) {
   case Command::eject:
     debug::print_message("WEB: Eject button");
     setStatusBit(Status::eject_change_requested);
-    flags.bitfield_DATA_72 |= 0x80;
+    flags.eject_button_event = true;
     break;
 
   case Command::reset:
     if (hal::get_power_ok()) {
       debug::print_message("WEB: Reset");
-      flags.bitfield_DATA_73 |= 0x01;
-      flags.bitfield_DATA_71 |= 0x08;
+      flags.warm_reset_request = true;
+      flags.os_reset_request = true;
     }
     break;
 
   case Command::fan_speed:
     debug::print_message("WEB: Fan speed " + std::to_string(message.arg));
     Fan::setCustomSpeed(message.arg);
-    flags.bitfield_DATA_6F |= 0x04;
+    flags.fan_override = true;
     break;
 
   case Command::fan_auto:
     debug::print_message("WEB: Fan automatic");
-    flags.bitfield_DATA_6F &= ~0x04;
+    flags.fan_override = false;
     break;
 
   case Command::led_pattern:
@@ -426,12 +428,12 @@ void runCommand(const CommandMessage& message) {
                          std::to_string(message.arg & 0x0F));
     Led::setRedPhases(message.arg >> 4);
     Led::setGreenPhases(message.arg & 0x0F);
-    flags.bitfield_DATA_70 |= 0x04;
+    flags.led_override = true;
     break;
 
   case Command::led_auto:
     debug::print_message("WEB: LEDs automatic");
-    flags.bitfield_DATA_70 &= ~0x04;
+    flags.led_override = false;
     break;
   }
 }
@@ -443,13 +445,13 @@ void publishStatus() {
   s.cpu_temperature = sensors.CPU_temperature;
   s.board_temperature = sensors.board_temperature;
   s.fan_speed = Fan::getFanSpeed();
-  s.fan_override = flags.bitfield_DATA_6F & 0x04;
+  s.fan_override = flags.fan_override;
   s.tray_state = (sensors.tray_status >> 4) & 0x07;
   s.tray_closed = Dvd::isTrayClosing();
   s.av_pack = (sensors.vmode >> 1) & 0x07;
-  s.av_missing = flags.bitfield_DATA_71 & 0x40;
+  s.av_missing = flags.av_cable_missing;
   s.overheated = checkStatusBit(overheated);
-  s.led_override = flags.bitfield_DATA_70 & 0x04;
+  s.led_override = flags.led_override;
   s.led_red = Led::getRedPhases();
   s.led_green = Led::getGreenPhases();
   s.interrupt_reason = flags.interrupt_reason;

@@ -81,7 +81,7 @@ void updateEject() {
   case switch_state::debouncing:
     if (hal::eject_button_pressed()) {
       setStatusBit(eject_change_requested);
-      utils::setBitNo(flags.bitfield_DATA_72, 7);
+      flags.eject_button_event = true;
       eject_state = switch_state::wait_for_button_release;
     } else {
       eject_state = switch_state::wait_for_button_press;

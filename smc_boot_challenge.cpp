@@ -92,17 +92,17 @@ static std::string ramTestResult() {
 }
 
 static void clearRamTestResult() {
-  flags.bitfield_DATA_71 &= ~0x10;
-  flags.bitfield_DATA_71 &= ~0x20;
+  flags.ram_test_submitted = false;
+  flags.ram_test_passed = false;
 }
 
 // While running: restart on a reset request, or once a pending reset
-// (70.0) is no longer held back by overheating or a shutdown
+// (cold_reset_request) is no longer held back by overheating or a shutdown
 static void waitForReset() {
-  if (flags.bitfield_DATA_73 & 0x01) {
+  if (flags.warm_reset_request) {
     clearRamTestResult();
     state = boot_challenge_state::initial;
-  } else if ((flags.bitfield_DATA_70 & 0x01) && !checkStatusBit(overheated) &&
+  } else if (flags.cold_reset_request && !checkStatusBit(overheated) &&
              !checkStatusBit(prepare_for_shutdown)) {
     clearRamTestResult();
     state = boot_challenge_state::initial;
@@ -110,8 +110,8 @@ static void waitForReset() {
 }
 
 static void lockUp() {
-  flags.bitfield_DATA_70 |= 0x01;
-  flags.bitfield_DATA_70 &= ~0x02;
+  flags.cold_reset_request = true;
+  flags.run_after_reset = false;
   state = boot_challenge_state::lock_up;
 }
 
@@ -170,9 +170,9 @@ void update() {
     break;
 
   case boot_challenge_state::wait_for_ram_test_result:
-    if (flags.bitfield_DATA_71 & 0x10) {
-      /* RAM test results submitted, 71.5 = passed */
-      if (flags.bitfield_DATA_71 & 0x20) {
+    if (flags.ram_test_submitted) {
+      /* RAM test results submitted */
+      if (flags.ram_test_passed) {
         state = boot_challenge_state::ram_test_ok;
       } else {
         state = boot_challenge_state::ram_test_failed;
@@ -212,7 +212,7 @@ void update() {
     break;
 
   case boot_challenge_state::challenge_wait_for_reply:
-    if (!(flags.bitfield_DATA_73 & 0x01) && !(flags.bitfield_DATA_70 & 0x01)) {
+    if (!flags.warm_reset_request && !flags.cold_reset_request) {
       boot_response_timeout = SMC_FIRMWARE_P11 ? 4 : 2; // 0x90A
       state = boot_challenge_state::check_response;
     } else {
@@ -227,8 +227,8 @@ void update() {
     } else if (--failure_countdown != 0) {
       failure_count = 0;
       rtc_dump_time = 4;
-      flags.bitfield_DATA_70 |= 0x01;
-      flags.bitfield_DATA_70 &= ~0x02;
+      flags.cold_reset_request = true;
+      flags.run_after_reset = false;
       state = boot_challenge_state::reboot;
     } else {
       lockUp();
@@ -237,16 +237,16 @@ void update() {
 
   case boot_challenge_state::lock_up:
     /* FRAG: manual LEDs (error code), stays here until power off */
-    flags.bitfield_DATA_70 |= 0x04;
-    flags.bitfield_DATA_72 |= 0x20;
-    flags.bitfield_DATA_73 |= 0x04;
+    flags.led_override = true;
+    flags.frag_power_off = true;
+    flags.frag_eject = true;
     break;
 
   case boot_challenge_state::retry_boot:
     /* Reset the Xbox and try again */
-    flags.bitfield_DATA_70 |= 0x01;
-    flags.bitfield_DATA_70 |= 0x02;
-    flags.bitfield_DATA_70 &= ~0x04;
+    flags.cold_reset_request = true;
+    flags.run_after_reset = true;
+    flags.led_override = false;
     clearRamTestResult();
     ram_test_response0 = 0;
     ram_test_response1 = 0;
@@ -254,8 +254,8 @@ void update() {
     break;
 
   case boot_challenge_state::check_response:
-    if (flags.bitfield_DATA_73 & 0x10) {
-      flags.bitfield_DATA_73 &= ~0x10;
+    if (flags.challenge_response_received) {
+      flags.challenge_response_received = false;
       if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
         debug::print_message("BOOT: Challenge passed");
         state = boot_challenge_state::challenge_passed;
@@ -280,7 +280,7 @@ void update() {
     break;
 
   case boot_challenge_state::challenge_passed:
-    if (flags.bitfield_DATA_73 & 0x01) {
+    if (flags.warm_reset_request) {
       /* Reset requested: new challenge for the next boot */
       clearRamTestResult();
       challenge.input_byte1 = fastTimerByte();

@@ -96,7 +96,7 @@ uint8_t update() {
     break;
 
   case power_standby_state::turn_on_power_alternative: // State 7
-    flags.bitfield_DATA_73 |= 0x02;                    // Set eject flag
+    flags.tray_open_expected = true; // Powered on by the eject button
     hal::turn_on_psu();
     hal::set_fan_speed(hal::FAN_MIN_SPEED); // The PIC holds the pin high (speed 0)
     power_timeout3 = 0x32; // 50 cycles
@@ -119,19 +119,19 @@ uint8_t update() {
   case power_standby_state::powered_up_alt:
     clearStatusBit(eject_change_requested);
     setInterruptReason(InterruptReason_eject_sw_pressed);
-    utils::setBitNo(flags.bitfield_DATA_6D, 5);
+    flags.pending_interrupt_reason |= InterruptReason_eject_sw_pressed;
     fireSystemInterrupt();
     state = power_standby_state::powered_up;
     break;
 
   case power_standby_state::powered_up:
-    utils::setBitNo(flags.bitfield_DATA_70, 1);
-    utils::clearBitNo(flags.bitfield_DATA_70, 2);
+    flags.run_after_reset = true;
+    flags.led_override = false;
     setStatusBit(first_execution);
     clearStatusBit(video_mode_changed);
-    utils::clearBitNo(flags.bitfield_DATA_71, 6);
-    utils::clearBitNo(flags.bitfield_DATA_6F, 0);
-    utils::clearBitNo(flags.bitfield_DATA_6F, 7);
+    flags.av_cable_missing = false;
+    flags.audio_clamp_request = false;
+    flags.audio_unclamp_request = false;
     setStatusBit(audio_clamp_timer);
     Video::init();
     Dvd::initDdvdTray();

@@ -140,12 +140,12 @@ void setPowerOkIrq(bool enabled) {
 }
 
 void update_LEDs() {
-  Led::setManualControl(utils::checkBitNo(flags.bitfield_DATA_70, 2));
+  Led::setManualControl(flags.led_override);
   Led::setOverheat(checkStatusBit(overheated));
-  Led::setAvMissing(utils::checkBitNo(flags.bitfield_DATA_71, 6));
-  // 70.3 is set while the system is powered
-  Led::setPowerOff(!utils::checkBitNo(flags.bitfield_DATA_70, 3));
-  Led::setQuickGreenBlink(utils::checkBitNo(flags.bitfield_DATA_6F, 5));
+  Led::setAvMissing(flags.av_cable_missing);
+  // system_running is set while the system is powered
+  Led::setPowerOff(!flags.system_running);
+  Led::setQuickGreenBlink(flags.tray_moving);
   Led::update();
   // Led::printState();
 }
@@ -269,20 +269,15 @@ void main_loop() {
 }
 
 void globals_init() {
-  flags = {0};
+  flags = {};
 
   resetInterruptReason();
   resetStatus();
 
   resetSMBusRegisters();
 
-  // Same as the PIC's RAM_init (0xB58)
-  flags.bitfield_DATA_6F = 0;
-  flags.bitfield_DATA_70 = 0;
-  flags.bitfield_DATA_71 = 0;
-  flags.bitfield_DATA_72 = 0x10; // First tray state change raises an interrupt
-  flags.bitfield_DATA_73 = 0;
-  flags.bitfield_DATA_74 = 0;
+  // Same as the PIC's RAM_init (0xB58): all flags clear (above) except
+  flags.tray_events_enabled = true; // First tray state change raises an interrupt
 
   sensors.CPU_temperature = 0x17;
   sensors.board_temperature = 0x17;

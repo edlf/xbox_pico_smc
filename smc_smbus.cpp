@@ -120,7 +120,7 @@ uint8_t smbus_read_handler(uint8_t command) {
   case Command::TRAY_STATE: // 0x03
     response = sensors.tray_status;
     // Set bit 0 if tray_insert flag is set
-    if (flags.bitfield_DATA_6F & 0x20) {
+    if (flags.tray_moving) {
       response |= 0x01;
     }
     break;
@@ -217,16 +217,16 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // Same as the PIC (0x13B): bit 0 = reset, bit 6 = power cycle,
     // bit 7 = power off
     if (data & 0x01) {
-      flags.bitfield_DATA_73 |= 0x01;
-      flags.bitfield_DATA_71 |= 0x08;
+      flags.warm_reset_request = true;
+      flags.os_reset_request = true;
     }
     if (data & 0x40) {
       setStatusBit(Status::power_change_requested);
-      flags.bitfield_DATA_73 |= 0x40;
+      flags.power_cycle_request = true;
     }
     if (data & 0x80) {
       setStatusBit(Status::power_change_requested);
-      flags.bitfield_DATA_6F |= 0x02;
+      flags.power_off_request = true;
     }
     break;
 
@@ -235,12 +235,12 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::FAN_OVERRIDE: // 0x05
-    // Same as the PIC (0x14A): bit 0 = use the speed from 0x06 (6F.2), only
+    // Same as the PIC (0x14A): bit 0 = use the speed from 0x06 (fan_override), only
     // accepted when that speed is valid
     if (!(data & 0x01)) {
-      utils::clearBitNo(flags.bitfield_DATA_6F, 2);
+      flags.fan_override = false;
     } else if (Fan::getCustomFanSpeed() <= hal::FAN_MAX_SPEED) {
-      utils::setBitNo(flags.bitfield_DATA_6F, 2);
+      flags.fan_override = true;
     }
     break;
 
@@ -250,11 +250,11 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::LED_OVERRIDE: // 0x07
-    // Same as the PIC (0x159): bit 0 = show the 0x08 pattern (70.2)
+    // Same as the PIC (0x159): bit 0 = show the 0x08 pattern (led_override)
     if (data & 0x01) {
-      utils::setBitNo(flags.bitfield_DATA_70, 2);
+      flags.led_override = true;
     } else {
-      utils::clearBitNo(flags.bitfield_DATA_70, 2);
+      flags.led_override = false;
     }
     break;
 
@@ -265,45 +265,45 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::AUDIO_CLAMP: // 0x0B
-    // Same as the PIC (0x16B): bit 0 = 1 clamp (6F.0), 0 unclamp (6F.7),
+    // Same as the PIC (0x16B): bit 0 = 1 clamp, 0 unclamp,
     // carried out by AudioClamp::update
     if (data & 0x01) {
-      utils::setBitNo(flags.bitfield_DATA_6F, 0);
+      flags.audio_clamp_request = true;
     } else {
-      utils::setBitNo(flags.bitfield_DATA_6F, 7);
+      flags.audio_unclamp_request = true;
     }
     break;
 
   case Command::DVD_TRAY_OPERATION: // 0x0C
-    // Same as the PIC (0x170): bit 0 = 1 load (6F.4), 0 eject (6F.3), carried
+    // Same as the PIC (0x170): bit 0 = 1 load, 0 eject, carried
     // out by Dvd::updateDvdTrayEject
     if (data & 0x01) {
-      utils::setBitNo(flags.bitfield_DATA_6F, 4);
+      flags.tray_load_request = true;
     } else {
-      utils::setBitNo(flags.bitfield_DATA_6F, 3);
+      flags.tray_eject_request = true;
     }
     break;
 
   case Command::OS_RESUME: // 0x0D
     // Same as the PIC (0x175): the OS answering a power/eject SMI, only
-    // while one is being handled (6F.6). Without it the SMC resets the Xbox.
-    if (!utils::checkBitNo(flags.bitfield_DATA_6F, 6)) {
+    // while one is being handled (waiting_for_os). Without it the SMC resets the Xbox.
+    if (!flags.waiting_for_os) {
       break;
     }
     if (data & 0x01) {
-      utils::setBitNo(flags.bitfield_DATA_6F, 1); // Power off
+      flags.power_off_request = true; // Power off
     }
     if (data & 0x08) {
-      utils::setBitNo(flags.bitfield_DATA_71, 3); // Reset
+      flags.os_reset_request = true; // Reset
     }
     if (data & 0x02) {
-      utils::setBitNo(flags.bitfield_DATA_70, 5); // Busy, keep waiting
+      flags.os_busy = true; // Busy, keep waiting
     }
     if (data & 0x04) {
-      utils::setBitNo(flags.bitfield_DATA_70, 4); // Handled, no reset
+      flags.os_event_handled = true; // Handled, no reset
     }
     if (!(data & 0x02)) {
-      utils::clearBitNo(flags.bitfield_DATA_6F, 6);
+      flags.waiting_for_os = false;
     }
     break;
 
@@ -313,13 +313,13 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::WRITE_RAM_TEST_RESULTS: // 0x12
-    // Same as the PIC (0x188): 71.4 = results submitted, 71.5 = passed
-    utils::setBitNo(flags.bitfield_DATA_71, 4);
-    utils::clearBitNo(flags.bitfield_DATA_71, 5);
+    // Same as the PIC (0x188)
+    flags.ram_test_submitted = true;
+    flags.ram_test_passed = false;
     ram_test_response0 = data;
     if (ram_test_response1 == 0xFF || ram_test_response1 == 0x00 ||
         (ram_test_response1 == 0x0F && ram_test_response0 == 0xF0)) {
-      utils::setBitNo(flags.bitfield_DATA_71, 5);
+      flags.ram_test_passed = true;
     }
     break;
 
@@ -329,7 +329,7 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
 
   case Command::CHALLENGE_RESPONSE1: // 0x21
     BootChallenge::getChallengeStructRef().response1 = data;
-    utils::setBitNo(flags.bitfield_DATA_73, 4); // Response complete
+    flags.challenge_response_received = true; // Response complete
     break;
 
 #if SMC_FIRMWARE_P11
@@ -349,23 +349,23 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::OVERRIDE_RESET_ON_TRAY_OPEN: // 0x19
-    // Same as the PIC (0x1A8): bit 0 disables reset-on-eject (72.1), allowed
-    // once per boot (72.2 is re-armed by the PLL/reset state machine)
+    // Same as the PIC (0x1A8): bit 0 disables reset-on-eject, allowed
+    // once per boot (reset_on_eject_writable is re-armed by the PLL/reset state machine)
     if (data & 0x01) {
-      if (utils::checkBitNo(flags.bitfield_DATA_72, 2)) {
-        utils::setBitNo(flags.bitfield_DATA_72, 1);
+      if (flags.reset_on_eject_writable) {
+        flags.reset_on_eject_disabled = true;
       }
     } else {
-      utils::clearBitNo(flags.bitfield_DATA_72, 1);
+      flags.reset_on_eject_disabled = false;
     }
-    utils::clearBitNo(flags.bitfield_DATA_72, 2);
+    flags.reset_on_eject_writable = false;
     break;
 
   case Command::OS_READY: // 0x1A
-    // Same as the PIC (0x1B1): bit 0 enables interrupts (72.6), which lets a
+    // Same as the PIC (0x1B1): bit 0 enables interrupts (os_ready), which lets a
     // power off go through the OS instead of cutting power right away
     if (data & 0x01) {
-      utils::setBitNo(flags.bitfield_DATA_72, 6);
+      flags.os_ready = true;
     }
     break;
 
@@ -461,20 +461,20 @@ bool smbusMasterReadByte(uint8_t address, uint8_t reg, uint8_t& value) {
 }
 
 // Same as the PIC (0xE71): CPU from register 0x01 and board from 0x00 of the
-// ADM1032 at 0x4C (1.0-1.4). 74.0 is set when a read fails, and the values
+// ADM1032 at 0x4C (1.0-1.4). temperature_read_failed is set when a read fails, and the values
 // that couldn't be read keep their previous value.
 bool read_temperatures() {
   uint8_t value;
-  flags.bitfield_DATA_74 &= ~0x01;
+  flags.temperature_read_failed = false;
 
   if (!smbusMasterReadByte(I2C_TEMP_SENSOR_ADDRESS, 0x01, value)) {
-    flags.bitfield_DATA_74 |= 0x01;
+    flags.temperature_read_failed = true;
     return false;
   }
   sensors.CPU_temperature = value;
 
   if (!smbusMasterReadByte(I2C_TEMP_SENSOR_ADDRESS, 0x00, value)) {
-    flags.bitfield_DATA_74 |= 0x01;
+    flags.temperature_read_failed = true;
     return false;
   }
   sensors.board_temperature = value;

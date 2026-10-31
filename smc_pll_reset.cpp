@@ -50,7 +50,7 @@ void printState() {
 // configures the temperature sensor instead, leaving the encoder alone.
 static void releaseResetAndConfigureEncoder() {
   hal::liftSystemReset();
-  flags.bitfield_DATA_73 |= 0x08;
+  flags.system_reset_released = true;
 #if SMC_FIRMWARE_P11
   busy_wait_us(3000);
   configureTemperatureSensor();
@@ -65,20 +65,20 @@ void update() {
   switch (state) {
   case pll_sysreset_state::initial:
     hal::assertSystemReset();
-    flags.bitfield_DATA_70 &= ~0x01;
-    flags.bitfield_DATA_72 &= ~0x40;
-    flags.bitfield_DATA_70 &= ~0x04;
-    flags.bitfield_DATA_72 |= 0x04;
-    flags.bitfield_DATA_72 |= 0x02;
+    flags.cold_reset_request = false;
+    flags.os_ready = false;
+    flags.led_override = false;
+    flags.reset_on_eject_writable = true;
+    flags.reset_on_eject_disabled = true;
     state = pll_sysreset_state::state1;
     break;
 
   case pll_sysreset_state::state1:
     hal::PLL_off();
     timeout = 0;
-    if (flags.bitfield_DATA_70 & 0x01) {
+    if (flags.cold_reset_request) {
       state = pll_sysreset_state::initial;
-    } else if ((flags.bitfield_DATA_70 & 0x02) && hal::get_power_ok()) {
+    } else if (flags.run_after_reset && hal::get_power_ok()) {
       /* Powered up: enable the PLL, release reset 2 ticks later */
       timeout = 2;
       state = pll_sysreset_state::cold_reset;
@@ -87,7 +87,7 @@ void update() {
 
   case pll_sysreset_state::state2:
     /* Not reachable on the PIC either */
-    if (!hal::get_power_ok() || (flags.bitfield_DATA_70 & 0x01)) {
+    if (!hal::get_power_ok() || flags.cold_reset_request) {
       state = pll_sysreset_state::initial;
     } else if (--timeout == 0) {
       state = pll_sysreset_state::cold_reset;
@@ -109,13 +109,13 @@ void update() {
 
   case pll_sysreset_state::warm_reset_1:
     hal::assertSystemReset();
-    flags.bitfield_DATA_73 &= ~0x01; // Clear reset request
-    flags.bitfield_DATA_72 &= ~0x40;
-    flags.bitfield_DATA_72 |= 0x04;
-    flags.bitfield_DATA_72 |= 0x02;
-    flags.bitfield_DATA_70 &= ~0x04;
+    flags.warm_reset_request = false;
+    flags.os_ready = false;
+    flags.reset_on_eject_writable = true;
+    flags.reset_on_eject_disabled = true;
+    flags.led_override = false;
 #if SMC_FIRMWARE_P11
-    if (!utils::checkBitNo(flags.bitfield_DATA_6F, 5)) { // Tray not moving
+    if (!flags.tray_moving) {
       Dvd::restartTrayDebounce();
     }
 #endif
@@ -142,9 +142,9 @@ void update() {
 
   case pll_sysreset_state::state8:
     /* Running - wait for power loss or a reset request */
-    if (!hal::get_power_ok() || (flags.bitfield_DATA_70 & 0x01)) {
+    if (!hal::get_power_ok() || flags.cold_reset_request) {
       state = pll_sysreset_state::initial;
-    } else if (flags.bitfield_DATA_73 & 0x01) {
+    } else if (flags.warm_reset_request) {
       state = pll_sysreset_state::warm_reset_1;
     }
     break;

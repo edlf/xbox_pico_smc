@@ -76,7 +76,7 @@ void update() {
     break;
 
   case video_state::changed:
-    utils::clearBitNo(flags.bitfield_DATA_71, 6);
+    flags.av_cable_missing = false;
     vmode_prev = vmode_raw;
     state = video_state::debounce;
     break;
@@ -102,8 +102,8 @@ void update() {
     // The PIC means to debounce here, but compares vmode_raw with itself, so
     // the removal is always accepted right away
     vmode_prev = readMode();
-    utils::setBitNo(flags.bitfield_DATA_71, 6); // No AV cable (LEDs, audio clamp)
-    utils::setBitNo(flags.bitfield_DATA_71, 7); // SMI to the OS
+    flags.av_cable_missing = true; // No AV cable (LEDs, audio clamp)
+    flags.av_unplugged_event = true; // SMI to the OS
     setMode(vmode_raw);
     state = video_state::no_cable;
     break;
@@ -114,8 +114,8 @@ void update() {
       state = video_state::special_debounce;
     } else if (vmode_raw != no_cable) {
       /* Cable is back */
-      utils::clearBitNo(flags.bitfield_DATA_71, 6);
-      utils::setBitNo(flags.bitfield_DATA_6F, 7); // Request unclamp
+      flags.av_cable_missing = false;
+      flags.audio_unclamp_request = true; // Request unclamp
       state = video_state::monitor;
     }
     break;
@@ -123,8 +123,8 @@ void update() {
   case video_state::special_debounce:
     vmode_raw = readMode();
     if (vmode_raw == special_mode) {
-      utils::setBitNo(flags.bitfield_DATA_72, 0); // SMI as power button
-      utils::clearBitNo(flags.bitfield_DATA_71, 6);
+      flags.av_power_button_event = true; // SMI as power button
+      flags.av_cable_missing = false;
       state = video_state::special_done;
     } else {
       state = video_state::no_cable;
