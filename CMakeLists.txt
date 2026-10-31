@@ -147,22 +147,23 @@ if(SMC_WEB_ENABLED)
 endif()
 
 # Add executable. Default name is the project name, version 0.1
-add_executable(OG_SMC utils.cpp
-                      debug.cpp
-                      main.cpp
-                      hal.cpp
-                      smc.cpp
-                      smc_led.cpp
-                      smc_boot_challenge.cpp
-                      smc_fan.cpp
-                      smc_smbus.cpp
-                      smc_dvd.cpp
-                      smc_front_panel_sw.cpp
-                      smc_pll_reset.cpp
-                      smc_audio_clamp.cpp
-                      smc_SMI.cpp
-                      smc_power_standby.cpp
-                      smc_video.cpp)
+set(SMC_SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/src)
+add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
+                      ${SMC_SRC_DIR}/debug.cpp
+                      ${SMC_SRC_DIR}/main.cpp
+                      ${SMC_SRC_DIR}/hal.cpp
+                      ${SMC_SRC_DIR}/smc.cpp
+                      ${SMC_SRC_DIR}/smc_led.cpp
+                      ${SMC_SRC_DIR}/smc_boot_challenge.cpp
+                      ${SMC_SRC_DIR}/smc_fan.cpp
+                      ${SMC_SRC_DIR}/smc_smbus.cpp
+                      ${SMC_SRC_DIR}/smc_dvd.cpp
+                      ${SMC_SRC_DIR}/smc_front_panel_sw.cpp
+                      ${SMC_SRC_DIR}/smc_pll_reset.cpp
+                      ${SMC_SRC_DIR}/smc_audio_clamp.cpp
+                      ${SMC_SRC_DIR}/smc_SMI.cpp
+                      ${SMC_SRC_DIR}/smc_power_standby.cpp
+                      ${SMC_SRC_DIR}/smc_video.cpp)
 
 target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
                                           SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
@@ -188,9 +189,9 @@ target_link_libraries(OG_SMC
         pico_stdlib
         hardware_pwm)
 
-# Add the standard include files to the build
+# Project headers, and lwipopts.h for the web interface
 target_include_directories(OG_SMC PRIVATE
-        ${CMAKE_CURRENT_LIST_DIR}
+        ${SMC_SRC_DIR}
 )
 
 # Add any user requested libraries
@@ -201,7 +202,7 @@ target_link_libraries(OG_SMC
         )
 
 if(SMC_WEB_ENABLED)
-  target_sources(OG_SMC PRIVATE web.cpp dhcp_server.cpp)
+  target_sources(OG_SMC PRIVATE ${SMC_SRC_DIR}/web.cpp ${SMC_SRC_DIR}/dhcp_server.cpp)
   target_compile_definitions(OG_SMC PRIVATE SMC_WIFI_SSID="${SMC_WIFI_SSID}"
                                             SMC_WIFI_PASSWORD="${SMC_WIFI_PASSWORD}")
   target_link_libraries(OG_SMC pico_cyw43_arch_lwip_poll pico_multicore pico_unique_id)
