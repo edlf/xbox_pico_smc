@@ -1,9 +1,8 @@
 #include "smc_audio_clamp.hpp"
 #include "smc.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 
-#include <vector>
+#include <iterator>
 #include <string>
 
 namespace SMC {
@@ -17,7 +16,7 @@ constexpr uint8_t unclamp_delay = 0x2C; // 44 ticks, ~0.9 s
 audio_state state;
 uint8_t audio_clamp_timeout;
 
-const std::vector<std::string> state_names {
+constexpr const char* state_names[] = {
   "Clamped",
   "Tick timer",
   "Unclamped"
@@ -82,12 +81,12 @@ void printState() {
     const size_t audio_state = static_cast<size_t>(state);
     std::string msg = "Audio clamp state [" + std::to_string(audio_state) + "]";
 
-    if (audio_state <= state_names.size()) {
-        msg += " " + state_names[audio_state];
+    if (audio_state < std::size(state_names)) {
+        msg += std::string(" ") + state_names[audio_state];
     }
 
     debug::print_message(msg);
 }
 
-} // AudioClamp
+} // namespace AudioClamp
 } // namespace SMC

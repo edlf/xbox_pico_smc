@@ -4,13 +4,13 @@
 #include "utils.hpp"
 #include "pico/stdlib.h"
 
-#include <vector>
+#include <iterator>
 #include <string>
 
 namespace SMC {
 namespace BootChallenge {
 
-const std::vector<std::string> state_names {
+constexpr const char* state_names[] = {
   "Initial",
   "Wait for ram test result",
   "Ram test ok",
@@ -316,8 +316,8 @@ void printState() {
     const size_t bc_state = static_cast<size_t>(state);
     std::string msg = "Boot challenge state [" + std::to_string(bc_state) + "]";
 
-    if (bc_state <= state_names.size()) {
-        msg += " " + state_names[bc_state];
+    if (bc_state < std::size(state_names)) {
+        msg += std::string(" ") + state_names[bc_state];
     }
 
     debug::print_message(msg);

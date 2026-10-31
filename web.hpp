@@ -1,5 +1,5 @@
-#ifndef __SMC_WEB__
-#define __SMC_WEB__
+#ifndef WEB_HPP
+#define WEB_HPP
 
 // Set by CMake (option SMC_WEB_INTERFACE): Wi-Fi access point with a status
 // and control page, served from core 1 (W boards only)
@@ -20,4 +20,4 @@ void service();
 } // namespace Web
 } // namespace SMC
 
-#endif // __SMC_WEB__
+#endif // WEB_HPP

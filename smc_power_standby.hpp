@@ -1,5 +1,5 @@
-#ifndef __SMC_POWER_STANDBY_SW__
-#define __SMC_POWER_STANDBY_SW__
+#ifndef SMC_POWER_STANDBY_SW_HPP
+#define SMC_POWER_STANDBY_SW_HPP
 
 #include <cstdint>
 
@@ -22,11 +22,8 @@ enum class power_standby_state {
 
 void init();
 uint8_t update();
-void setPowerTimeout3(uint16_t val);
-uint16_t getPowerTimeout3();
-void powerTimeout3Decrement();
 
 } // namespace PowerStandby
 } // namespace SMC
 
-#endif // __SMC_POWER_STANDBY_SW__
+#endif // SMC_POWER_STANDBY_SW_HPP

@@ -4,15 +4,14 @@
 #include "smc.hpp"
 #include "smc_pll_reset.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 
-#include <vector>
+#include <iterator>
 #include <string>
 
 namespace SMC {
 namespace SMI {
 
-const std::vector<std::string> smi_state_names {
+constexpr const char* smi_state_names[] = {
   "Decision_state",
   "Power off start",
   "Process power off conditions",
@@ -64,8 +63,8 @@ void printState() {
     const size_t smi_state = static_cast<size_t>(state);
     std::string msg = "SMI state [" + std::to_string(smi_state) + "]";
 
-    if (smi_state <= smi_state_names.size()) {
-        msg += " " + smi_state_names[smi_state];
+    if (smi_state < std::size(smi_state_names)) {
+        msg += std::string(" ") + smi_state_names[smi_state];
     }
 
     debug::print_message(msg);

@@ -26,8 +26,9 @@ int main() {
                        " SMC_LED_RED_BREATHE=" + (SMC_LED_RED_BREATHE ? "ON" : "OFF") +
                        " SMC_FIRMWARE=" + (SMC_FIRMWARE_P11 ? "P11" : "P01") +
                        " SMC_REPORT_P01=" + (SMC_REPORT_P01 ? "ON" : "OFF") +
+                       " SMC_DEBUG_LEVEL=" + debug::level_name() +
                        " SMC_WEB_INTERFACE=" + (SMC_WEB_INTERFACE ? "ON" : "OFF"));
-  debug::print_message(std::string("BUILD: Reported version (SMBus 0x01) ") + SMC::version_string);
+  debug::print_message(std::string("BUILD: Reported version ") + SMC::version_string);
   if (watchdog_caused_reboot()) {
     debug::print_critical("Rebooted by watchdog");
   }

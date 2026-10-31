@@ -1,10 +1,9 @@
 #include "smc.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 
 #include "time.h"
 
-#include <vector>
+#include <iterator>
 #include <string>
 
 namespace SMC {
@@ -17,7 +16,7 @@ enum class switch_state {
   release_debounce
 };
 
-const std::vector<std::string> state_names {
+constexpr const char* state_names[] = {
   "Wait for button press",
   "Debouncing",
   "Wait for button release",
@@ -108,8 +107,8 @@ void printPowerState() {
     const size_t p_state = static_cast<size_t>(pwr_state);
     std::string msg = "Power SW state [" + std::to_string(p_state) + "]";
 
-    if (p_state <= state_names.size()) {
-        msg += " " + state_names[p_state];
+    if (p_state < std::size(state_names)) {
+        msg += std::string(" ") + state_names[p_state];
     }
 
     debug::print_message(msg);
@@ -119,8 +118,8 @@ void printEjectState() {
     const size_t e_state = static_cast<size_t>(eject_state);
     std::string msg = "Eject SW state [" + std::to_string(e_state) + "]";
 
-    if (e_state <= state_names.size()) {
-        msg += " " + state_names[e_state];
+    if (e_state < std::size(state_names)) {
+        msg += std::string(" ") + state_names[e_state];
     }
 
     debug::print_message(msg);

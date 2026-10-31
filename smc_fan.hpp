@@ -1,5 +1,5 @@
-#ifndef __SMC_FAN__
-#define __SMC_FAN__
+#ifndef SMC_FAN_HPP
+#define SMC_FAN_HPP
 
 #include <cstdint>
 
@@ -33,4 +33,4 @@ uint8_t getCustomFanSpeed();
 } // namespace Fan
 } // namespace SMC
 
-#endif // __SMC_FAN__
+#endif // SMC_FAN_HPP

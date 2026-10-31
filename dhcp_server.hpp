@@ -1,5 +1,5 @@
-#ifndef __DHCP_SERVER__
-#define __DHCP_SERVER__
+#ifndef DHCP_SERVER_HPP
+#define DHCP_SERVER_HPP
 
 struct netif;
 
@@ -11,4 +11,4 @@ bool start(netif* nif);
 
 } // namespace dhcp_server
 
-#endif // __DHCP_SERVER__
+#endif // DHCP_SERVER_HPP

@@ -1,6 +1,5 @@
-
-#ifndef __SMC_PLL_RESET__
-#define __SMC_PLL_RESET__
+#ifndef SMC_PLL_RESET_HPP
+#define SMC_PLL_RESET_HPP
 
 namespace SMC {
 namespace PLL_Reset {
@@ -26,4 +25,4 @@ void printState();
 } // namespace PLL_Reset
 } // namespace SMC
 
-#endif // __SMC_PLL_RESET__
+#endif // SMC_PLL_RESET_HPP

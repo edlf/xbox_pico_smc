@@ -1,5 +1,5 @@
-#ifndef __SMC_BOOT_CHALLENGE__
-#define __SMC_BOOT_CHALLENGE__
+#ifndef SMC_BOOT_CHALLENGE_HPP
+#define SMC_BOOT_CHALLENGE_HPP
 
 #include <cstdint>
 
@@ -49,4 +49,4 @@ void printState();
 } // namespace BootChallenge
 } // namespace SMC
 
-#endif // __SMC_BOOT_CHALLENGE__
+#endif // SMC_BOOT_CHALLENGE_HPP

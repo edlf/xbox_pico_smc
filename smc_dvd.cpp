@@ -1,7 +1,6 @@
 #include "smc_dvd.hpp"
 #include "smc.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 
 namespace SMC {
 namespace Dvd {
@@ -11,7 +10,7 @@ namespace Dvd {
 uint8_t tray_status_first_read;
 
 dvd_tray_state dvd_tray;
-update_dvd_tray_three_state dvd_tray_three; // jump_index_sub_code_519
+update_dvd_tray_three_state dvd_tray_three;
 update_eject_tray_state update_eject_tray;
 
 uint16_t tray_state_timer = 0;
@@ -30,7 +29,7 @@ void init() {
   tray_status_raw = 0;
 }
 
-void initDdvdTray() {
+void initDvdTray() {
   dvd_tray = dvd_tray_state::initial;
 }
 
@@ -78,7 +77,7 @@ void updateDvdTray() {
     break;
 
   case dvd_tray_state::apply:
-    debug::print_message("DVD: Tray state " + std::to_string(tray_status_raw >> 4));
+    debug::print_debug("DVD: Tray state " + std::to_string(tray_status_raw >> 4));
     sensors.tray_status = tray_status_raw;
     if (tray_status_raw == 0x30) {
       if (flags.tray_events_enabled) {
@@ -116,7 +115,7 @@ void updateEjectTray() {
   case update_eject_tray_state::initial:
     eject_timeout = 5;
     if (flags.eject_pulse) {
-      debug::print_message(std::string("DVD: Eject pulse to ") + (tray_eject ? "close" : "open"));
+      debug::print_debug(std::string("DVD: Eject pulse to ") + (tray_eject ? "close" : "open"));
       update_eject_tray = update_eject_tray_state::tick_timer;
     }
     break;
@@ -274,7 +273,7 @@ constexpr uint8_t no_drive_tray_state = 0x40;
 
 void init() {}
 
-void initDdvdTray() {}
+void initDvdTray() {}
 
 bool isTrayClosing() {
   return true;
@@ -298,5 +297,5 @@ void updateDvdTrayThree() {}
 
 #endif // SMC_DVD_SUPPORT
 
-} // namespace DVD
+} // namespace Dvd
 } // namespace SMC

@@ -1,5 +1,5 @@
-#ifndef __SMC_VIDEO__
-#define __SMC_VIDEO__
+#ifndef SMC_VIDEO_HPP
+#define SMC_VIDEO_HPP
 
 #include <cstdint>
 
@@ -22,4 +22,4 @@ void printMode(const uint8_t vm);
 } // namespace Video
 } // namespace SMC
 
-#endif // __SMC_VIDEO__
+#endif // SMC_VIDEO_HPP

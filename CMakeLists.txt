@@ -86,6 +86,17 @@ else()
   message(FATAL_ERROR "SMC_FIRMWARE must be P11 or P01, got '${SMC_FIRMWARE}'")
 endif()
 
+# Log verbosity on the USB/UART console: -DSMC_DEBUG_LEVEL=DEBUG adds the SMBus
+# transactions. SILENT, CRITICAL, WARNINGS, INFO or DEBUG.
+set(SMC_DEBUG_LEVEL INFO CACHE STRING "Log level: SILENT, CRITICAL, WARNINGS, INFO or DEBUG")
+set(SMC_DEBUG_LEVELS SILENT CRITICAL WARNINGS INFO DEBUG)
+set_property(CACHE SMC_DEBUG_LEVEL PROPERTY STRINGS ${SMC_DEBUG_LEVELS})
+string(TOUPPER "${SMC_DEBUG_LEVEL}" SMC_DEBUG_LEVEL_SETTING)
+list(FIND SMC_DEBUG_LEVELS "${SMC_DEBUG_LEVEL_SETTING}" SMC_DEBUG_LEVEL_INDEX)
+if(SMC_DEBUG_LEVEL_INDEX LESS 0)
+  message(FATAL_ERROR "SMC_DEBUG_LEVEL must be SILENT, CRITICAL, WARNINGS, INFO or DEBUG, got '${SMC_DEBUG_LEVEL}'")
+endif()
+
 # Report "P01" on SMBus 0x01 while following P11: -DSMC_REPORT_P01=ON
 option(SMC_REPORT_P01 "Report version P01 on SMBus 0x01, whatever SMC_FIRMWARE is" OFF)
 
@@ -161,6 +172,7 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_LED_RED_BREATHE=$<BOOL:${SMC_LED_RED_BREATHE}>
                                           SMC_FIRMWARE_P11=$<BOOL:${SMC_FIRMWARE_P11}>
                                           SMC_REPORT_P01=$<BOOL:${SMC_REPORT_P01}>
+                                          SMC_DEBUG_LEVEL=${SMC_DEBUG_LEVEL_INDEX}
                                           SMC_WEB_INTERFACE=$<BOOL:${SMC_WEB_ENABLED}>
                                           SMC_BOARD="${PICO_BOARD}")
 

@@ -1,5 +1,5 @@
-#ifndef __SMC_AUDIO_CLAMP__
-#define __SMC_AUDIO_CLAMP__
+#ifndef SMC_AUDIO_CLAMP_HPP
+#define SMC_AUDIO_CLAMP_HPP
 
 namespace SMC {
 namespace AudioClamp {
@@ -15,7 +15,7 @@ void update();
 bool isClamped();
 void printState();
 
-} // AudioClamp
+} // namespace AudioClamp
 } // SMC
 
-#endif // __SMC_AUDIO_CLAMP__
+#endif // SMC_AUDIO_CLAMP_HPP

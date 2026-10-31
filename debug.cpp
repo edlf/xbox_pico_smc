@@ -5,7 +5,11 @@
 
 namespace debug {
 
-DebugLevel debugLevel = DebugLevel::All;
+// Set by CMake (SMC_DEBUG_LEVEL), the index into DebugLevel
+#ifndef SMC_DEBUG_LEVEL
+#define SMC_DEBUG_LEVEL 3 // Info
+#endif
+DebugLevel debugLevel = static_cast<DebugLevel>(SMC_DEBUG_LEVEL);
 
 void print_timestamp() {
     absolute_time_t time = get_absolute_time();
@@ -23,13 +27,6 @@ void print_critical(const std::string& msg) {
   }
 }
 
-void print_error(const std::string& msg) {
-  if (debugLevel >= DebugLevel::Errors) {
-    print_timestamp();
-    std::cout <<  "(ERROR) " << msg << std::endl;
-  }
-}
-
 void print_warn(const std::string& msg) {
   if (debugLevel >= DebugLevel::Warnings) {
     print_timestamp();
@@ -38,10 +35,26 @@ void print_warn(const std::string& msg) {
 }
 
 void print_message(const std::string& msg) {
-  if (debugLevel == DebugLevel::All) {
+  if (debugLevel >= DebugLevel::Info) {
     print_timestamp();
     std::cout <<  "(INFO ) " << msg << std::endl;
   }
+}
+
+void print_debug(const std::string& msg) {
+  if (debug_enabled()) {
+    print_timestamp();
+    std::cout <<  "(DEBUG) " << msg << std::endl;
+  }
+}
+
+bool debug_enabled() {
+  return debugLevel >= DebugLevel::Debug;
+}
+
+const char* level_name() {
+  constexpr const char* names[] = {"SILENT", "CRITICAL", "WARNINGS", "INFO", "DEBUG"};
+  return names[static_cast<int>(debugLevel)];
 }
 
 void print_welcome() {
@@ -50,22 +63,6 @@ void print_welcome() {
             << "*                                  SMC Boot                                   *\n"
             << "*-----------------------------------------------------------------------------*"
             << std::endl;
-}
-
-void print_state_change(const std::string state_name, const uint8_t previous, const uint8_t current) {
-  if (debugLevel == DebugLevel::All) {
-    print_timestamp();
-    std::cout <<  "(STATE) " << state_name;
-
-    constexpr size_t max_len = 20;
-    size_t str_size = state_name.size();
-    if (max_len > str_size) {
-      std::string s(max_len - str_size, ' ');
-      std::cout << s;
-    }
-
-    std::cout << " " << std::to_string(previous) << " -> " << std::to_string(current) << std::endl;
-  }
 }
 
 } // namespace debug

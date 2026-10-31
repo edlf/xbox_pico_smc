@@ -1,6 +1,5 @@
 #include "smc.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 #include "pico/stdlib.h"
 #include "pin_assignments.hpp"
 #include "smc_video.hpp"
@@ -11,22 +10,10 @@ namespace SMC {
 namespace PowerStandby {
 
 power_standby_state state;
-uint16_t power_timeout3 = 0;
+static uint16_t power_timeout3 = 0;
 
 void init(){
   state = power_standby_state::initial;
-}
-
-void setPowerTimeout3(uint16_t val) {
-  power_timeout3 = val;
-}
-
-void powerTimeout3Decrement() {
-  power_timeout3--;
-}
-
-uint16_t getPowerTimeout3() {
-  return power_timeout3;
 }
 
 uint8_t update() {
@@ -134,7 +121,7 @@ uint8_t update() {
     flags.audio_unclamp_request = false;
     flags.audio_clamp_timer = true;
     Video::init();
-    Dvd::initDdvdTray();
+    Dvd::initDvdTray();
     ram_test_response0 = 0;
     ram_test_response1 = 0;
     hal::timer1_init(hal::TICK_US);

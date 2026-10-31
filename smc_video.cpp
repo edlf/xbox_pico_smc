@@ -2,7 +2,6 @@
 #include "smc.hpp"
 #include "debug.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 
 namespace SMC {
 namespace Video {

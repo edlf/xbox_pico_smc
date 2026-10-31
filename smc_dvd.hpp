@@ -1,5 +1,5 @@
-#ifndef __SMC_DVD__
-#define __SMC_DVD__
+#ifndef SMC_DVD_HPP
+#define SMC_DVD_HPP
 
 #include <cstdint>
 
@@ -34,7 +34,7 @@ enum class update_dvd_tray_three_state {
 };
 
 void init();
-void initDdvdTray();
+void initDvdTray();
 void updateDvdTrayEject();
 void updateEjectTray();
 void updateDvdTrayThree();
@@ -44,7 +44,7 @@ bool isTrayClosing();
 void restartTrayDebounce();
 uint8_t readTrayState(); // Tray state pins, PORTB & 0x70 on the PIC
 
-} // namespace DVD
+} // namespace Dvd
 } // namespace SMC
 
-#endif // __SMC_DVD__
+#endif // SMC_DVD_HPP

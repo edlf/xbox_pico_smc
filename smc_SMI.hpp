@@ -1,5 +1,5 @@
-#ifndef __SMC_SMI__
-#define __SMC_SMI__
+#ifndef SMC_SMI_HPP
+#define SMC_SMI_HPP
 
 #include <cstdint>
 
@@ -41,4 +41,4 @@ uint8_t update();
 } // namespace SMI
 } // namespace SMC
 
-#endif // __SMC_SMI__
+#endif // SMC_SMI_HPP

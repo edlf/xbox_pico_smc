@@ -222,7 +222,6 @@ uint8_t get_tray_state() {
     tray_state = tray_state | (1 << 6);
   }
 
-  // debug::print_message("GPIO: Get tray state " + std::to_string(tray_state));
   return tray_state;
 }
 
@@ -594,10 +593,6 @@ void enableWatchdog() {
 
 void petWatchdog() {
   watchdog_update();
-}
-
-bool rebootCauseWatchdog() {
-  return watchdog_caused_reboot();
 }
 
 // Main loop tick, same as the PIC's Timer1: timer1_init() starts a period,

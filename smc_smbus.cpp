@@ -93,8 +93,10 @@ void printSMBusLog() {
   while (smbus_log_tail != smbus_log_head) {
     const SMBusLogEntry entry = smbus_log[smbus_log_tail];
     smbus_log_tail = (smbus_log_tail + 1) % smbus_log_size;
-    debug::print_message(std::string("SMBUS: ") + (entry.write ? "Write" : "Read ") + " cmd [" +
+    if (debug::debug_enabled()) { // Debug level only, they're too frequent for Info
+      debug::print_debug(std::string("SMBUS: ") + (entry.write ? "Write" : "Read ") + " cmd [" +
                          utils::toHex(entry.command) + "] data [" + utils::toHex(entry.data) + "]");
+    }
   }
 }
 

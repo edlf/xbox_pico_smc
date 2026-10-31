@@ -1,9 +1,8 @@
 #include "smc.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 #include "debug.hpp"
 
-#include <vector>
+#include <iterator>
 #include <string>
 
 namespace SMC {
@@ -23,7 +22,7 @@ static bool av_missing = false;
 static bool power_off_bit = false;
 static bool quick_green_blink = false;
 
-const std::vector<std::string> state_names {
+constexpr const char* state_names[] = {
   "Initial",
   "Overheat",
   "Manual control",
@@ -96,8 +95,8 @@ void printState() {
     const size_t led_state = static_cast<size_t>(state);
     std::string msg = "LED state [" + std::to_string(led_state) + "]";
 
-    if (led_state <= state_names.size()) {
-        msg += " " + state_names[led_state];
+    if (led_state < std::size(state_names)) {
+        msg += std::string(" ") + state_names[led_state];
     }
 
     debug::print_message(msg);
@@ -188,12 +187,12 @@ void update()
     break;
 
   case led_state::set_gpios: // 7
-    if (utils::checkBitNo(red_phases, led_phase)) {
+    if (red_phases & (1 << led_phase)) {
       hal::led_red_on();
     } else {
       hal::led_red_off();
     }
-    if (utils::checkBitNo(green_phases, led_phase)) {
+    if (green_phases & (1 << led_phase)) {
       hal::led_green_on();
     } else {
       hal::led_green_off();

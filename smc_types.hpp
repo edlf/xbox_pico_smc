@@ -1,5 +1,5 @@
-#ifndef __SMC_TYPES__
-#define __SMC_TYPES__
+#ifndef SMC_TYPES_HPP
+#define SMC_TYPES_HPP
 
 #include <cstdint>
 #include <stdio.h>
@@ -95,13 +95,6 @@ typedef struct {
   uint8_t vmode;
 } sensors_struct;
 
-enum class Encoder {
-  Conexant,
-  Focus,
-  Xcalibur,
-  NoEncoder
-};
-
 } // namespace SMC
 
-#endif // __SMC_TYPES__
+#endif // SMC_TYPES_HPP

@@ -1,5 +1,5 @@
-#ifndef __SMC_LED__
-#define __SMC_LED__
+#ifndef SMC_LED_HPP
+#define SMC_LED_HPP
 
 #include <cstdint>
 
@@ -39,4 +39,4 @@ void printState();
 } // namespace Led
 } // namespace SMC
 
-#endif // __SMC_LED__
+#endif // SMC_LED_HPP

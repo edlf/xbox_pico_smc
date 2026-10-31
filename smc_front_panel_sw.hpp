@@ -1,5 +1,5 @@
-#ifndef __SMC_FRONT_PANEL_SW__
-#define __SMC_FRONT_PANEL_SW__
+#ifndef SMC_FRONT_PANEL_SW_HPP
+#define SMC_FRONT_PANEL_SW_HPP
 
 namespace SMC {
 namespace FrontPanelSW {
@@ -11,7 +11,7 @@ void updateEject();
 void printPowerState();
 void printEjectState();
 
-} // namespace __SMC_FRONT_PANEL_SW__
+} // namespace FrontPanelSW
 } // namespace SMC
 
-#endif // __SMC_LED__
+#endif // SMC_FRONT_PANEL_SW_HPP

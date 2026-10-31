@@ -1,5 +1,5 @@
-#ifndef __PIN_ASSIGNMENTS__
-#define __PIN_ASSIGNMENTS__
+#ifndef PIN_ASSIGNMENTS_HPP
+#define PIN_ASSIGNMENTS_HPP
 
 #include <cstdint>
 #include "hardware/i2c.h"
@@ -42,9 +42,6 @@ constexpr uint8_t PICO_LED = PICO_DEFAULT_LED_PIN;
 constexpr uint32_t I2C_BAUDRATE = 100000U;  // 100 kHz
 constexpr uint8_t I2C_SLAVE_ADDRESS = 0x10;
 constexpr uint8_t I2C_TEMP_SENSOR_ADDRESS = 0x4C;
-constexpr uint8_t I2C_EEPROM_ADDRESS = 0x54;
 constexpr uint8_t I2C_CONEXANT_ADDRESS = 0x45;
-constexpr uint8_t I2C_FOCUS_ADDRESS = 0x6A;
-constexpr uint8_t I2C_XCALIBUR = 0x70;
 
-#endif  // __PIN_ASSIGNMENTS__
+#endif  // PIN_ASSIGNMENTS_HPP

@@ -1,5 +1,5 @@
-#ifndef __HAL__
-#define __HAL__
+#ifndef HAL_HPP
+#define HAL_HPP
 
 #include <cstddef>
 #include <cstdint>
@@ -28,8 +28,6 @@ bool eject_button_pressed();
 void pico_led_on();
 void pico_led_off();
 
-void system_reset_on();
-void system_reset_off();
 void smi_pin_on();
 void smi_pin_off();
 void audio_clamp_on();
@@ -67,7 +65,6 @@ void assertSystemReset();
 void liftSystemReset();
 void enableWatchdog();
 void petWatchdog();
-bool rebootCauseWatchdog();
 // Original SMC main loop tick: Timer1 preload 0xE795, 1:8 @ 10 MHz = 20 ms
 constexpr uint32_t TICK_US = 20000;
 void timer1_init(uint32_t delay_us);
@@ -76,4 +73,4 @@ void disable_and_discard_interrupts();
 
 } // namespace hal
 
-#endif // __HAL__
+#endif // HAL_HPP

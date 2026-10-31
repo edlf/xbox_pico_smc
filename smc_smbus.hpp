@@ -1,5 +1,5 @@
-#ifndef __SMC_SMBUS__
-#define __SMC_SMBUS__
+#ifndef SMC_SMBUS_HPP
+#define SMC_SMBUS_HPP
 
 #include <cstdint>
 
@@ -20,4 +20,4 @@ extern const char version_string[];
 
 }
 
-#endif // __SMC_SMBUS__
+#endif // SMC_SMBUS_HPP

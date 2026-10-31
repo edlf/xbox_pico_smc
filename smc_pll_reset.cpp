@@ -1,10 +1,9 @@
 #include "smc_pll_reset.hpp"
 #include "smc.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 #include "pico/stdlib.h"
 
-#include <vector>
+#include <iterator>
 #include <string>
 
 namespace SMC {
@@ -13,7 +12,7 @@ namespace PLL_Reset {
 pll_sysreset_state state;
 uint8_t timeout; // Own counter, 0x49 on the PIC
 
-const std::vector<std::string> state_names {
+constexpr const char* state_names[] = {
   "initial",
   "held in reset",
   "start delay (unused)",
@@ -38,8 +37,8 @@ void printState() {
     const size_t bc_state = static_cast<size_t>(state);
     std::string msg = "PLL Reset state [" + std::to_string(bc_state) + "]";
 
-    if (bc_state <= state_names.size()) {
-        msg += " " + state_names[bc_state];
+    if (bc_state < std::size(state_names)) {
+        msg += std::string(" ") + state_names[bc_state];
     }
 
     debug::print_message(msg);
@@ -56,7 +55,7 @@ static void releaseResetAndConfigureEncoder() {
   configureTemperatureSensor();
 #else
   busy_wait_us(900);
-  configureEncoder();
+  configureConexantEncoder();
 #endif
   state = pll_sysreset_state::running;
 }

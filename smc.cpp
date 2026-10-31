@@ -1,6 +1,5 @@
 #include "smc.hpp"
 #include "debug.hpp"
-#include "utils.hpp"
 
 // Pico stuff
 #include "hardware/i2c.h"
@@ -16,7 +15,6 @@ namespace SMC {
 volatile uint8_t ram_test_response0;
 volatile uint8_t ram_test_response1;
 volatile uint8_t bios_response_byte0;
-volatile uint8_t bios_response_byte1;
 
 flags_struct flags;
 sensors_struct sensors;
@@ -29,14 +27,6 @@ void setInterruptReason(uint8_t ir) {
   flags.interrupt_reason |= ir;
 }
 
-void clearInterruptReason(uint8_t ir) {
-  flags.interrupt_reason &= ~ir;
-}
-
-bool checkInterruptReason(uint8_t ir) {
-  return flags.interrupt_reason & ir;
-}
-
 void fireSystemInterrupt() {
   debug::print_message("SMC: Fire System Interrupt");
 
@@ -47,29 +37,7 @@ void fireSystemInterrupt() {
   hal::smi_pin_on();
 }
 
-void configureEncoder() {
-  debug::print_message("SMC: Configure Encoder");
-  Encoder encoder = DetectVideoEncoder();
-
-  switch (encoder) {
-    case Encoder::Conexant:
-      configureConexantEncoder();
-      break;
-
-    case Encoder::Focus:
-      configureFocusEncoder();
-      break;
-
-    case Encoder::Xcalibur:
-      configureXcaliburEncoder();
-      break;
-
-    default:
-      debug::print_critical("No encoder returned");
-      break;
-  }
-}
-
+// P01 (0x5FB): the PIC's only encoder write, register 0xBA = 0x3F
 void configureConexantEncoder() {
   debug::print_message("SMC: Configure Conexant Encoder");
 
@@ -88,14 +56,6 @@ void configureTemperatureSensor() {
   if (!smbusMasterWrite(I2C_TEMP_SENSOR_ADDRESS, config, len)) {
     debug::print_warn("Temperature sensor write failed");
   }
-}
-
-void configureFocusEncoder() {
-  // TODO
-}
-
-void configureXcaliburEncoder() {
-  // TODO
 }
 
 // Mirrors the PIC's only external interrupt: CCP2 capture on a POWOK falling
@@ -131,7 +91,6 @@ void update_LEDs() {
   Led::setPowerOff(!flags.system_running);
   Led::setQuickGreenBlink(flags.tray_moving);
   Led::update();
-  // Led::printState();
 }
 
 void main_loop() {
@@ -165,7 +124,6 @@ void main_loop() {
 #endif
   hal::timer1_init(hal::TICK_US);
 
-  PowerStandby::setPowerTimeout3(1);
   do {
     BootChallenge::seedStandby();
 #if SMC_WEB_INTERFACE
@@ -199,7 +157,6 @@ void main_loop() {
 
         power_standby_state = SMI::update();
         printSMBusLog();
-        // SMI::printState();
         if ((power_standby_state & 1) != 0) {
           break;
         }
@@ -211,12 +168,10 @@ void main_loop() {
       Fan::powerOff();
 
       PowerStandby::init();
-      // jump_index_sub_code_828 = 0;
       Fan::init();
       Dvd::init();
       Video::init();
       AudioClamp::init();
-      // jump_index_sub_code_5AF = 0;
       BootChallenge::init();
       Led::resetPhaseCounter();
       SMI::init();
@@ -228,23 +183,20 @@ void main_loop() {
       // P11 skips the wait when powering back on after a power cycle (0x2A2)
       // and waits one tick less otherwise
       const bool wait_after_power_off = !SMI::powerOnRequested();
-      PowerStandby::setPowerTimeout3(24);
+      uint8_t wait_ticks = 24;
 #else
       const bool wait_after_power_off = true;
-      PowerStandby::setPowerTimeout3(25);
+      uint8_t wait_ticks = 25;
 #endif
 
       while (wait_after_power_off) {
         hal::timer1_wait();
         hal::petWatchdog();
         FrontPanelSW::updatePower();
-        PowerStandby::powerTimeout3Decrement();
-        if (PowerStandby::getPowerTimeout3() == 0) {
+        if (--wait_ticks == 0) {
           break;
         }
       }
-
-      PowerStandby::setPowerTimeout3(0);
     }
 
     printSMBusLog();
@@ -291,25 +243,6 @@ void panic(const std::string message) {
     hal::pico_led_off();
     busy_wait_ms(500);
   }
-}
-
-Encoder DetectVideoEncoder(void)
-{
-  /* TODO: Based on XBLAST
-  if (I2CTransmitByteGetReturn(I2C_CONEXANT_ADDRESS, 0x00) != ERR_I2C_ERROR_BUS)
-  {
-    return Encoder::Conexant;
-  }
-  else if (I2CTransmitByteGetReturn(I2C_FOCUS_ADDRESS, 0x00) != ERR_I2C_ERROR_BUS)
-  {
-    return Encoder::Focus;
-  }
-  else
-  {
-    return Encoder::Xcalibur;
-  }
-  */
-  return Encoder::Conexant;
 }
 
 } // namespace SMC
