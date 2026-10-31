@@ -47,7 +47,7 @@ void updatePower() {
 
   case switch_state::debouncing:
     if (hal::power_button_pressed()) {
-      setStatusBit(power_change_requested);
+      flags.power_change_requested = true;
       pwr_state = switch_state::wait_for_button_release;
     } else {
       pwr_state = switch_state::wait_for_button_press;
@@ -80,7 +80,7 @@ void updateEject() {
 
   case switch_state::debouncing:
     if (hal::eject_button_pressed()) {
-      setStatusBit(eject_change_requested);
+      flags.eject_change_requested = true;
       flags.eject_button_event = true;
       eject_state = switch_state::wait_for_button_release;
     } else {

@@ -132,8 +132,8 @@ void update_fan_temp() {
   switch (state) {
   case fan_control_state::initial:
     setSpeed(min_fan_speed); // 0 on the PIC
-    clearStatusBit(overheated);
-    if (!checkStatusBit(prepare_for_shutdown)) {
+    flags.overheated = false;
+    if (!flags.prepare_for_shutdown) {
       state = fan_control_state::start;
     }
     break;
@@ -170,7 +170,7 @@ void update_fan_temp() {
     setSpeed(max_fan_speed);
     flags.cold_reset_request = true;
     flags.run_after_reset = false;
-    setStatusBit(overheated); // SMI shuts the Xbox down once this clears
+    flags.overheated = true; // SMI shuts the Xbox down once this clears
     timeout1 = 0xFA;
     timeout2 = 0xB3;
     state = fan_control_state::overheated_cooldown;
@@ -183,13 +183,13 @@ void update_fan_temp() {
     read_temperatures();
     if (sensors.CPU_temperature > shutdown_cpu_temp || sensors.board_temperature > shutdown_board_temp) {
       /* Still far too hot, shut down now */
-      clearStatusBit(overheated);
+      flags.overheated = false;
     } else if (sensors.CPU_temperature >= cool_predicted_temp || sensors.board_temperature >= cool_board_temp) {
       /* Still warm, keep cooling */
       state = fan_control_state::overheated_wait;
     } else {
       /* Cooled down, shut down */
-      clearStatusBit(overheated);
+      flags.overheated = false;
     }
     break;
 
@@ -198,7 +198,7 @@ void update_fan_temp() {
       timeout1 = 0xFA;
       state = fan_control_state::overheated_cooldown;
     } else {
-      clearStatusBit(overheated);
+      flags.overheated = false;
     }
     break;
 

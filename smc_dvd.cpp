@@ -8,7 +8,7 @@ namespace Dvd {
 
 #if SMC_DVD_SUPPORT
 
-uint8_t raw_tray_status_filtered;
+uint8_t tray_status_first_read;
 
 dvd_tray_state dvd_tray;
 update_dvd_tray_three_state dvd_tray_three; // jump_index_sub_code_519
@@ -49,35 +49,35 @@ void updateDvdTray() {
   switch (dvd_tray) {
   case dvd_tray_state::initial:
     tray_state_timer = 0x20;
-    dvd_tray = dvd_tray_state::tick_timer;
+    dvd_tray = dvd_tray_state::startup_delay;
     break;
 
-  case dvd_tray_state::tick_timer:
+  case dvd_tray_state::startup_delay:
     tray_state_timer--;
     if (tray_state_timer == 0) {
-      dvd_tray = dvd_tray_state::state2;
+      dvd_tray = dvd_tray_state::watch;
     }
     break;
 
-  case dvd_tray_state::state2:
+  case dvd_tray_state::watch:
     tray_status_raw = hal::get_tray_state() & 0x70;
-    raw_tray_status_filtered = tray_status_raw;
+    tray_status_first_read = tray_status_raw;
     if ((sensors.tray_status ^ tray_status_raw) != 0) {
-      dvd_tray = dvd_tray_state::state3;
+      dvd_tray = dvd_tray_state::confirm;
     }
     break;
 
-  case dvd_tray_state::state3:
+  case dvd_tray_state::confirm:
     tray_state = hal::get_tray_state();
     tray_status_raw = tray_state & 0x70;
-    if ((tray_state & 0x70) != raw_tray_status_filtered) {
-      dvd_tray = dvd_tray_state::state2;
+    if ((tray_state & 0x70) != tray_status_first_read) {
+      dvd_tray = dvd_tray_state::watch;
     } else {
-      dvd_tray = dvd_tray_state::state4;
+      dvd_tray = dvd_tray_state::apply;
     }
     break;
 
-  case dvd_tray_state::state4:
+  case dvd_tray_state::apply:
     debug::print_message("DVD: Tray state " + std::to_string(tray_status_raw >> 4));
     sensors.tray_status = tray_status_raw;
     if (tray_status_raw == 0x30) {
@@ -90,12 +90,12 @@ void updateDvdTray() {
       }
     } else if ((tray_status_raw == 0x60) || (tray_status_raw == 0x40)) {
       if (flags.tray_events_enabled) {
-        setStatusBit(Status::dvd_tray);
+        flags.tray_media_event = true;
       }
     } else {
       flags.tray_events_enabled = true;
     }
-    dvd_tray = dvd_tray_state::state2;
+    dvd_tray = dvd_tray_state::watch;
     break;
 
   default:
@@ -105,9 +105,9 @@ void updateDvdTray() {
 }
 
 void restartTrayDebounce() {
-  // Same as P11 (0x636): back to the tick state without reloading the timer,
+  // Same as P11 (0x636): back to the start-up delay without reloading the timer,
   // which is already 0, so it counts 256 ticks
-  dvd_tray = dvd_tray_state::tick_timer;
+  dvd_tray = dvd_tray_state::startup_delay;
 }
 
 void updateEjectTray() {
@@ -154,40 +154,40 @@ void updateDvdTrayEject() {
   case 0: /* Tray open */
     if (sensors.tray_status == 0x50) {
       /* Tray is closing */
-      clearStatusBit(eject_change_requested);
+      flags.eject_change_requested = false;
       flags.tray_load_request = false;
       tray_eject = 1;
       return;
     }
 
     /* Close on eject button, load request (SMBus 0x0C) or shutdown */
-    if (!checkStatusBit(eject_change_requested) && !flags.tray_load_request &&
-        !checkStatusBit(prepare_for_shutdown)) {
+    if (!flags.eject_change_requested && !flags.tray_load_request &&
+        !flags.prepare_for_shutdown) {
       return;
     }
     if (!trayCanMove()) {
       return;
     }
     flags.eject_pulse = true; // Pulse eject
-    clearStatusBit(eject_change_requested);
+    flags.eject_change_requested = false;
     flags.tray_load_request = false;
     tray_eject = 1;
     break;
 
   case 1: /* Tray closed */
-    if (checkStatusBit(prepare_for_shutdown)) {
+    if (flags.prepare_for_shutdown) {
       return;
     }
 
     if (sensors.tray_status == 0x30) {
       /* Tray is opening */
-      clearStatusBit(eject_change_requested);
+      flags.eject_change_requested = false;
       flags.tray_eject_request = false;
       tray_eject = 0;
       return;
     }
 
-    if (checkStatusBit(eject_change_requested)) {
+    if (flags.eject_change_requested) {
       if (!flags.reset_on_eject_disabled) {
         flags.tray_open_expected = true;
       }
@@ -196,7 +196,7 @@ void updateDvdTrayEject() {
       if (flags.frag_eject) {
         flags.run_after_reset = true;
         flags.eject_pulse = true;
-        clearStatusBit(eject_change_requested);
+        flags.eject_change_requested = false;
       }
     }
 
@@ -205,7 +205,7 @@ void updateDvdTrayEject() {
       return;
     }
     flags.eject_pulse = true; // Pulse eject
-    clearStatusBit(eject_change_requested);
+    flags.eject_change_requested = false;
     flags.tray_eject_request = false;
     tray_eject = 0;
     break;

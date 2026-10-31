@@ -40,9 +40,6 @@ void resetInterruptReason();
 void setInterruptReason(uint8_t ir);
 void clearInterruptReason(uint8_t ir);
 bool checkInterruptReason(uint8_t ir);
-void setStatusBit(uint8_t status_bit);
-void clearStatusBit(uint8_t status_bit);
-uint8_t checkStatusBit(uint8_t status_bit);
 
 void main_loop();
 void globals_init();

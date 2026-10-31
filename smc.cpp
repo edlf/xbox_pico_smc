@@ -37,22 +37,6 @@ bool checkInterruptReason(uint8_t ir) {
   return flags.interrupt_reason & ir;
 }
 
-void resetStatus() {
-  flags.status = 0;
-}
-
-void setStatusBit(uint8_t status_bit) {
-  flags.status |= status_bit;
-}
-
-void clearStatusBit(uint8_t status_bit) {
-  flags.status &= ~status_bit;
-}
-
-uint8_t checkStatusBit(uint8_t status_bit) {
-  return flags.status & status_bit;
-}
-
 void fireSystemInterrupt() {
   debug::print_message("SMC: Fire System Interrupt");
 
@@ -141,7 +125,7 @@ void setPowerOkIrq(bool enabled) {
 
 void update_LEDs() {
   Led::setManualControl(flags.led_override);
-  Led::setOverheat(checkStatusBit(overheated));
+  Led::setOverheat(flags.overheated);
   Led::setAvMissing(flags.av_cable_missing);
   // system_running is set while the system is powered
   Led::setPowerOff(!flags.system_running);
@@ -190,7 +174,7 @@ void main_loop() {
 
     // Power cycle: press the power button for the host
     if (SMI::takePowerOnRequest()) {
-      setStatusBit(power_change_requested);
+      flags.power_change_requested = true;
     }
 
     uint8_t power_standby_state = PowerStandby::update();
@@ -272,7 +256,6 @@ void globals_init() {
   flags = {};
 
   resetInterruptReason();
-  resetStatus();
 
   resetSMBusRegisters();
 

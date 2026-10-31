@@ -10,7 +10,7 @@ namespace SMC {
 namespace AudioClamp {
 
 // Same as the PIC (0x573). Requests: audio_clamp_request, audio_unclamp_request (SMBus
-// 0x0B), Status audio_clamp_timer = unclamp after a delay (set at power up). Missing AV cable
+// 0x0B), audio_clamp_timer = unclamp after a delay (set at power up). Missing AV cable
 // (av_cable_missing) or a shutdown (prepare_for_shutdown) always clamps.
 constexpr uint8_t unclamp_delay = 0x2C; // 44 ticks, ~0.9 s
 
@@ -30,7 +30,7 @@ void init() {
 
 static bool mustClamp() {
   return flags.av_cable_missing || flags.audio_clamp_request ||
-         checkStatusBit(prepare_for_shutdown);
+         flags.prepare_for_shutdown;
 }
 
 void update() {
@@ -45,13 +45,13 @@ void update() {
     }
     if (flags.audio_unclamp_request) {
       state = audio_state::unclamped;
-    } else if (checkStatusBit(audio_clamp_timer)) {
+    } else if (flags.audio_clamp_timer) {
       state = audio_state::tick_timer;
     }
     break;
 
   case audio_state::tick_timer:
-    clearStatusBit(audio_clamp_timer);
+    flags.audio_clamp_timer = false;
     if (mustClamp()) {
       state = audio_state::clamped;
     } else if (flags.audio_unclamp_request || --audio_clamp_timeout == 0) {
@@ -62,7 +62,7 @@ void update() {
   case audio_state::unclamped:
     hal::audio_clamp_off();
     flags.audio_unclamp_request = false;
-    clearStatusBit(audio_clamp_timer);
+    flags.audio_clamp_timer = false;
     if (mustClamp()) {
       state = audio_state::clamped;
     }

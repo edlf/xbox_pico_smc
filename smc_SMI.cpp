@@ -16,17 +16,17 @@ const std::vector<std::string> smi_state_names {
   "Decision_state",
   "Power off start",
   "Process power off conditions",
-  "Check ram test results",
+  "Wait for OS power off",
   "Interrupt event handled",
-  "case5",
+  "OS busy, wait longer",
   "Request tray close",
   "Leds off",
   "Wait for tray to close",
   "Initial",
   "Overheat cooldown wait",
-  "case11",
+  "Wait for OS response",
   "Going to reset",
-  "case13",
+  "OS busy, check limit",
   "Delay",
   "Wait for stable tray state",
   "Delayed turning off",
@@ -35,7 +35,7 @@ const std::vector<std::string> smi_state_names {
 
 smi_power_state state;
 uint16_t power_timeout = 0;
-uint16_t power_timeout2 = 0;
+uint16_t power_timeout2 = 0; // How many more times the OS may answer "busy"
 static bool power_on_requested = false; // 0xBD.0, survives init()
 static volatile uint8_t power_cycle_delay = 25; // P11: SMBus 0x22, 0xBE on the PIC
 
@@ -101,22 +101,22 @@ uint8_t update() {
   switch (state) {
   case smi_power_state::decision_state:
     /* Decision state - Check for pending interrupts */
-    clearStatusBit(first_execution);
+    flags.first_execution = false;
     flags.system_running = true;
     flags.waiting_for_os = false;
     flags.pending_interrupt_reason = 0; // Pending copy only, 6C is cleared by SMBus read 0x11
 
-    if (checkStatusBit(overheated)) {
+    if (flags.overheated) {
       /* System overheated */
       state = smi_power_state::overheat_cooldown_wait;
-    } else if (checkStatusBit(power_change_requested)) {
+    } else if (flags.power_change_requested) {
       /* Power button pressed */
       flags.waiting_for_os = true;
       raiseInterrupt(InterruptReason_power_sw_pressed);
       state = smi_power_state::start_power_off;
-    } else if (checkStatusBit(eject_change_requested)) {
+    } else if (flags.eject_change_requested) {
       /* Eject button pressed */
-      clearStatusBit(eject_change_requested);
+      flags.eject_change_requested = false;
       flags.waiting_for_os = true;
       raiseInterrupt(InterruptReason_eject_sw_pressed);
       state = smi_power_state::process_power_off_conditions;
@@ -132,7 +132,7 @@ uint8_t update() {
       }
       raiseInterrupt(InterruptReason_dvd_tray1);
       state = smi_power_state::process_power_off_conditions;
-    } else if (checkStatusBit(dvd_tray)) {
+    } else if (flags.tray_media_event) {
       /* DVD tray change */
       raiseInterrupt(InterruptReason_dvd_tray0);
       state = smi_power_state::process_power_off_conditions;
@@ -140,7 +140,7 @@ uint8_t update() {
       /* DVD tray event (0x00) */
       raiseInterrupt(InterruptReason_dvd_tray2);
       state = smi_power_state::process_power_off_conditions;
-    } else if (checkStatusBit(video_mode_changed)) {
+    } else if (flags.video_mode_changed) {
       /* Video mode changed */
       raiseInterrupt(InterruptReason_av_mode_changed);
       state = smi_power_state::process_power_off_conditions;
@@ -165,25 +165,27 @@ uint8_t update() {
     power_timeout = 25;
     power_timeout2 = 3;
 
-    if (checkStatusBit(power_change_requested) || flags.av_power_button_event) {
-      state = smi_power_state::check_ram_test_results;
+    if (flags.power_change_requested || flags.av_power_button_event) {
+      state = smi_power_state::wait_for_os_power_off;
     } else if (flags.tray_opening_event) {
       // Tray event resets the Xbox unless reset-on-eject is disabled
       if (flags.reset_on_eject_disabled) {
         state = smi_power_state::event_interrupt_handled;
       } else {
-        state = smi_power_state::case11;
+        state = smi_power_state::wait_for_os_response;
       }
-    } else if (checkStatusBit(dvd_tray) || flags.tray_state_00_event ||
-               flags.av_unplugged_event || checkStatusBit(video_mode_changed)) {
+    } else if (flags.tray_media_event || flags.tray_state_00_event ||
+               flags.av_unplugged_event || flags.video_mode_changed) {
       // Plain notifications, nothing else to do once the SMI has been sent
       state = smi_power_state::event_interrupt_handled;
     } else {
-      state = smi_power_state::case11;
+      state = smi_power_state::wait_for_os_response;
     }
     break;
 
-  case smi_power_state::check_ram_test_results:
+  case smi_power_state::wait_for_os_power_off:
+    // Power off: let the OS shut down first. Without a passed RAM test or
+    // SMBus 0x1A (os_ready) there is no OS to ask, so power off right away.
     if (!flags.power_off_request) {
       if (!flags.ram_test_submitted) {
         state = smi_power_state::request_tray_close;
@@ -192,7 +194,7 @@ uint8_t update() {
       } else if (!flags.os_ready) {
         state = smi_power_state::request_tray_close;
       } else if (flags.os_busy) {
-        state = smi_power_state::case13;
+        state = smi_power_state::os_busy_limit;
       } else {
         if (--power_timeout == 0) {
           state = smi_power_state::request_tray_close;
@@ -206,13 +208,13 @@ uint8_t update() {
   case smi_power_state::event_interrupt_handled:
     // Use the pending copy, the host may already have read and cleared 6C
     if (flags.pending_interrupt_reason & InterruptReason_av_mode_changed) {
-      clearStatusBit(video_mode_changed);
+      flags.video_mode_changed = false;
     }
     if (flags.pending_interrupt_reason & InterruptReason_av_unplugged) {
       flags.av_unplugged_event = false;
     }
     if (flags.pending_interrupt_reason & InterruptReason_dvd_tray0) {
-      clearStatusBit(dvd_tray);
+      flags.tray_media_event = false;
     }
     if (flags.pending_interrupt_reason & InterruptReason_dvd_tray2) {
       flags.tray_state_00_event = false;
@@ -225,16 +227,16 @@ uint8_t update() {
     state = smi_power_state::decision_state;
     break;
 
-  case smi_power_state::case5:
-    /* Intermediate state */
+  case smi_power_state::os_busy_wait:
+    /* The OS answered "busy" (SMBus 0x0D bit 1): give it up to 255 more ticks */
     power_timeout = 0xFF;
     flags.os_busy = false;
     flags.waiting_for_os = true;
-    state = smi_power_state::check_ram_test_results;
+    state = smi_power_state::wait_for_os_power_off;
     break;
 
   case smi_power_state::request_tray_close:
-    setStatusBit(prepare_for_shutdown); // System shutting down
+    flags.prepare_for_shutdown = true; // System shutting down
     power_timeout = 25;
     state = smi_power_state::wait_tray_close;
     break;
@@ -263,11 +265,11 @@ uint8_t update() {
   case smi_power_state::initial:
     flags.frag_power_off = false;
     flags.system_running = false;
-    clearStatusBit(video_mode_changed);
+    flags.video_mode_changed = false;
     flags.av_unplugged_event = false;
-    clearStatusBit(dvd_tray);
+    flags.tray_media_event = false;
     flags.tray_opening_event = false;
-    clearStatusBit(power_change_requested);
+    flags.power_change_requested = false;
     flags.av_power_button_event = false;
 
     if (flags.power_cycle_request) {
@@ -285,24 +287,25 @@ uint8_t update() {
       power_timeout = 0x32;
 #endif
       state = smi_power_state::wait_state_for_power_cycle;
-    } else if (checkStatusBit(first_execution)) {
+    } else if (flags.first_execution) {
       /* Just powered up */
       state = smi_power_state::decision_state;
-      clearStatusBit(prepare_for_shutdown);
+      flags.prepare_for_shutdown = false;
     } else {
       return 1; /* Powered off */
     }
     break;
 
   case smi_power_state::overheat_cooldown_wait:
-    if ((checkStatusBit(overheated)) == 0) {
+    if (!flags.overheated) {
       power_timeout = 1;
       state = smi_power_state::delay;
     }
     break;
 
-  case smi_power_state::case11:
-    /* Check for various conditions before going to state 4 or others */
+  case smi_power_state::wait_for_os_response:
+    /* Power/eject/tray SMI sent: wait for the OS to answer with SMBus 0x0D,
+     * reset the Xbox if it doesn't within 25 ticks */
     if (flags.os_event_handled) {
       /* OS handled it (SMBus 0x0D), unless it's a tray event with
        * reset-on-eject enabled: that one still resets after the timeout */
@@ -314,7 +317,7 @@ uint8_t update() {
         state = smi_power_state::event_interrupt_handled;
       }
     } else if (flags.os_busy) {
-      state = smi_power_state::case5;
+      state = smi_power_state::os_busy_wait;
     } else if (flags.power_off_request) {
       state = smi_power_state::request_tray_close;
     } else if (flags.os_reset_request) {
@@ -329,17 +332,17 @@ uint8_t update() {
   case smi_power_state::going_to_reset:
     flags.os_reset_request = false;
     flags.warm_reset_request = true;
-    clearStatusBit(video_mode_changed);
+    flags.video_mode_changed = false;
     flags.av_unplugged_event = false;
-    clearStatusBit(dvd_tray);
+    flags.tray_media_event = false;
     flags.tray_opening_event = false;
     state = smi_power_state::decision_state;
     break;
 
-  case smi_power_state::case13:
-    /* Intermediate handling state */
+  case smi_power_state::os_busy_limit:
+    /* Allow "busy" at most 3 times (power_timeout2), then power off anyway */
     if (--power_timeout2 != 0) {
-      state = smi_power_state::case5;
+      state = smi_power_state::os_busy_wait;
     } else {
       state = smi_power_state::request_tray_close;
     }
@@ -347,7 +350,7 @@ uint8_t update() {
 
   case smi_power_state::delay:
     // Proceed at once if the PLL is already off, otherwise after the timeout
-    if (!PLL_Reset::isState1() && --power_timeout != 0) {
+    if (!PLL_Reset::isHeldInReset() && --power_timeout != 0) {
       break;
     }
 

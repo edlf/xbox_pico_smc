@@ -15,14 +15,14 @@ uint8_t timeout; // Own counter, 0x49 on the PIC
 
 const std::vector<std::string> state_names {
   "initial",
-  "state1",
-  "state2",
-  "cold_reset",
-  "warm_reset_2",
-  "warm_reset_1",
-  "state6",
-  "state7",
-  "state8"
+  "held in reset",
+  "start delay (unused)",
+  "start PLL",
+  "release reset",
+  "warm reset",
+  "restart PLL off (unused)",
+  "restart PLL on (unused)",
+  "running"
 };
 
 void init() {
@@ -30,8 +30,8 @@ void init() {
   timeout = 0;
 }
 
-bool isState1() {
-  return (state == pll_sysreset_state::state1);
+bool isHeldInReset() {
+  return (state == pll_sysreset_state::held_in_reset);
 }
 
 void printState() {
@@ -58,7 +58,7 @@ static void releaseResetAndConfigureEncoder() {
   busy_wait_us(900);
   configureEncoder();
 #endif
-  state = pll_sysreset_state::state8;
+  state = pll_sysreset_state::running;
 }
 
 void update() {
@@ -70,10 +70,10 @@ void update() {
     flags.led_override = false;
     flags.reset_on_eject_writable = true;
     flags.reset_on_eject_disabled = true;
-    state = pll_sysreset_state::state1;
+    state = pll_sysreset_state::held_in_reset;
     break;
 
-  case pll_sysreset_state::state1:
+  case pll_sysreset_state::held_in_reset:
     hal::PLL_off();
     timeout = 0;
     if (flags.cold_reset_request) {
@@ -81,20 +81,20 @@ void update() {
     } else if (flags.run_after_reset && hal::get_power_ok()) {
       /* Powered up: enable the PLL, release reset 2 ticks later */
       timeout = 2;
-      state = pll_sysreset_state::cold_reset;
+      state = pll_sysreset_state::start_pll;
     }
     break;
 
-  case pll_sysreset_state::state2:
-    /* Not reachable on the PIC either */
+  case pll_sysreset_state::start_delay_unused:
+    /* Never entered, the PIC has it too (0x5E8) */
     if (!hal::get_power_ok() || flags.cold_reset_request) {
       state = pll_sysreset_state::initial;
     } else if (--timeout == 0) {
-      state = pll_sysreset_state::cold_reset;
+      state = pll_sysreset_state::start_pll;
     }
     break;
 
-  case pll_sysreset_state::cold_reset:
+  case pll_sysreset_state::start_pll:
     hal::PLL_on();
     if (--timeout != 0) {
       return;
@@ -103,11 +103,11 @@ void update() {
     releaseResetAndConfigureEncoder();
     break;
 
-  case pll_sysreset_state::warm_reset_2:
+  case pll_sysreset_state::release_reset:
     releaseResetAndConfigureEncoder();
     break;
 
-  case pll_sysreset_state::warm_reset_1:
+  case pll_sysreset_state::warm_reset:
     hal::assertSystemReset();
     flags.warm_reset_request = false;
     flags.os_ready = false;
@@ -119,33 +119,34 @@ void update() {
       Dvd::restartTrayDebounce();
     }
 #endif
-    state = pll_sysreset_state::warm_reset_2;
+    state = pll_sysreset_state::release_reset;
     break;
 
-  case pll_sysreset_state::state6:
+  case pll_sysreset_state::restart_pll_off_unused:
+    // Never entered: nothing sets it, also on the PIC (0x62C)
     if (--timeout != 0) {
       return;
     }
     hal::PLL_off();
     hal::assertSystemReset();
     timeout = 1;
-    state = pll_sysreset_state::state7;
+    state = pll_sysreset_state::restart_pll_on_unused;
     break;
 
-  case pll_sysreset_state::state7:
+  case pll_sysreset_state::restart_pll_on_unused:
     if (--timeout != 0) {
       return;
     }
     hal::PLL_on();
-    state = pll_sysreset_state::warm_reset_2;
+    state = pll_sysreset_state::release_reset;
     break;
 
-  case pll_sysreset_state::state8:
-    /* Running - wait for power loss or a reset request */
+  case pll_sysreset_state::running:
+    /* Wait for power loss or a reset request */
     if (!hal::get_power_ok() || flags.cold_reset_request) {
       state = pll_sysreset_state::initial;
     } else if (flags.warm_reset_request) {
-      state = pll_sysreset_state::warm_reset_1;
+      state = pll_sysreset_state::warm_reset;
     }
     break;
 

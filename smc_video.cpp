@@ -94,7 +94,7 @@ void update() {
 
   case video_state::confirmed:
     setMode(vmode_raw);
-    setStatusBit(Status::video_mode_changed); // SMI to the OS
+    flags.video_mode_changed = true; // SMI to the OS
     state = video_state::monitor;
     break;
 

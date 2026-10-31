@@ -395,12 +395,12 @@ void runCommand(const CommandMessage& message) {
   switch (message.command) {
   case Command::power:
     debug::print_message("WEB: Power button");
-    setStatusBit(Status::power_change_requested);
+    flags.power_change_requested = true;
     break;
 
   case Command::eject:
     debug::print_message("WEB: Eject button");
-    setStatusBit(Status::eject_change_requested);
+    flags.eject_change_requested = true;
     flags.eject_button_event = true;
     break;
 
@@ -450,7 +450,7 @@ void publishStatus() {
   s.tray_closed = Dvd::isTrayClosing();
   s.av_pack = (sensors.vmode >> 1) & 0x07;
   s.av_missing = flags.av_cable_missing;
-  s.overheated = checkStatusBit(overheated);
+  s.overheated = flags.overheated;
   s.led_override = flags.led_override;
   s.led_red = Led::getRedPhases();
   s.led_green = Led::getGreenPhases();

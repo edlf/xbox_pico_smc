@@ -12,12 +12,13 @@
 namespace SMC {
 namespace Dvd {
 
+// Tray state debounce (0x9D3)
 enum class dvd_tray_state {
-  initial,
-  tick_timer,
-  state2,
-  state3,
-  state4
+  initial,       // Start the start-up delay
+  startup_delay, // Ignore the tray for 32 ticks (640 ms) after power on
+  watch,         // Wait for the pins to differ from the reported state
+  confirm,       // Read again, back to watch unless it matches the first read
+  apply          // Report the new state and raise its SMI
 };
 
 enum class update_eject_tray_state {

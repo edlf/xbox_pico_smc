@@ -102,8 +102,8 @@ static void waitForReset() {
   if (flags.warm_reset_request) {
     clearRamTestResult();
     state = boot_challenge_state::initial;
-  } else if (flags.cold_reset_request && !checkStatusBit(overheated) &&
-             !checkStatusBit(prepare_for_shutdown)) {
+  } else if (flags.cold_reset_request && !flags.overheated &&
+             !flags.prepare_for_shutdown) {
     clearRamTestResult();
     state = boot_challenge_state::initial;
   }

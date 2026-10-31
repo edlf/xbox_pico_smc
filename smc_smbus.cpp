@@ -221,11 +221,11 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
       flags.os_reset_request = true;
     }
     if (data & 0x40) {
-      setStatusBit(Status::power_change_requested);
+      flags.power_change_requested = true;
       flags.power_cycle_request = true;
     }
     if (data & 0x80) {
-      setStatusBit(Status::power_change_requested);
+      flags.power_change_requested = true;
       flags.power_off_request = true;
     }
     break;

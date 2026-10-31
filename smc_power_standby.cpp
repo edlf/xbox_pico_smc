@@ -50,7 +50,7 @@ uint8_t update() {
   case power_standby_state::check_av_power_button: // State 2
     // Check power button or AVIP port kiosk power on
     FrontPanelSW::updatePower();
-    if ((sensors.vmode != 0x0E) && (!checkStatusBit(power_change_requested))) {
+    if ((sensors.vmode != 0x0E) && (!flags.power_change_requested)) {
       state = power_standby_state::check_eject_button;
     } else {
       state = power_standby_state::turn_on_power_no_av;
@@ -61,7 +61,7 @@ uint8_t update() {
     hal::turn_on_psu();
     hal::set_fan_speed(hal::FAN_MIN_SPEED); // The PIC holds the pin high (speed 0)
     power_timeout3 = 50;
-    clearStatusBit(power_change_requested);
+    flags.power_change_requested = false;
     state = power_standby_state::powered_up_wait_power_ok;
     break;
 
@@ -81,7 +81,7 @@ uint8_t update() {
 
   case power_standby_state::check_eject_button: // State 5
     FrontPanelSW::updateEject();
-    if (checkStatusBit(eject_change_requested)) {
+    if (flags.eject_change_requested) {
       state = power_standby_state::turn_on_power_alternative;
     } else {
       state = power_standby_state::idle;
@@ -117,7 +117,7 @@ uint8_t update() {
     break;
 
   case power_standby_state::powered_up_alt:
-    clearStatusBit(eject_change_requested);
+    flags.eject_change_requested = false;
     setInterruptReason(InterruptReason_eject_sw_pressed);
     flags.pending_interrupt_reason |= InterruptReason_eject_sw_pressed;
     fireSystemInterrupt();
@@ -127,12 +127,12 @@ uint8_t update() {
   case power_standby_state::powered_up:
     flags.run_after_reset = true;
     flags.led_override = false;
-    setStatusBit(first_execution);
-    clearStatusBit(video_mode_changed);
+    flags.first_execution = true;
+    flags.video_mode_changed = false;
     flags.av_cable_missing = false;
     flags.audio_clamp_request = false;
     flags.audio_unclamp_request = false;
-    setStatusBit(audio_clamp_timer);
+    flags.audio_clamp_timer = true;
     Video::init();
     Dvd::initDdvdTray();
     ram_test_response0 = 0;

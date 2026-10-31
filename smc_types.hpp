@@ -25,26 +25,6 @@ enum InterruptReason : uint8_t {
   InterruptReason_unused = 0b10000000            // 0x80
 };
 
-enum Status : uint8_t {
-  // bit 0 is set when power switch is pressed and when power off is requested
-  // via SMBus
-  power_change_requested = 0b00000001, // 0, 0x01
-  // bit 1 is set when eject switch is pressed
-  eject_change_requested = 0b00000010, // 1, 0x02
-  // bit 2 is set for the first execution of the main loop after the Xbox turns on
-  first_execution = 0b00000100,   // 2, 0x04
-  audio_clamp_timer = 0b00001000, // 3, 0x08
-  // bit 4 is set when the system is overheated
-  overheated = 0b00010000, // 4, 0x10
-  // bit 5 is set when the SMC should prepare for Xbox shutdown (tray close,
-  // turn off audio clamp, don't change fan speed, don't monitor boot challenge)
-  prepare_for_shutdown = 0b00100000, // 5, 0x20
-  // bit 6 is DVD tray related (causes SMI interrupt to be fired)
-  dvd_tray = 0b01000000, // 0x40
-  // bit 7 is set when vide mode changes (causes SMI interrupt to be fired)
-  video_mode_changed = 0b10000000 // 0x80
-};
-
 // The PIC keeps these as bits in RAM 0x6C-0x74, the address and bit of each is
 // given as 6F.2 etc. for comparing with the disassembly.
 typedef struct {
@@ -52,7 +32,16 @@ typedef struct {
   // 6D: copy of the reasons of the SMI being handled, so they can be cleared
   // once the OS answers even if it already read and cleared 6C
   uint8_t pending_interrupt_reason;
-  uint8_t status; // 6E, Status bits
+
+  // Events and states shared by the state machines
+  bool power_change_requested; // 6E.0 Power button, or power off/cycle requested over SMBus
+  bool eject_change_requested; // 6E.1 Eject button
+  bool first_execution;        // 6E.2 First pass of the main loop after power on
+  bool audio_clamp_timer;      // 6E.3 Unclamp the audio after a delay (set at power on)
+  bool overheated;             // 6E.4
+  bool prepare_for_shutdown;   // 6E.5 Close the tray, clamp the audio, hold the fan and boot challenge
+  bool tray_media_event;       // 6E.6 Tray went to 0x40/0x60, SMI (InterruptReason_dvd_tray0)
+  bool video_mode_changed;     // 6E.7 SMI (InterruptReason_av_mode_changed)
 
   // Requests from the OS over SMBus, carried out by the state machines
   bool audio_clamp_request;   // 6F.0 SMBus 0x0B = 1
