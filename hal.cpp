@@ -17,21 +17,88 @@ pwm_config pwm_cfg;
 uint pwm_slice;
 uint pwm_channel;
 
-// Front panel LEDs are active low, like on the PIC (RA0/RA1 low = on)
+// Front panel LEDs are active low, like on the PIC (RA0/RA1 low = on). They
+// run as PWM so SMC_LED_BRIGHTNESS can dim them: ~1 kHz, output inverted so
+// the level is the on-time.
+constexpr uint16_t LED_PWM_WRAP = 999;
+constexpr uint32_t LED_PWM_HZ = 1000;
+constexpr uint16_t LED_ON_LEVEL = (uint32_t)(LED_PWM_WRAP + 1) * SMC_LED_BRIGHTNESS / 100;
+
+#if SMC_LED_RED_BREATHE
+// The red LED breathes while it's on: a 1 s triangle, squared so the change
+// looks even, restarted from dark each time it turns on. A 10 ms timer steps it.
+constexpr int32_t RED_BREATH_STEP_MS = 10;
+constexpr uint16_t RED_BREATH_STEPS = 100;
+
+static volatile bool red_on = false;
+static volatile uint16_t red_breath_step = 0;
+static repeating_timer_t red_breath_timer;
+
+static uint16_t redBreathLevel(uint16_t step) {
+  constexpr uint32_t half = RED_BREATH_STEPS / 2;
+  const uint32_t x = step < half ? step : RED_BREATH_STEPS - step; // 0 -> half -> 0
+  return (uint32_t)LED_ON_LEVEL * x * x / (half * half);
+}
+
+static bool redBreathTick(repeating_timer_t*) {
+  if (red_on) {
+    pwm_set_gpio_level(pins::LED_RED, redBreathLevel(red_breath_step));
+    red_breath_step = (red_breath_step + 1) % RED_BREATH_STEPS;
+  }
+  return true;
+}
+
+#endif
+
+static void initLeds() {
+  for (const uint8_t pin : {pins::LED_RED, pins::LED_GREEN}) {
+    const uint slice = pwm_gpio_to_slice_num(pin);
+    pwm_config cfg = pwm_get_default_config();
+    pwm_config_set_clkdiv(&cfg, (float)clock_get_hz(clk_sys) / (LED_PWM_HZ * (LED_PWM_WRAP + 1)));
+    pwm_config_set_wrap(&cfg, LED_PWM_WRAP);
+    pwm_config_set_output_polarity(&cfg, true, true);
+    pwm_init(slice, &cfg, true);
+    pwm_set_gpio_level(pin, 0); // Off
+  }
+  // Only now hand the pins to the PWM, so they never flash on
+  gpio_set_function(pins::LED_RED, GPIO_FUNC_PWM);
+  gpio_set_function(pins::LED_GREEN, GPIO_FUNC_PWM);
+
+#if SMC_LED_RED_BREATHE
+  // Negative period: every 10 ms from the previous start, not the previous end
+  add_repeating_timer_ms(-RED_BREATH_STEP_MS, redBreathTick, nullptr, &red_breath_timer);
+#endif
+}
+
 void led_green_on() {
-  gpio_put(pins::LED_GREEN, 0);
+  pwm_set_gpio_level(pins::LED_GREEN, LED_ON_LEVEL);
 }
 
 void led_green_off() {
-  gpio_put(pins::LED_GREEN, 1);
+  pwm_set_gpio_level(pins::LED_GREEN, 0);
 }
 
 void led_red_on() {
-  gpio_put(pins::LED_RED, 0);
+#if SMC_LED_RED_BREATHE
+  if (!red_on) {
+    red_breath_step = 0; // Start the breath from dark
+    red_on = true;
+  }
+#else
+  pwm_set_gpio_level(pins::LED_RED, LED_ON_LEVEL);
+#endif
 }
 
 void led_red_off() {
-  gpio_put(pins::LED_RED, 1);
+#if SMC_LED_RED_BREATHE
+  // With the timer held off, so it can't light it again after this
+  const uint32_t status = save_and_disable_interrupts();
+  red_on = false;
+  pwm_set_gpio_level(pins::LED_RED, 0);
+  restore_interrupts(status);
+#else
+  pwm_set_gpio_level(pins::LED_RED, 0);
+#endif
 }
 
 void pico_led_on() {
@@ -392,17 +459,12 @@ void i2c_bus_recovery() {
 void init() {
   debug::print_message("GPIO: Init");
 
+  initLeds(); // Off
+
   // Idle levels before the pins become outputs, as in the PIC's port_init:
-  // LEDs off, SMI released, DVD eject released
-  gpio_put(pins::LED_RED, 1);
-  gpio_put(pins::LED_GREEN, 1);
+  // SMI released, DVD eject released
   gpio_put(pins::SMI, 1);
   gpio_put(pins::DVD_EJECT, 0); // Open drain, only ever drives low
-
-  gpio_set_function(pins::LED_RED, GPIO_FUNC_SIO);
-  gpio_set_dir(pins::LED_RED, GPIO_OUT);
-  gpio_set_function(pins::LED_GREEN, GPIO_FUNC_SIO);
-  gpio_set_dir(pins::LED_GREEN, GPIO_OUT);
 
   gpio_set_function(pins::SW_POWER, GPIO_FUNC_SIO);
   gpio_set_dir(pins::SW_POWER, GPIO_IN);

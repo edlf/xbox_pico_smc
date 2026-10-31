@@ -52,6 +52,17 @@ if(NOT SMC_AV_PACK_MODE MATCHES "^[0-6]$")
   message(FATAL_ERROR "SMC_AV_PACK_MODE must be 0-6, got '${SMC_AV_PACK_MODE}'")
 endif()
 
+# Front panel LED brightness in percent (the PIC only has on/off):
+# -DSMC_LED_BRIGHTNESS=n
+set(SMC_LED_BRIGHTNESS 100 CACHE STRING "LED brightness in percent (1-100)")
+if(NOT SMC_LED_BRIGHTNESS MATCHES "^[0-9]+$" OR SMC_LED_BRIGHTNESS LESS 1 OR SMC_LED_BRIGHTNESS GREATER 100)
+  message(FATAL_ERROR "SMC_LED_BRIGHTNESS must be 1-100, got '${SMC_LED_BRIGHTNESS}'")
+endif()
+
+# Red LED breathes (1 s pulse) while on instead of staying solid:
+# -DSMC_LED_RED_BREATHE=ON
+option(SMC_LED_RED_BREATHE "Red LED breathes while on" OFF)
+
 # Add executable. Default name is the project name, version 0.1
 add_executable(OG_SMC utils.cpp
                       debug.cpp
@@ -73,7 +84,9 @@ add_executable(OG_SMC utils.cpp
 target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
                                           SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
                                           SMC_AV_PACK_OVERRIDE=$<BOOL:${SMC_AV_PACK_OVERRIDE}>
-                                          SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE})
+                                          SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
+                                          SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
+                                          SMC_LED_RED_BREATHE=$<BOOL:${SMC_LED_RED_BREATHE}>)
 
 pico_set_program_name(OG_SMC "OG_SMC")
 pico_set_program_version(OG_SMC "0.1")

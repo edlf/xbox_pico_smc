@@ -5,6 +5,16 @@
 #include <cstdint>
 #include <string>
 
+// Set by CMake (option SMC_LED_BRIGHTNESS): front panel LED brightness in percent
+#ifndef SMC_LED_BRIGHTNESS
+#define SMC_LED_BRIGHTNESS 100
+#endif
+
+// Set by CMake (option SMC_LED_RED_BREATHE): red LED breathes while on
+#ifndef SMC_LED_RED_BREATHE
+#define SMC_LED_RED_BREATHE 0
+#endif
+
 namespace hal {
 void init();
 
