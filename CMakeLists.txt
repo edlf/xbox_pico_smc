@@ -42,6 +42,16 @@ option(SMC_DVD_SUPPORT "Support a DVD drive (tray, eject)" ON)
 # when the RAM test or the challenge fails. -DSMC_BOOT_CHALLENGE=ON
 option(SMC_BOOT_CHALLENGE "Reset the Xbox when the boot challenge fails" OFF)
 
+# Report a fixed AV pack instead of reading the AV connector:
+# -DSMC_AV_PACK_OVERRIDE=ON [-DSMC_AV_PACK_MODE=n]. Codes (SMBus 0x04): 0 SCART,
+# 1 High Definition AV Pack, 2 VGA, 3 RF, 4 Advanced AV (S-Video), 6 Standard AV
+option(SMC_AV_PACK_OVERRIDE "Report SMC_AV_PACK_MODE instead of the detected AV pack" OFF)
+set(SMC_AV_PACK_MODE 1 CACHE STRING "AV pack code reported when overridden (1 = High Definition AV Pack)")
+set_property(CACHE SMC_AV_PACK_MODE PROPERTY STRINGS 0 1 2 3 4 5 6)
+if(NOT SMC_AV_PACK_MODE MATCHES "^[0-6]$")
+  message(FATAL_ERROR "SMC_AV_PACK_MODE must be 0-6, got '${SMC_AV_PACK_MODE}'")
+endif()
+
 # Add executable. Default name is the project name, version 0.1
 add_executable(OG_SMC utils.cpp
                       debug.cpp
@@ -61,7 +71,9 @@ add_executable(OG_SMC utils.cpp
                       smc_video.cpp)
 
 target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
-                                          SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>)
+                                          SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
+                                          SMC_AV_PACK_OVERRIDE=$<BOOL:${SMC_AV_PACK_OVERRIDE}>
+                                          SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE})
 
 pico_set_program_name(OG_SMC "OG_SMC")
 pico_set_program_version(OG_SMC "0.1")

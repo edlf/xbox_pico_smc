@@ -24,14 +24,19 @@ enum class video_state {
   special_done       // 7
 };
 
-bool override = false;
-uint8_t override_mode = 0b00000010;
+// Fixed AV pack from CMake (SMC_AV_PACK_OVERRIDE), as mode pins: code << 1
+constexpr bool override = SMC_AV_PACK_OVERRIDE;
+constexpr uint8_t override_mode = (SMC_AV_PACK_MODE & 0x07) << 1;
 video_state state;
 uint8_t vmode_raw = 0;
 uint8_t vmode_prev = 0;
+bool mode_printed = false; // Cable printed since power-up
+uint8_t settle_ticks = 0;  // Let the AV pack power up before trusting an unchanged mode
 
 void init() {
   state = video_state::monitor;
+  mode_printed = false;
+  settle_ticks = 10;
   vmode_raw = 0;
   vmode_prev = 0;
 }
@@ -40,9 +45,17 @@ static uint8_t readMode() {
   return override ? override_mode : hal::get_video_mode();
 }
 
+// The AV pack's ID pins are only meaningful while the Xbox is on
+static void printModeIfPowered(uint8_t mode) {
+  if (hal::get_power_ok()) {
+    printMode(mode);
+    mode_printed = true;
+  }
+}
+
 static void setMode(uint8_t mode) {
   if (mode != sensors.vmode) {
-    printMode(mode);
+    printModeIfPowered(mode);
   }
   sensors.vmode = mode;
 }
@@ -55,6 +68,10 @@ void update() {
       state = video_state::cable_removed;
     } else if (vmode_raw != sensors.vmode) {
       state = video_state::changed;
+    } else if (settle_ticks != 0) {
+      settle_ticks--;
+    } else if (!mode_printed) {
+      printModeIfPowered(vmode_raw); // Unchanged since standby, print it once
     }
     break;
 
@@ -121,8 +138,6 @@ void update() {
 }
 
 void printMode(const uint8_t vm) {
-  // TODO this is only valid if xbox in on
-
   std::string message = "VIDEO: AV Cable [";
   bool recognized_cable = true;
 
