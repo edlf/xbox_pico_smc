@@ -6,6 +6,7 @@
 
 #include "smc.hpp"
 #include "debug.hpp"
+#include "web.hpp"
 
 // Set by CMake: the PICO_BOARD this was built for
 #ifndef SMC_BOARD
@@ -22,7 +23,8 @@ int main() {
                        " SMC_AV_PACK_OVERRIDE=" + (SMC_AV_PACK_OVERRIDE ? "ON" : "OFF") +
                        " SMC_AV_PACK_MODE=" + std::to_string(SMC_AV_PACK_MODE) +
                        " SMC_LED_BRIGHTNESS=" + std::to_string(SMC_LED_BRIGHTNESS) +
-                       " SMC_LED_RED_BREATHE=" + (SMC_LED_RED_BREATHE ? "ON" : "OFF"));
+                       " SMC_LED_RED_BREATHE=" + (SMC_LED_RED_BREATHE ? "ON" : "OFF") +
+                       " SMC_WEB_INTERFACE=" + (SMC_WEB_INTERFACE ? "ON" : "OFF"));
   if (watchdog_caused_reboot()) {
     debug::print_critical("Rebooted by watchdog");
   }

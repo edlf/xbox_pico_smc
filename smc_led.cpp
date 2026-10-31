@@ -64,6 +64,14 @@ void setRedPhases(const uint8_t phase) {
     red_phases_manual = phase;
 }
 
+uint8_t getGreenPhases() {
+    return green_phases_manual;
+}
+
+uint8_t getRedPhases() {
+    return red_phases_manual;
+}
+
 void setManualControl(const bool i) {
     manual_control = i;
 }

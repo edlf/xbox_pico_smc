@@ -71,6 +71,52 @@ endif()
 # -DSMC_LED_RED_BREATHE=ON
 option(SMC_LED_RED_BREATHE "Red LED breathes while on" OFF)
 
+# Wi-Fi access point with a status and control page, W boards only:
+# -DSMC_WEB_INTERFACE=AUTO (default: on for boards with Wi-Fi), ON or OFF.
+# [-DSMC_WIFI_SSID=... -DSMC_WIFI_PASSWORD=...] Connect to the network and
+# open http://192.168.4.1
+set(SMC_WEB_INTERFACE AUTO CACHE STRING "Wi-Fi access point with a status and control page: AUTO (on for boards with Wi-Fi), ON or OFF")
+set_property(CACHE SMC_WEB_INTERFACE PROPERTY STRINGS AUTO ON OFF)
+# Build folders from before AUTO existed hold the old plain ON/OFF default
+get_property(SMC_WEB_INTERFACE_TYPE CACHE SMC_WEB_INTERFACE PROPERTY TYPE)
+if(SMC_WEB_INTERFACE_TYPE STREQUAL "BOOL")
+  set_property(CACHE SMC_WEB_INTERFACE PROPERTY TYPE STRING)
+  set_property(CACHE SMC_WEB_INTERFACE PROPERTY VALUE AUTO)
+endif()
+string(TOUPPER "${SMC_WEB_INTERFACE}" SMC_WEB_INTERFACE_SETTING)
+if(SMC_WEB_INTERFACE_SETTING STREQUAL "AUTO")
+  if(PICO_CYW43_SUPPORTED)
+    set(SMC_WEB_ENABLED ON)
+  else()
+    set(SMC_WEB_ENABLED OFF)
+  endif()
+elseif(SMC_WEB_INTERFACE_SETTING MATCHES "^(ON|YES|TRUE|1)$")
+  set(SMC_WEB_ENABLED ON)
+elseif(SMC_WEB_INTERFACE_SETTING MATCHES "^(OFF|NO|FALSE|0)$")
+  set(SMC_WEB_ENABLED OFF)
+else()
+  message(FATAL_ERROR "SMC_WEB_INTERFACE must be AUTO, ON or OFF, got '${SMC_WEB_INTERFACE}'")
+endif()
+message(STATUS "Web interface (SMC_WEB_INTERFACE=${SMC_WEB_INTERFACE}): ${SMC_WEB_ENABLED}")
+set(SMC_WIFI_SSID "OG-SMC" CACHE STRING "Access point name")
+set(SMC_WIFI_PASSWORD "" CACHE STRING "Access point WPA2 password (8-63 characters), empty: made from the board's unique ID and shown in the boot log")
+# Build folders from before the per-board password still hold the old fixed
+# default, which nobody chose: drop it
+if(SMC_WIFI_PASSWORD STREQUAL "og-smc-xbox")
+  set_property(CACHE SMC_WIFI_PASSWORD PROPERTY VALUE "")
+  set(SMC_WIFI_PASSWORD "")
+  message(STATUS "SMC_WIFI_PASSWORD was the old default, now made from the board ID")
+endif()
+if(SMC_WEB_ENABLED)
+  if(NOT PICO_CYW43_SUPPORTED)
+    message(FATAL_ERROR "SMC_WEB_INTERFACE needs a board with Wi-Fi (pico_w, pico2_w), PICO_BOARD is '${PICO_BOARD}'")
+  endif()
+  string(LENGTH "${SMC_WIFI_PASSWORD}" SMC_WIFI_PASSWORD_LENGTH)
+  if(SMC_WIFI_PASSWORD_LENGTH GREATER 0 AND (SMC_WIFI_PASSWORD_LENGTH LESS 8 OR SMC_WIFI_PASSWORD_LENGTH GREATER 63))
+    message(FATAL_ERROR "SMC_WIFI_PASSWORD must be 8-63 characters, or empty for one made from the board's unique ID")
+  endif()
+endif()
+
 # Add executable. Default name is the project name, version 0.1
 add_executable(OG_SMC utils.cpp
                       debug.cpp
@@ -95,6 +141,7 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
                                           SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
                                           SMC_LED_RED_BREATHE=$<BOOL:${SMC_LED_RED_BREATHE}>
+                                          SMC_WEB_INTERFACE=$<BOOL:${SMC_WEB_ENABLED}>
                                           SMC_BOARD="${PICO_BOARD}")
 
 pico_set_program_name(OG_SMC "OG_SMC")
@@ -120,5 +167,12 @@ target_link_libraries(OG_SMC
         hardware_watchdog
         pico_i2c_slave
         )
+
+if(SMC_WEB_ENABLED)
+  target_sources(OG_SMC PRIVATE web.cpp dhcp_server.cpp)
+  target_compile_definitions(OG_SMC PRIVATE SMC_WIFI_SSID="${SMC_WIFI_SSID}"
+                                            SMC_WIFI_PASSWORD="${SMC_WIFI_PASSWORD}")
+  target_link_libraries(OG_SMC pico_cyw43_arch_lwip_poll pico_multicore pico_unique_id)
+endif()
 
 pico_add_extra_outputs(OG_SMC)

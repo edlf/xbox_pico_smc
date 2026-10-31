@@ -59,7 +59,7 @@ uint8_t update() {
 
   case power_standby_state::turn_on_power_no_av: // State 3
     hal::turn_on_psu();
-    hal::set_fan_speed(0); // Pin high, like the PIC on power-up
+    hal::set_fan_speed(hal::FAN_MIN_SPEED); // The PIC holds the pin high (speed 0)
     power_timeout3 = 50;
     clearStatusBit(power_change_requested);
     state = power_standby_state::powered_up_wait_power_ok;
@@ -98,7 +98,7 @@ uint8_t update() {
   case power_standby_state::turn_on_power_alternative: // State 7
     flags.bitfield_DATA_73 |= 0x02;                    // Set eject flag
     hal::turn_on_psu();
-    hal::set_fan_speed(0); // Pin high, like the PIC on power-up
+    hal::set_fan_speed(hal::FAN_MIN_SPEED); // The PIC holds the pin high (speed 0)
     power_timeout3 = 0x32; // 50 cycles
     state = power_standby_state::powered_up_wait_power_ok_alternative;
     break;

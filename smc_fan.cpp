@@ -6,9 +6,9 @@
 namespace SMC {
 namespace Fan {
 
-// Same as the PIC's fan/temperature control (0x36F). Speeds are 0-50 and
-// every count is in 20 ms ticks.
-constexpr uint8_t min_fan_speed = 10;
+// Same as the PIC's fan/temperature control (0x36F). Speeds are 10-50 (the PIC
+// also has 0, fan stopped) and every count is in 20 ms ticks.
+constexpr uint8_t min_fan_speed = hal::FAN_MIN_SPEED;
 constexpr uint8_t max_fan_speed = hal::FAN_MAX_SPEED;
 constexpr uint8_t start_fan_speed = 30;
 
@@ -67,8 +67,12 @@ void init() {
 }
 
 static void setSpeed(uint8_t speed) {
-  // Like the PIC's set_fan_speed (0xE85), anything above 50 becomes 50
-  if (speed > max_fan_speed) {
+  // Like the PIC's set_fan_speed (0xE85) anything above 50 becomes 50, and
+  // unlike it the fan is never stopped: anything below 10 becomes 10. This
+  // covers the custom speed from SMBus 0x06 and the web interface too.
+  if (speed < min_fan_speed) {
+    speed = min_fan_speed;
+  } else if (speed > max_fan_speed) {
     speed = max_fan_speed;
   }
   fan_speed = speed;
@@ -77,7 +81,7 @@ static void setSpeed(uint8_t speed) {
 
 // Called by the main loop once the Xbox is off (0x279)
 void powerOff() {
-  setSpeed(0);
+  fan_speed = 0; // No power to the fan
   hal::fan_pin_low();
 }
 
@@ -120,7 +124,7 @@ static void predictCpuTemperature() {
 void update_fan_temp() {
   switch (state) {
   case fan_control_state::initial:
-    setSpeed(0);
+    setSpeed(min_fan_speed); // 0 on the PIC
     clearStatusBit(overheated);
     if (!checkStatusBit(prepare_for_shutdown)) {
       state = fan_control_state::start;

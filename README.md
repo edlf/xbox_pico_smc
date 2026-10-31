@@ -12,3 +12,8 @@ Very very experimental, currently it boots on 1.0 boards.
 - Fan control
 - SMC boot challenge/override
 - Logging via uart
+- Experimental WiFi control, requires external power to the pico (3.3v standby rail is not strong enough)
+
+## Notes
+- *Heavily* based on the work Prehistoricman did. [Xbox_SMC](https://github.com/Prehistoricman/Xbox_SMC)
+- Some AI assistance was used (claude), mostly for the web interface.

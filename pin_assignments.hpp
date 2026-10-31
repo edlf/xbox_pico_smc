@@ -35,8 +35,6 @@ constexpr uint8_t DVD_ACTIVE   = 26;
 #ifdef PICO_DEFAULT_LED_PIN
 constexpr uint8_t PICO_LED = PICO_DEFAULT_LED_PIN;
 #endif
-// RGB Led
-constexpr uint8_t YD_BOARD_RGB = 23;
 }  // namespace pins
 
 #define I2C_PORT i2c0

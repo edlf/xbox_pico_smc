@@ -52,8 +52,9 @@ bool get_power_ok();
 uint8_t get_video_mode();
 
 // FAN
+constexpr uint8_t FAN_MIN_SPEED = 10; // The fan is never stopped while the Xbox is on
 constexpr uint8_t FAN_MAX_SPEED = 50;
-void set_fan_speed(uint8_t speed); // 0-50, same scale as SMBus 0x10
+void set_fan_speed(uint8_t speed); // 10-50, same scale as SMBus 0x10
 void fan_pin_low();                // Pin state while the Xbox is off
 // SMBus master transfer (write tx, then read rx after a repeated START),
 // bit-banged on the SMBus slave's pins like the PIC

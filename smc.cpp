@@ -9,6 +9,7 @@
 #include "pico/stdlib.h"
 #include "hal.hpp"
 #include "pin_assignments.hpp"
+#include "web.hpp"
 
 namespace SMC {
 
@@ -165,11 +166,17 @@ void main_loop() {
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
 
   hal::enableWatchdog();
+#if SMC_WEB_INTERFACE
+  Web::start();
+#endif
   hal::timer1_init(hal::TICK_US);
 
   PowerStandby::setPowerTimeout3(1);
   do {
     BootChallenge::seedStandby();
+#if SMC_WEB_INTERFACE
+    Web::service();
+#endif
 
     // Power cycle: press the power button for the host
     if (SMI::takePowerOnRequest()) {
@@ -181,6 +188,9 @@ void main_loop() {
       BootChallenge::seedPowerUp();
 
       while (true) {
+#if SMC_WEB_INTERFACE
+        Web::service();
+#endif
         PLL_Reset::update();
         BootChallenge::update();
         Dvd::updateDvdTray();

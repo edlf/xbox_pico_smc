@@ -27,6 +27,8 @@ void clearPhases();
 // Phases shown while LEDs are under manual control (SMBus 0x08, boot error codes)
 void setGreenPhases(const uint8_t);
 void setRedPhases(const uint8_t);
+uint8_t getGreenPhases();
+uint8_t getRedPhases();
 void setManualControl(const bool);
 void setOverheat(const bool);
 void setAvMissing(const bool);

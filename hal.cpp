@@ -253,24 +253,22 @@ bool eject_button_pressed() {
 }
 
 // Fan PWM, same output as the PIC's CCP1 (0xE85): ~9.8 kHz, 10-bit, and
-// inverted. Speed 0 holds the pin high, 50 holds it low, and 1-49 keep it
-// high for (50 - speed)% of each period.
+// inverted: 50 holds the pin low, and lower speeds keep it high for
+// (50 - speed)% of each period. The PIC also has speed 0 (pin held high, fan
+// stopped); here the speed never goes below FAN_MIN_SPEED.
 constexpr uint16_t FAN_PWM_WRAP = 1023;
 constexpr uint32_t FAN_PWM_HZ = 9766; // PIC: 10 MHz / 4 / 256 (PR2 = 0xFF)
 
 static uint8_t fan_speed_set = 0xFF;
 
 void set_fan_speed(uint8_t speed) {
-  if (speed > FAN_MAX_SPEED) {
+  if (speed < FAN_MIN_SPEED) {
+    speed = FAN_MIN_SPEED;
+  } else if (speed > FAN_MAX_SPEED) {
     speed = FAN_MAX_SPEED;
   }
 
-  uint16_t level;
-  if (speed == 0) {
-    level = FAN_PWM_WRAP + 1; // Always high
-  } else {
-    level = (uint32_t)(FAN_PWM_WRAP + 1) * (FAN_MAX_SPEED - speed) / (2 * FAN_MAX_SPEED);
-  }
+  const uint16_t level = (uint32_t)(FAN_PWM_WRAP + 1) * (FAN_MAX_SPEED - speed) / (2 * FAN_MAX_SPEED);
   pwm_set_chan_level(pwm_slice, pwm_channel, level);
 
   if (speed != fan_speed_set) {
