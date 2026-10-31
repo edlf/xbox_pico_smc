@@ -5,6 +5,7 @@
 
 #include <vector>
 #include <string>
+#include <cstdio>
 
 namespace SMC {
 namespace BootChallenge {
@@ -86,6 +87,16 @@ void compute() {
   }
 }
 
+static std::string hex(uint8_t value) {
+  char text[5];
+  snprintf(text, sizeof(text), "0x%02X", value);
+  return text;
+}
+
+static std::string ramTestResult() {
+  return "result " + hex(ram_test_response0) + " type " + hex(ram_test_response1);
+}
+
 static void clearRamTestResult() {
   flags.bitfield_DATA_71 &= ~0x10;
   flags.bitfield_DATA_71 &= ~0x20;
@@ -153,6 +164,9 @@ static bool powerCycleWithRtcDump() {
   return true;
 }
 
+// Without SMC_BOOT_CHALLENGE the state machine still runs to log the results,
+// but a failure never resets the Xbox or locks it up: it carries on with the
+// challenge, then waits in challenge_passed for the next reset
 void update() {
   switch (state) {
   case boot_challenge_state::initial:
@@ -170,19 +184,30 @@ void update() {
         state = boot_challenge_state::ram_test_failed;
       }
     } else if (--boot_response_timeout == 0) {
+      debug::print_warn("BOOT: No RAM test result");
+#if SMC_BOOT_CHALLENGE
       state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
+#else
+      state = boot_challenge_state::challenge_wait_for_reply;
+#endif
     }
     break;
 
   case boot_challenge_state::ram_test_ok:
+    debug::print_message("BOOT: RAM test passed, " + ramTestResult());
     state = boot_challenge_state::challenge_wait_for_reply;
     break;
 
   case boot_challenge_state::ram_test_failed:
+    debug::print_warn("BOOT: RAM test failed, " + ramTestResult());
+#if SMC_BOOT_CHALLENGE
     Led::setRedPhases(0x0F);
     Led::setGreenPhases(0x05);
     bios_response_byte0 = ERROR_RAM_TEST_FAILED;
     state = boot_challenge_state::boot_failed;
+#else
+    state = boot_challenge_state::challenge_wait_for_reply;
+#endif
     break;
 
   case boot_challenge_state::challenge_failed_or_no_ram_test_result:
@@ -238,16 +263,26 @@ void update() {
     if (flags.bitfield_DATA_73 & 0x10) {
       flags.bitfield_DATA_73 &= ~0x10;
       if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
+        debug::print_message("BOOT: Challenge passed");
         state = boot_challenge_state::challenge_passed;
         break;
       }
+      debug::print_warn("BOOT: Challenge failed, expected " + hex(challenge.expected0) + " " +
+                        hex(challenge.expected1) + " got " + hex(challenge.response0) + " " +
+                        hex(challenge.response1));
     } else if (--boot_response_timeout != 0) {
       break;
+    } else {
+      debug::print_warn("BOOT: No challenge answer");
     }
 
+#if SMC_BOOT_CHALLENGE
     /* Wrong answer or timeout: go straight to a power cycle */
     failure_count = 4;
     state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
+#else
+    state = boot_challenge_state::challenge_passed;
+#endif
     break;
 
   case boot_challenge_state::challenge_passed:

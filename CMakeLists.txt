@@ -38,6 +38,10 @@ pico_sdk_init()
 # Build without DVD drive support for drive-less systems: -DSMC_DVD_SUPPORT=OFF
 option(SMC_DVD_SUPPORT "Support a DVD drive (tray, eject)" ON)
 
+# Enforce the boot challenge like the original: reset, power cycle and FRAG
+# when the RAM test or the challenge fails. -DSMC_BOOT_CHALLENGE=ON
+option(SMC_BOOT_CHALLENGE "Reset the Xbox when the boot challenge fails" OFF)
+
 # Add executable. Default name is the project name, version 0.1
 add_executable(OG_SMC utils.cpp
                       debug.cpp
@@ -56,7 +60,8 @@ add_executable(OG_SMC utils.cpp
                       smc_power_standby.cpp
                       smc_video.cpp)
 
-target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>)
+target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
+                                          SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>)
 
 pico_set_program_name(OG_SMC "OG_SMC")
 pico_set_program_version(OG_SMC "0.1")
