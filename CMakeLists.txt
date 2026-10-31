@@ -23,7 +23,15 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
-set(PICO_BOARD pico CACHE STRING "Board type")
+set(PICO_BOARD pico2_w CACHE STRING "Board type")
+
+# Supported boards: pico, pico_w, pico2, pico2_w. Pick one with -DPICO_BOARD=...
+# in a fresh build directory (pico2/pico2_w build for the RP2350). On the W
+# boards the onboard LED is on the wireless chip and isn't used.
+set(SMC_SUPPORTED_BOARDS pico pico_w pico2 pico2_w)
+if(NOT PICO_BOARD IN_LIST SMC_SUPPORTED_BOARDS)
+  message(WARNING "PICO_BOARD '${PICO_BOARD}' is untested, supported: ${SMC_SUPPORTED_BOARDS}")
+endif()
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -86,7 +94,8 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_AV_PACK_OVERRIDE=$<BOOL:${SMC_AV_PACK_OVERRIDE}>
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
                                           SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
-                                          SMC_LED_RED_BREATHE=$<BOOL:${SMC_LED_RED_BREATHE}>)
+                                          SMC_LED_RED_BREATHE=$<BOOL:${SMC_LED_RED_BREATHE}>
+                                          SMC_BOARD="${PICO_BOARD}")
 
 pico_set_program_name(OG_SMC "OG_SMC")
 pico_set_program_version(OG_SMC "0.1")

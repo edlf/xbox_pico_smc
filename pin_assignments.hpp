@@ -30,8 +30,11 @@ constexpr uint8_t TRAY_STATE_1 = 21;
 constexpr uint8_t TRAY_STATE_2 = 22;
 constexpr uint8_t DVD_ACTIVE   = 26;
 
-// Pico Internal
-constexpr uint8_t RP2040_LED = 25;
+// Pico onboard LED: a GPIO on the Pico and Pico 2. On the W boards it's on the
+// wireless chip (and GPIO23-25 belong to that chip), so it isn't used there.
+#ifdef PICO_DEFAULT_LED_PIN
+constexpr uint8_t PICO_LED = PICO_DEFAULT_LED_PIN;
+#endif
 // RGB Led
 constexpr uint8_t YD_BOARD_RGB = 23;
 }  // namespace pins

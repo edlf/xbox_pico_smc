@@ -102,11 +102,15 @@ void led_red_off() {
 }
 
 void pico_led_on() {
-  gpio_put(pins::RP2040_LED, 1);
+#ifdef PICO_DEFAULT_LED_PIN
+  gpio_put(pins::PICO_LED, 1);
+#endif
 }
 
 void pico_led_off() {
-  gpio_put(pins::RP2040_LED, 0);
+#ifdef PICO_DEFAULT_LED_PIN
+  gpio_put(pins::PICO_LED, 0);
+#endif
 }
 
 bool state_pll = false;
@@ -222,14 +226,30 @@ uint8_t get_tray_state() {
   return tray_state;
 }
 
+// RP2350-E9: while a pad's input buffer is on it leaks current that pulls a
+// weakly driven pin up, and the front panel buttons only pull their line down
+// weakly (a press measured 1.6 V). As the erratum suggests, the buffer is only
+// switched on for the read.
+static bool readButton(const uint8_t pin) {
+#if PICO_RP2350
+  gpio_set_input_enabled(pin, true);
+  busy_wait_us(10);
+  const bool level = gpio_get(pin);
+  gpio_set_input_enabled(pin, false);
+  return level;
+#else
+  return gpio_get(pin);
+#endif
+}
+
 bool power_button_pressed() {
   // High is not pressed
-  return !gpio_get(pins::SW_POWER);
+  return !readButton(pins::SW_POWER);
 }
 
 bool eject_button_pressed() {
   // High is not pressed
-  return !gpio_get(pins::SW_EJECT);
+  return !readButton(pins::SW_EJECT);
 }
 
 // Fan PWM, same output as the PIC's CCP1 (0xE85): ~9.8 kHz, 10-bit, and
@@ -472,6 +492,11 @@ void init() {
   gpio_set_function(pins::SW_EJECT, GPIO_FUNC_SIO);
   gpio_set_dir(pins::SW_EJECT, GPIO_IN);
   gpio_pull_up(pins::SW_EJECT);
+#if PICO_RP2350
+  // Input buffers only on while reading, see readButton()
+  gpio_set_input_enabled(pins::SW_POWER, false);
+  gpio_set_input_enabled(pins::SW_EJECT, false);
+#endif
 
   gpio_set_function(pins::SYSTEM_RESET, GPIO_FUNC_SIO);
   gpio_set_dir(pins::SYSTEM_RESET, GPIO_OUT);
@@ -529,8 +554,10 @@ void init() {
   gpio_set_dir(pins::DVD_ACTIVE, GPIO_IN);
   gpio_disable_pulls(pins::DVD_ACTIVE);
 
-  gpio_init(pins::RP2040_LED);
-  gpio_set_dir(pins::RP2040_LED, GPIO_OUT);
+#ifdef PICO_DEFAULT_LED_PIN
+  gpio_init(pins::PICO_LED);
+  gpio_set_dir(pins::PICO_LED, GPIO_OUT);
+#endif
 
   gpio_set_function(pins::I2C_SDA, GPIO_FUNC_I2C);
   gpio_set_function(pins::I2C_SCL, GPIO_FUNC_I2C);
