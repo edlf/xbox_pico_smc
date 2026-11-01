@@ -166,7 +166,6 @@ set(SMC_WIFI_PASSWORD "" CACHE STRING "Access point WPA2 password (8-63 characte
 if(SMC_WIFI_PASSWORD STREQUAL "og-smc-xbox")
   set_property(CACHE SMC_WIFI_PASSWORD PROPERTY VALUE "")
   set(SMC_WIFI_PASSWORD "")
-  message(STATUS "SMC_WIFI_PASSWORD was the old default, now made from the board ID")
 endif()
 if(SMC_WEB_ENABLED)
   if(NOT PICO_CYW43_SUPPORTED)

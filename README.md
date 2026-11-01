@@ -33,3 +33,4 @@ Very very experimental, currently it boots on 1.0 boards (although the fan curve
 ## Documentation
 - [SMBUS commands](/docs/SMBUS.md)
 - [State Machines](/docs/StateMachines.md)
+- [Wiring](/docs/Wiring.md)
