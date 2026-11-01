@@ -191,18 +191,36 @@ bool get_power_ok() {
   return gpio_get(pins::POWER_OK);
 }
 
+// RP2350-E9: while a pad's input buffer is on it leaks current that pulls a
+// weakly driven pin up to about 2.2 V. The front panel buttons only pull their
+// line down weakly (a press measured 1.6 V), and AV mode 1 is pulled up to
+// POWON, so in standby only that unpowered rail holds it low and it read high
+// (no cable, which powers the Xbox on). As the erratum suggests, the buffer is
+// only switched on for the read.
+static bool readWeakInput(const uint8_t pin) {
+#if PICO_RP2350
+  gpio_set_input_enabled(pin, true);
+  busy_wait_us(10);
+  const bool level = gpio_get(pin);
+  gpio_set_input_enabled(pin, false);
+  return level;
+#else
+  return gpio_get(pin);
+#endif
+}
+
 // Gets video cable type
 uint8_t get_video_mode() {
   uint8_t video_mode = 0;
 
   // Video mode is set as 0b0000_1110
-  if (gpio_get(pins::VIDEO_MODE_0)) {
+  if (readWeakInput(pins::VIDEO_MODE_0)) {
     video_mode = video_mode | (1 << 1);
   }
-  if (gpio_get(pins::VIDEO_MODE_1)) {
+  if (readWeakInput(pins::VIDEO_MODE_1)) {
     video_mode = video_mode | (1 << 2);
   }
-  if (gpio_get(pins::VIDEO_MODE_2)) {
+  if (readWeakInput(pins::VIDEO_MODE_2)) {
     video_mode = video_mode | (1 << 3);
   }
 
@@ -225,30 +243,14 @@ uint8_t get_tray_state() {
   return tray_state;
 }
 
-// RP2350-E9: while a pad's input buffer is on it leaks current that pulls a
-// weakly driven pin up, and the front panel buttons only pull their line down
-// weakly (a press measured 1.6 V). As the erratum suggests, the buffer is only
-// switched on for the read.
-static bool readButton(const uint8_t pin) {
-#if PICO_RP2350
-  gpio_set_input_enabled(pin, true);
-  busy_wait_us(10);
-  const bool level = gpio_get(pin);
-  gpio_set_input_enabled(pin, false);
-  return level;
-#else
-  return gpio_get(pin);
-#endif
-}
-
 bool power_button_pressed() {
   // High is not pressed
-  return !readButton(pins::SW_POWER);
+  return !readWeakInput(pins::SW_POWER);
 }
 
 bool eject_button_pressed() {
   // High is not pressed
-  return !readButton(pins::SW_EJECT);
+  return !readWeakInput(pins::SW_EJECT);
 }
 
 // Fan PWM, same output as the PIC's CCP1 (0xE85): ~9.8 kHz, 10-bit, and
@@ -490,7 +492,7 @@ void init() {
   gpio_set_dir(pins::SW_EJECT, GPIO_IN);
   gpio_pull_up(pins::SW_EJECT);
 #if PICO_RP2350
-  // Input buffers only on while reading, see readButton()
+  // Input buffers only on while reading, see readWeakInput()
   gpio_set_input_enabled(pins::SW_POWER, false);
   gpio_set_input_enabled(pins::SW_EJECT, false);
 #endif
@@ -536,6 +538,12 @@ void init() {
   gpio_set_function(pins::VIDEO_MODE_2, GPIO_FUNC_SIO);
   gpio_set_dir(pins::VIDEO_MODE_2, GPIO_IN);
   gpio_disable_pulls(pins::VIDEO_MODE_2);
+#if PICO_RP2350
+  // Input buffers only on while reading, see readWeakInput()
+  gpio_set_input_enabled(pins::VIDEO_MODE_0, false);
+  gpio_set_input_enabled(pins::VIDEO_MODE_1, false);
+  gpio_set_input_enabled(pins::VIDEO_MODE_2, false);
+#endif
 
   gpio_set_function(pins::TRAY_STATE_0, GPIO_FUNC_SIO);
   gpio_set_dir(pins::TRAY_STATE_0, GPIO_IN);

@@ -121,8 +121,9 @@ P2L clamps values above 50 to 50.
 ### 0x07 LED override (write)
 
 Bit 0 = 1: show the pattern from 0x08. Bit 0 = 0: back to the automatic
-patterns. An overheat always shows its own pattern. On P01 the "no AV cable"
-pattern and the off state also win over the override; on P11 they don't.
+patterns. An overheat and the "no AV cable" pattern always win over the
+override (the original P11 lets the override hide the AV one). On P01 the off
+state also wins; on P11 it doesn't.
 Cleared by every reset.
 
 ### 0x08 LED pattern (write)

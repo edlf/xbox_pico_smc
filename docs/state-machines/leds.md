@@ -9,8 +9,8 @@ shown bit 3 first. Both LEDs on make orange.
 stateDiagram-v2
     [*] --> initial
     initial --> overheat: overheated
-    initial --> manual_control: LED override (P11 checks this second)
     initial --> quick_green_orange: no AV cable
+    initial --> manual_control: LED override (P11 checks this third)
     initial --> off: system not running
     initial --> manual_control: LED override (P01 checks this fourth)
     initial --> quick_green_blink: tray moving
@@ -40,7 +40,7 @@ stateDiagram-v2
 
 | # | State | What it does |
 |---|-------|--------------|
-| 0 | `initial` | Picks the pattern, highest priority first |
+| 0 | `initial` | Picks the pattern, highest priority first. A missing AV cable beats the LED override on every firmware; the original P11 checks the override first, so a dashboard's LED colours hid it |
 | 6 | `tick_update` | Holds the current phase for 6 ticks |
 | 7 | `set_gpios` | Sets both LEDs for the next phase |
 | 8 | `resetPhaseCounter` | Starts again at phase 3 |

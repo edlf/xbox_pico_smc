@@ -3,6 +3,8 @@
 #include "debug.hpp"
 #include "hal.hpp"
 
+#include <cstdio>
+
 namespace SMC {
 namespace Video {
 
@@ -41,7 +43,18 @@ void init() {
 }
 
 static uint8_t readMode() {
-  return override ? override_mode : hal::get_video_mode();
+  const uint8_t mode = override ? override_mode : hal::get_video_mode();
+
+  // Raw pin changes, to see what the AV port reads when a cable is swapped
+  static uint8_t last_logged = 0xFF;
+  if (mode != last_logged && debug::debug_enabled()) {
+    char msg[48];
+    snprintf(msg, sizeof(msg), "VIDEO: Pins 0x%02X (state %u)", mode, static_cast<unsigned>(state));
+    debug::print_debug(msg);
+  }
+  last_logged = mode;
+
+  return mode;
 }
 
 // The AV pack's ID pins are only meaningful while the Xbox is on
@@ -109,6 +122,7 @@ void update() {
     flags.av_cable_missing = true; // No AV cable (LEDs, audio clamp)
     flags.av_unplugged_event = true; // SMI to the OS
     setMode(vmode_raw);
+    debug::print_message("VIDEO: Unplugged, SMI queued, audio clamped, LEDs orange/green");
     state = video_state::no_cable;
     break;
 
@@ -118,6 +132,7 @@ void update() {
       state = video_state::special_debounce;
     } else if (vmode_raw != no_cable) {
       /* Cable is back */
+      debug::print_message("VIDEO: Cable back, audio unclamped");
       flags.av_cable_missing = false;
       flags.audio_unclamp_request = true; // Request unclamp
       state = video_state::monitor;

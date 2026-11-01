@@ -5,6 +5,7 @@
 #include "smc_pll_reset.hpp"
 #include "hal.hpp"
 
+#include <cstdio>
 #include <iterator>
 #include <string>
 
@@ -73,6 +74,9 @@ void printState() {
 // Latches the reason in both the SMBus-readable byte (6C) and the pending copy
 // (6D) that event_interrupt_handled uses to clear the source, then pulses SMI
 static void raiseInterrupt(uint8_t reason) {
+  char msg[32];
+  snprintf(msg, sizeof(msg), "SMI: Interrupt reason 0x%02X", reason);
+  debug::print_message(msg);
   setInterruptReason(reason);
   flags.pending_interrupt_reason |= reason;
   fireSystemInterrupt();
