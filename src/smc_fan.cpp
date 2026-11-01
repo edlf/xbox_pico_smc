@@ -12,38 +12,76 @@ constexpr uint8_t min_fan_speed = hal::FAN_MIN_SPEED;
 constexpr uint8_t max_fan_speed = hal::FAN_MAX_SPEED;
 constexpr uint8_t start_fan_speed = 30;
 
-// Thresholds in °C, hex as in the PIC
-constexpr uint8_t critical_cpu_temp = 0x58;      // 88: overheated
-constexpr uint8_t critical_board_temp = 0x4B;    // 75
-#if SMC_FIRMWARE_P11
-// P11 runs the fan faster: these three are 7 °C lower than P01
-constexpr uint8_t hot_cpu_temp = 0x43;           // 67: +3 speed
-constexpr uint8_t warm_predicted_temp = 0x43;    // 67: +1 speed
-constexpr uint8_t cool_predicted_temp = 0x42;    // 66: below and steady, maybe -1
-#else
-constexpr uint8_t hot_cpu_temp = 0x4A;           // 74: +3 speed
-constexpr uint8_t warm_predicted_temp = 0x4A;    // 74: +1 speed
-constexpr uint8_t cool_predicted_temp = 0x49;    // 73: below and steady, maybe -1
-#endif
-constexpr uint8_t hot_predicted_temp = 0x56;     // 86: +3 speed
-constexpr uint8_t warm_board_temp = 0x3C;        // 60: +1 speed
-constexpr uint8_t cool_board_temp = 0x39;        // 57
-constexpr uint8_t shutdown_cpu_temp = 0x61;      // 97: still overheated, give up
-constexpr uint8_t shutdown_board_temp = 0x54;    // 84
-
-#if SMC_FIRMWARE_P2L
-// P2L (0xECD) only uses the CPU temperature, all limits are "at least"
-constexpr uint8_t p2l_overheat_cpu_temp = 0x59;  // 89: overheated
-constexpr uint8_t p2l_hot_cpu_temp = 0x4E;       // 78: +3 speed
-constexpr uint8_t p2l_hot_predicted_temp = 0x57; // 87: +3 speed
-constexpr uint8_t p2l_warm_predicted_temp = 0x4E; // 78: +1 speed
-constexpr uint8_t p2l_hold_predicted_temp = 0x4C; // 76: hold, below and steady -1
-constexpr uint8_t p2l_shutdown_cpu_temp = 0x62;  // 98: still overheated, give up
-#endif
-
 // Faked readings when the sensor can't be read, forcing an overheat shutdown
 constexpr uint8_t failed_read_cpu_temp = 0x59;
 constexpr uint8_t failed_read_board_temp = 0x4C;
+
+// PIC (P01/P11) thresholds in °C, hex as in the PIC. Above ("hot", "warm",
+// "critical", "shutdown") or below ("cool") counts.
+struct temperature_thresholds {
+  uint8_t critical_cpu;      // Overheated
+  uint8_t critical_board;
+  uint8_t hot_cpu;           // +3 speed
+  uint8_t hot_predicted;     // +3 speed
+  uint8_t warm_predicted;    // +1 speed
+  uint8_t warm_board;        // +1 speed
+  uint8_t cool_predicted;    // Below and steady, maybe -1
+  uint8_t cool_board;
+  uint8_t shutdown_cpu;      // Still overheated after the cool-down, give up
+  uint8_t shutdown_board;
+};
+
+constexpr temperature_thresholds p01_thresholds = {
+  0x58, // critical_cpu    88
+  0x4B, // critical_board  75
+  0x4A, // hot_cpu         74
+  0x56, // hot_predicted   86
+  0x4A, // warm_predicted  74
+  0x3C, // warm_board      60
+  0x49, // cool_predicted  73
+  0x39, // cool_board      57
+  0x61, // shutdown_cpu    97
+  0x54, // shutdown_board  84
+};
+
+// P11 runs the fan faster: hot_cpu, warm_predicted and cool_predicted are
+// 7 °C lower than P01
+constexpr temperature_thresholds p11_thresholds = {
+  0x58, // critical_cpu    88
+  0x4B, // critical_board  75
+  0x43, // hot_cpu         67
+  0x56, // hot_predicted   86
+  0x43, // warm_predicted  67
+  0x3C, // warm_board      60
+  0x42, // cool_predicted  66
+  0x39, // cool_board      57
+  0x61, // shutdown_cpu    97
+  0x54, // shutdown_board  84
+};
+
+constexpr const temperature_thresholds& thresholds =
+    SMC_FIRMWARE_P11 ? p11_thresholds : p01_thresholds;
+
+#if SMC_FIRMWARE_P2L
+// P2L (0xECD) only uses the CPU temperature, all limits are "at least"
+struct p2l_temperature_thresholds {
+  uint8_t overheat_cpu;      // Overheated
+  uint8_t hot_cpu;           // +3 speed
+  uint8_t hot_predicted;     // +3 speed
+  uint8_t warm_predicted;    // +1 speed
+  uint8_t hold_predicted;    // Hold; below it and steady, -1
+  uint8_t shutdown_cpu;      // Still overheated after the cool-down, give up
+};
+
+constexpr p2l_temperature_thresholds p2l_thresholds = {
+  0x59, // overheat_cpu    89
+  0x4E, // hot_cpu         78
+  0x57, // hot_predicted   87
+  0x4E, // warm_predicted  78
+  0x4C, // hold_predicted  76
+  0x62, // shutdown_cpu    98
+};
+#endif
 
 #if SMC_FIRMWARE_P2L
 constexpr uint8_t sample_count = 128; // P2L (0x170E): average of 128 readings, one per tick
@@ -57,6 +95,7 @@ constexpr uint8_t wait_round_ticks = 0x32;
 constexpr uint8_t wait_rounds = 0x14;
 #endif
 constexpr uint8_t read_retries = 20;  // Ticks to retry a failed reading
+
 // I2C bus recovery before giving up on the sensor; DXF and P2L don't have it
 constexpr bool bus_recovery = !SMC_FIRMWARE_DXF && !SMC_FIRMWARE_P2L;
 
@@ -75,7 +114,8 @@ uint16_t board_sum;
 uint8_t cpu_samples[sample_count];
 uint8_t board_samples[sample_count];
 #endif
-bool bus_recovery_allowed; // 0xBD.1, re-armed by every good reading
+
+bool bus_recovery_allowed; // re-armed by every good reading
 volatile uint8_t raise_to_speed; // P2L: SMBus 0x05 off, applied on the next tick
 
 uint8_t previous_cpu_temperature;
@@ -200,15 +240,16 @@ void update_fan_temp() {
     // P2L counts the sampling ticks in the first round
     timeout1 = wait_round_ticks - sample_count;
 
-    if (sensors.CPU_temperature >= p2l_overheat_cpu_temp) {
+    if (sensors.CPU_temperature >= p2l_thresholds.overheat_cpu) {
       state = fan_control_state::overheated;
     } else if (flags.fan_override) {
       state = fan_control_state::custom_fan_speed;
-    } else if (sensors.CPU_temperature >= p2l_hot_cpu_temp || cpu_temperature_predicted >= p2l_hot_predicted_temp) {
+    } else if (sensors.CPU_temperature >= p2l_thresholds.hot_cpu ||
+               cpu_temperature_predicted >= p2l_thresholds.hot_predicted) {
       state = fan_control_state::cpu_hot;
-    } else if (cpu_temperature_predicted >= p2l_warm_predicted_temp) {
+    } else if (cpu_temperature_predicted >= p2l_thresholds.warm_predicted) {
       state = fan_control_state::board_hot;
-    } else if (cpu_temperature_predicted >= p2l_hold_predicted_temp || cpu_temperature_increase != 0) {
+    } else if (cpu_temperature_predicted >= p2l_thresholds.hold_predicted || cpu_temperature_increase != 0) {
       state = fan_control_state::wait;
     } else {
       state = fan_control_state::board_cool;
@@ -218,16 +259,16 @@ void update_fan_temp() {
     timeout1 = wait_round_ticks; // Next decision in 20 * 50 ticks = 20 s
 #endif
 
-    if (sensors.CPU_temperature > critical_cpu_temp || sensors.board_temperature > critical_board_temp) {
+    if (sensors.CPU_temperature > thresholds.critical_cpu || sensors.board_temperature > thresholds.critical_board) {
       state = fan_control_state::overheated;
     } else if (flags.fan_override) {
       state = fan_control_state::custom_fan_speed;
-    } else if (sensors.CPU_temperature > hot_cpu_temp || cpu_temperature_predicted > hot_predicted_temp) {
+    } else if (sensors.CPU_temperature > thresholds.hot_cpu || cpu_temperature_predicted > thresholds.hot_predicted) {
       state = fan_control_state::cpu_hot;
-    } else if (cpu_temperature_predicted > warm_predicted_temp || sensors.board_temperature > warm_board_temp) {
+    } else if (cpu_temperature_predicted > thresholds.warm_predicted || sensors.board_temperature > thresholds.warm_board) {
       state = fan_control_state::board_hot;
-    } else if (cpu_temperature_predicted < cool_predicted_temp && cpu_temperature_increase == 0 &&
-               sensors.board_temperature < cool_board_temp) {
+    } else if (cpu_temperature_predicted < thresholds.cool_predicted && cpu_temperature_increase == 0 &&
+               sensors.board_temperature < thresholds.cool_board) {
       state = fan_control_state::board_cool;
     } else {
       state = fan_control_state::wait;
@@ -256,7 +297,7 @@ void update_fan_temp() {
 #if SMC_FIRMWARE_P2L
     // P2L (0xF59) only stops early on a sensor error or at 98 °C: it checks
     // for "cooled down" but ignores the result, so it cools for the full time
-    if (!read_temperatures() || sensors.CPU_temperature >= p2l_shutdown_cpu_temp) {
+    if (!read_temperatures() || sensors.CPU_temperature >= p2l_thresholds.shutdown_cpu) {
       flags.overheated = false;
     } else {
       state = fan_control_state::overheated_wait;
@@ -264,10 +305,10 @@ void update_fan_temp() {
     break;
 #endif
     read_temperatures();
-    if (sensors.CPU_temperature > shutdown_cpu_temp || sensors.board_temperature > shutdown_board_temp) {
+    if (sensors.CPU_temperature > thresholds.shutdown_cpu || sensors.board_temperature > thresholds.shutdown_board) {
       /* Still far too hot, shut down now */
       flags.overheated = false;
-    } else if (sensors.CPU_temperature >= cool_predicted_temp || sensors.board_temperature >= cool_board_temp) {
+    } else if (sensors.CPU_temperature >= thresholds.cool_predicted || sensors.board_temperature >= thresholds.cool_board) {
       /* Still warm, keep cooling */
       state = fan_control_state::overheated_wait;
     } else {
