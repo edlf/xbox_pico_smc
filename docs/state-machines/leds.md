@@ -8,6 +8,7 @@ shown bit 3 first. Both LEDs on make orange.
 ```mermaid
 stateDiagram-v2
     [*] --> initial
+    initial --> boot_failure: boot challenge gave up (FRAG)
     initial --> overheat: overheated
     initial --> quick_green_orange: no AV cable
     initial --> manual_control: LED override (P11 checks this third)
@@ -16,6 +17,7 @@ stateDiagram-v2
     initial --> quick_green_blink: tray moving
     initial --> solid_green: otherwise
 
+    boot_failure --> tick_update
     overheat --> tick_update
     manual_control --> tick_update
     quick_green_orange --> tick_update
@@ -37,10 +39,11 @@ stateDiagram-v2
 | 4 | `solid_green` | 0x0 | 0xF | Green |
 | 5 | `off` | 0x0 | 0x0 | Off |
 | 9 | `quick_green_orange` | 0x5 | 0xF | Alternating green / orange (no AV cable) |
+| 10 | `boot_failure` | 0xF / 0xA | 0x5 | Boot failure error code: RAM test failed (0xF) or challenge failed / no RAM test result (0xA) |
 
 | # | State | What it does |
 |---|-------|--------------|
-| 0 | `initial` | Picks the pattern, highest priority first. A missing AV cable beats the LED override on every firmware; the original P11 checks the override first, so a dashboard's LED colours hid it |
+| 0 | `initial` | Picks the pattern, highest priority first. The boot failure code beats everything (the PIC shows it through the LED override, below an overheat). A missing AV cable beats the LED override on every firmware; the original P11 checks the override first, so a dashboard's LED colours hid it |
 | 6 | `tick_update` | Holds the current phase for 6 ticks |
 | 7 | `set_gpios` | Sets both LEDs for the next phase |
 | 8 | `resetPhaseCounter` | Starts again at phase 3 |

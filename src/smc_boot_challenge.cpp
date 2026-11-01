@@ -193,13 +193,13 @@ void update() {
   switch (state) {
   case boot_challenge_state::initial:
 #if SMC_FIRMWARE_P2L
-    // P2L (0xD5F): 15 ticks, lets the system run and restarts the tray tracking
+    // P2L (0xD5F): 15 ticks and lets the system run
     boot_response_timeout = 15;
     flags.run_after_reset = true;
-    Dvd::restartTrayTracking();
 #else
     boot_response_timeout = 12;
 #endif
+    Dvd::restartTrayTracking(); // As P2L (0xD61)
 #if !SMC_FIRMWARE_NO_CHALLENGE
     compute(); // D01/DXF (0x8DA) skip it
 #endif
@@ -237,6 +237,7 @@ void update() {
 #if SMC_BOOT_CHALLENGE
     Led::setRedPhases(0x0F);
     Led::setGreenPhases(0x05);
+    Led::setBootFailurePattern(0x0F, 0x05);
     bios_response_byte0 = ERROR_RAM_TEST_FAILED;
     state = boot_challenge_state::boot_failed;
 #else
@@ -247,6 +248,7 @@ void update() {
   case boot_challenge_state::challenge_failed_or_no_ram_test_result:
     Led::setRedPhases(0x0A);
     Led::setGreenPhases(0x05);
+    Led::setBootFailurePattern(0x0A, 0x05);
     bios_response_byte0 = ERROR_CHALLENGE_FAILED;
     state = boot_challenge_state::boot_failed;
     break;
@@ -302,7 +304,8 @@ void update() {
     break;
 
   case boot_challenge_state::lock_up:
-    /* FRAG: manual LEDs (error code), stays here until power off */
+    /* FRAG: error code LEDs (top priority, see Led::setBootFailure), stays
+     * here until power off */
     flags.led_override = true;
     flags.frag_power_off = true;
     flags.frag_eject = !SMC_FIRMWARE_P2L || !flags.overheated; // P2L (0xE15): not when overheated

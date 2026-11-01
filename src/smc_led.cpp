@@ -21,6 +21,9 @@ static bool overheat = false;
 static bool av_missing = false;
 static bool power_off_bit = false;
 static bool quick_green_blink = false;
+static bool boot_failure = false;
+static uint8_t red_phases_failure;
+static uint8_t green_phases_failure;
 
 constexpr const char* state_names[] = {
   "Initial",
@@ -32,7 +35,8 @@ constexpr const char* state_names[] = {
   "Tick update",
   "Set GPIOs",
   "Reset phase counter",
-  "Quick green/orange (Missing AV)"
+  "Quick green/orange (Missing AV)",
+  "Boot failure"
 };
 
 void init() {
@@ -44,6 +48,8 @@ void init() {
   green_phases = 0;
   red_phases = 0;
   manual_control = false;
+  red_phases_failure = 0;
+  green_phases_failure = 0;
 }
 
 void resetPhaseCounter() {
@@ -91,6 +97,15 @@ void setQuickGreenBlink(const bool i) {
   quick_green_blink = i;
 }
 
+void setBootFailure(const bool i) {
+  boot_failure = i;
+}
+
+void setBootFailurePattern(const uint8_t red, const uint8_t green) {
+  red_phases_failure = red;
+  green_phases_failure = green;
+}
+
 void printState() {
     const size_t led_state = static_cast<size_t>(state);
     std::string msg = "LED state [" + std::to_string(led_state) + "]";
@@ -107,6 +122,14 @@ void update()
   switch (state) {
   case led_state::initial: // 0
     state_counter = 6;
+
+    // The boot failure error code wins over everything, an overheat and the
+    // SMBus LED override included (the PIC shows it through the override, so a
+    // later SMBus 0x07/0x08 write or an overheat could hide it)
+    if (boot_failure) {
+      state = led_state::boot_failure;
+      return;
+    }
 
     if (overheat) {
       state = led_state::overheat;
@@ -216,6 +239,12 @@ void update()
   case led_state::quick_green_orange: // 9
     red_phases = 5;
     green_phases = 0xF;
+    state = led_state::tick_update;
+    break;
+
+  case led_state::boot_failure: // 10
+    red_phases = red_phases_failure;
+    green_phases = green_phases_failure;
     state = led_state::tick_update;
     break;
 

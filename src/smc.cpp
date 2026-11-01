@@ -90,6 +90,7 @@ void update_LEDs() {
   // system_running is set while the system is powered
   Led::setPowerOff(!flags.system_running);
   Led::setQuickGreenBlink(flags.tray_moving);
+  Led::setBootFailure(flags.frag_power_off); // Set once the boot challenge gives up
   Led::update();
 }
 

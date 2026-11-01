@@ -15,8 +15,8 @@ readings. Raises the tray SMIs.
 ```mermaid
 stateDiagram-v2
     [*] --> initial
-    initial --> startup_delay: 32-tick timer
-    startup_delay --> watch: after 32 ticks (640 ms)
+    initial --> startup_delay: 39-tick timer
+    startup_delay --> watch: after 39 ticks (780 ms)
     watch --> confirm: pins differ from the reported state
     confirm --> watch: changed again
     confirm --> apply: same as the first reading
@@ -26,7 +26,7 @@ stateDiagram-v2
 | State | What it does |
 |-------|--------------|
 | `initial` | Starts the start-up delay |
-| `startup_delay` | Ignores the tray after power on. P11 also comes back here on a warm reset, then for ~5 s |
+| `startup_delay` | Ignores the tray after power on and when the boot challenge starts. A warm reset also comes back here, then for ~5 s |
 | `watch` | Waits for the pins to differ from the reported state |
 | `confirm` | Reads again |
 | `apply` | Reports the state and, once tray events are enabled, raises an SMI: 0x30 opening, 0x00 closed, 0x40/0x60 media. Any other state enables tray events |
@@ -49,10 +49,10 @@ closed.
 ```mermaid
 stateDiagram-v2
     [*] --> closed
-    closed --> open: tray reports opening (0x30)
+    closed --> open: tray reports opening (0x30), or open (0x10) while not moving
     closed --> open: SMBus 0x0C eject, pulse
     closed --> closed: eject button, SMI only (FRAG pulses)
-    open --> closed: tray reports closing (0x50)
+    open --> closed: tray reports closing (0x50), or closed (0x00) while not moving
     open --> closed: eject button, SMBus 0x0C load, or shutdown, pulse
 ```
 
@@ -60,11 +60,15 @@ While the tray is open the SMC closes it on its own. While it's closed the eject
 button only raises an SMI, and the OS opens the tray with SMBus 0x0C. Pulses
 are skipped while the drive reports 0x70 or 0x20.
 
-P2L also switches to closed when a tray that isn't moving reports 0x00, and to
-open when it reports 0x10, except right after an eject press or pulse. Every
-eject pulse also starts the tray moving tracking, and in the tray moving state
-machine a closing tray (0x50) always ends the eject phase. The start-up delay
-of the debounce is 39 ticks instead of 32.
+The DVD handling follows P2L (v1.6) for every firmware. Compared with the PIC:
+
+- A tray that isn't moving and reports 0x00 or 0x10 also counts as closed or
+  open, except right after an eject press or pulse.
+- Every eject pulse, not only the eject button, starts the tray moving tracking.
+- A closing tray (0x50) always ends the eject phase of the tray moving tracking.
+- The debounce start-up delay is 39 ticks instead of 32, and the boot challenge
+  start restarts the debounce and the tray moving tracking.
+- The DXF stop at 0x00 in the tray moving tracking is gone.
 
 ## Tray moving (`update_dvd_tray_three_state`, PIC 0x519)
 
@@ -73,14 +77,14 @@ Sets `tray_moving`, reported in SMBus 0x03 bit 0 and shown as a quick green blin
 ```mermaid
 stateDiagram-v2
     [*] --> initial
-    initial --> eject: eject button pressed
+    initial --> eject: eject button or eject pulse
     initial --> wait: tray in a moving state
-    wait --> initial: tray at 0x10, 0x40 or 0x60 (DXF also 0x00)
-    eject --> wait: tray opening (0x30), 0x20, closing (0x50, unless opening is expected), or 255-tick timeout
+    wait --> initial: tray at 0x10, 0x40 or 0x60
+    eject --> wait: tray opening (0x30), 0x20, closing (0x50), or 255-tick timeout
 ```
 
 | State | What it does |
 |-------|--------------|
 | `initial` | Not moving |
 | `wait` | Moving, until the tray settles |
-| `eject` | Moving after an eject button press, until the drive reacts |
+| `eject` | Moving after an eject button press or pulse, until the drive reacts |

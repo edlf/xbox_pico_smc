@@ -115,11 +115,10 @@ void update() {
     flags.reset_on_eject_writable = true;
     flags.reset_on_eject_disabled = true;
     flags.led_override = false;
-#if SMC_FIRMWARE_P11
+    // Ignore tray changes for a while after a warm reset (P11/P2L, 0x636)
     if (!flags.tray_moving) {
       Dvd::restartTrayDebounce();
     }
-#endif
     state = pll_sysreset_state::release_reset;
     break;
 

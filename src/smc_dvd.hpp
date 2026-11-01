@@ -40,9 +40,9 @@ void updateEjectTray();
 void updateDvdTrayThree();
 void updateDvdTray();
 bool isTrayClosing();
-// P11: restart the tray debounce, ignoring tray changes for ~5 s (warm reset)
+// Warm reset: restart the tray debounce, ignoring tray changes for ~5 s
 void restartTrayDebounce();
-// P2L: restart the tray debounce and tray moving state machines
+// Boot challenge start: restart the tray debounce and tray moving state machines
 void restartTrayTracking();
 uint8_t readTrayState(); // Tray state pins, PORTB & 0x70 on the PIC
 

@@ -16,7 +16,8 @@ enum class led_state {
   tick_update,
   set_gpios,
   resetPhaseCounter,
-  quick_green_orange
+  quick_green_orange,
+  boot_failure
 };
 
 void init();
@@ -34,6 +35,9 @@ void setOverheat(const bool);
 void setAvMissing(const bool);
 void setPowerOff(const bool);
 void setQuickGreenBlink(const bool);
+// Boot failure (FRAG) error code, shown above every other pattern
+void setBootFailure(const bool);
+void setBootFailurePattern(const uint8_t red, const uint8_t green);
 void printState();
 
 } // namespace Led
