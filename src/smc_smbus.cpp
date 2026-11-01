@@ -252,8 +252,9 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::REQUEST_FAN_SPEED: // 0x06
-    // Speed used while 0x05 override is on (0-50). P2L (0x5C4) clamps it to 50
-    Fan::setCustomSpeed((SMC_FIRMWARE_P2L && data > hal::FAN_MAX_SPEED) ? hal::FAN_MAX_SPEED : data);
+    // Speed used while 0x05 override is on, limited to 50 as P2L (0x5C4). The
+    // PIC stores it as is, and 0x05 then refuses anything above 50
+    Fan::setCustomSpeed(data > hal::FAN_MAX_SPEED ? hal::FAN_MAX_SPEED : data);
     break;
 
   case Command::LED_OVERRIDE: // 0x07
@@ -375,15 +376,10 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::OS_READY: // 0x1A
-    // Same as the PIC (0x1B1): bit 0 enables interrupts (os_ready), which lets a
-    // power off go through the OS instead of cutting power right away
-#if SMC_FIRMWARE_P2L
-    flags.os_ready = data & 0x01; // P2L (0x66C): 0 clears it
-#else
-    if (data & 0x01) {
-      flags.os_ready = true;
-    }
-#endif
+    // Bit 0 enables interrupts (os_ready), which lets a power off go through the
+    // OS instead of cutting power right away. Writing 0 clears it, as P2L
+    // (0x66C); the PIC (0x1B1) only ever sets it
+    flags.os_ready = data & 0x01;
     break;
 
   case Command::SCRATCH: // 0x1B

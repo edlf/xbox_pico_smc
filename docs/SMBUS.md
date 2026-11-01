@@ -106,8 +106,8 @@ pack. Writes are ignored, as on the PIC.
 ### 0x05 Fan override (write)
 
 Bit 0 = 1: run the fan at the speed from 0x06 instead of the temperature
-control. Only accepted once 0x06 holds a valid speed (≤ 50), so send 0x06
-first. Bit 0 = 0: back to automatic.
+control. Only accepted once 0x06 has been written, so send 0x06 first. Bit 0
+= 0: back to automatic.
 
 P2L: always accepted (the 0x06 speed starts at 50), and turning it off raises
 the fan to at least 30.
@@ -115,8 +115,8 @@ the fan to at least 30.
 ### 0x06 Fan speed (write)
 
 Speed for the fan override, 0-50 (the scale of 0x10). The fan never runs below
-10 while the Xbox is on, so 0-9 run at 10.
-P2L clamps values above 50 to 50.
+10 while the Xbox is on, so 0-9 run at 10. Values above 50 are limited to 50,
+as P2L (the original P01/P11 store them, and 0x05 then refuses to turn on).
 
 ### 0x07 LED override (write)
 
@@ -227,8 +227,8 @@ first 0x19 write after a reset decides:
 
 Bit 0 = 1: the OS is running and handles power off. From then on the power
 button sends an SMI and waits for the 0x0D answer instead of powering off
-right away. Cleared at every reset.
-P2L copies bit 0, so writing 0 clears it again.
+right away. Bit 0 = 0 clears it again, as P2L (the original P01/P11 ignore
+it). Also cleared at every reset.
 
 ### 0x1B Scratch (read/write)
 
