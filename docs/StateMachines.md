@@ -27,7 +27,7 @@ flowchart TD
 | [SMI and power](state-machines/smi_power.md) | `smc_SMI.cpp` | Xbox on |
 | [PLL and SYSRESET](state-machines/pll_reset.md) | `smc_pll_reset.cpp` | Xbox on |
 | [Boot challenge](state-machines/boot_challenge.md) | `smc_boot_challenge.cpp` | Xbox on |
-| [Fan control](state-machines/fan_control.md) | `smc_fan.cpp` | Xbox on |
+| [Fan control](state-machines/fan_control.md) | `smc_fan_pic.cpp`, `smc_fan_p2l.cpp` | Xbox on |
 | [DVD tray](state-machines/dvd_tray.md) (4 machines) | `smc_dvd.cpp` | Xbox on |
 | [Video mode](state-machines/video.md) | `smc_video.cpp` | Both |
 | [Audio clamp](state-machines/audio_clamp.md) | `smc_audio_clamp.cpp` | Xbox on |

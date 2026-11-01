@@ -191,6 +191,12 @@ endif()
 
 # Add executable. Default name is the project name, version 0.1
 set(SMC_SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/src)
+# Fan control: P2L has its own, the others follow the PIC
+if(SMC_FIRMWARE_P2L)
+  set(SMC_FAN_SRC ${SMC_SRC_DIR}/smc_fan_p2l.cpp)
+else()
+  set(SMC_FAN_SRC ${SMC_SRC_DIR}/smc_fan_pic.cpp)
+endif()
 add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/debug.cpp
                       ${SMC_SRC_DIR}/main.cpp
@@ -199,6 +205,7 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/smc_led.cpp
                       ${SMC_SRC_DIR}/smc_boot_challenge.cpp
                       ${SMC_SRC_DIR}/smc_fan.cpp
+                      ${SMC_FAN_SRC}
                       ${SMC_SRC_DIR}/smc_smbus.cpp
                       ${SMC_SRC_DIR}/smc_dvd.cpp
                       ${SMC_SRC_DIR}/smc_front_panel_sw.cpp

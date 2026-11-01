@@ -1,7 +1,14 @@
 # Fan control
 
-`src/smc_fan.cpp`, PIC 0x36F. Reads the temperature sensor, predicts the CPU
+PIC 0x36F, P2L 0xECD. Reads the temperature sensor, predicts the CPU
 temperature and adjusts the fan speed (10-50) every 20 s. Detects overheating.
+
+- `src/smc_fan_pic.cpp`: P01, P11, D01 and DXF.
+- `src/smc_fan_p2l.cpp`: P2L.
+- `src/smc_fan.cpp`: what both share (setting the speed, the CPU temperature
+  prediction, the SMBus/web getters and setters).
+
+CMake builds only the state machine file for the chosen `SMC_FIRMWARE`.
 
 Thresholds (°C) differ between firmwares:
 
