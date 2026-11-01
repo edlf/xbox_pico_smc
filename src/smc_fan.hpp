@@ -28,6 +28,8 @@ void update_fan_temp();
 void powerOff();
 uint8_t getFanSpeed();
 void setCustomSpeed(const uint8_t);
+// Raise the fan to at least this speed on the next tick (P2L, SMBus 0x05 off)
+void raiseSpeedTo(const uint8_t speed);
 uint8_t getCustomFanSpeed();
 
 } // namespace Fan

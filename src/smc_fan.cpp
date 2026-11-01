@@ -31,12 +31,34 @@ constexpr uint8_t cool_board_temp = 0x39;        // 57
 constexpr uint8_t shutdown_cpu_temp = 0x61;      // 97: still overheated, give up
 constexpr uint8_t shutdown_board_temp = 0x54;    // 84
 
+#if SMC_FIRMWARE_P2L
+// P2L (0xECD) only uses the CPU temperature, all limits are "at least"
+constexpr uint8_t p2l_overheat_cpu_temp = 0x59;  // 89: overheated
+constexpr uint8_t p2l_hot_cpu_temp = 0x4E;       // 78: +3 speed
+constexpr uint8_t p2l_hot_predicted_temp = 0x57; // 87: +3 speed
+constexpr uint8_t p2l_warm_predicted_temp = 0x4E; // 78: +1 speed
+constexpr uint8_t p2l_hold_predicted_temp = 0x4C; // 76: hold, below and steady -1
+constexpr uint8_t p2l_shutdown_cpu_temp = 0x62;  // 98: still overheated, give up
+#endif
+
 // Faked readings when the sensor can't be read, forcing an overheat shutdown
 constexpr uint8_t failed_read_cpu_temp = 0x59;
 constexpr uint8_t failed_read_board_temp = 0x4C;
 
+#if SMC_FIRMWARE_P2L
+constexpr uint8_t sample_count = 128; // P2L (0x170E): average of 128 readings, one per tick
+// Next decision 4 x 250 ticks (20 s) after the last one, sampling included
+constexpr uint8_t wait_round_ticks = 0xFA;
+constexpr uint8_t wait_rounds = 4;
+#else
 constexpr uint8_t sample_count = 3;   // Median of 3 readings on 3 ticks
+// Next decision in 20 x 50 ticks (20 s)
+constexpr uint8_t wait_round_ticks = 0x32;
+constexpr uint8_t wait_rounds = 0x14;
+#endif
 constexpr uint8_t read_retries = 20;  // Ticks to retry a failed reading
+// I2C bus recovery before giving up on the sensor; DXF and P2L don't have it
+constexpr bool bus_recovery = !SMC_FIRMWARE_DXF && !SMC_FIRMWARE_P2L;
 
 uint8_t fan_speed;
 uint8_t custom_fan_speed;
@@ -46,9 +68,15 @@ uint8_t timeout2; // 0x46
 
 uint8_t samples_left;  // 0x59
 uint8_t retry_timeout; // 0x5A
+#if SMC_FIRMWARE_P2L
+uint16_t cpu_sum;
+uint16_t board_sum;
+#else
 uint8_t cpu_samples[sample_count];
 uint8_t board_samples[sample_count];
+#endif
 bool bus_recovery_allowed; // 0xBD.1, re-armed by every good reading
+volatile uint8_t raise_to_speed; // P2L: SMBus 0x05 off, applied on the next tick
 
 uint8_t previous_cpu_temperature;
 uint8_t cpu_temperature_increase;
@@ -58,16 +86,26 @@ void init() {
   // Same as the PIC's RAM_init (0xB58)
   state = fan_control_state::initial;
   fan_speed = 0;
+#if SMC_FIRMWARE_P2L
+  custom_fan_speed = 0x32; // 50, so SMBus 0x05 works on its own (0x3FE)
+#else
   custom_fan_speed = 0x33; // > 50, so SMBus 0x05 can't enable it before 0x06
+#endif
   timeout1 = 0;
   timeout2 = 0;
   samples_left = 0;
   retry_timeout = 0;
+#if SMC_FIRMWARE_P2L
+  cpu_sum = 0;
+  board_sum = 0;
+#else
   for (uint8_t i = 0; i < sample_count; i++) {
     cpu_samples[i] = 0;
     board_samples[i] = 0;
   }
+#endif
   bus_recovery_allowed = true;
+  raise_to_speed = 0;
   previous_cpu_temperature = 0x17;
   cpu_temperature_increase = 0;
   cpu_temperature_predicted = 0x17;
@@ -92,6 +130,7 @@ void powerOff() {
   hal::fan_pin_low();
 }
 
+#if !SMC_FIRMWARE_P2L
 static uint8_t median(uint8_t* samples) {
   // Sort of 3 values, same result as the PIC's bubble sort (0xB05)
   for (uint8_t pass = 0; pass < sample_count - 1; pass++) {
@@ -105,6 +144,7 @@ static uint8_t median(uint8_t* samples) {
   }
   return samples[1];
 }
+#endif
 
 static void predictCpuTemperature() {
   // Same as the PIC (0xE33): add a margin based on how fast the CPU heats up
@@ -129,9 +169,19 @@ static void predictCpuTemperature() {
 }
 
 void update_fan_temp() {
+  // P2L: SMBus 0x05 turned the override off (from the SMBus interrupt)
+  if (raise_to_speed != 0) {
+    if (fan_speed < raise_to_speed) {
+      setSpeed(raise_to_speed);
+    }
+    raise_to_speed = 0;
+  }
+
   switch (state) {
   case fan_control_state::initial:
-    setSpeed(min_fan_speed); // 0 on the PIC
+#if !SMC_FIRMWARE_P2L
+    setSpeed(min_fan_speed); // 0 on the PIC; P2L keeps the 30 from power on
+#endif
     flags.overheated = false;
     if (!flags.prepare_for_shutdown) {
       state = fan_control_state::start;
@@ -145,8 +195,28 @@ void update_fan_temp() {
     break;
 
   case fan_control_state::decision_state:
-    timeout2 = 0x14;
-    timeout1 = 0x32; // Next decision in 50 * 20 ticks = 20 s
+    timeout2 = wait_rounds;
+#if SMC_FIRMWARE_P2L
+    // P2L counts the sampling ticks in the first round
+    timeout1 = wait_round_ticks - sample_count;
+
+    if (sensors.CPU_temperature >= p2l_overheat_cpu_temp) {
+      state = fan_control_state::overheated;
+    } else if (flags.fan_override) {
+      state = fan_control_state::custom_fan_speed;
+    } else if (sensors.CPU_temperature >= p2l_hot_cpu_temp || cpu_temperature_predicted >= p2l_hot_predicted_temp) {
+      state = fan_control_state::cpu_hot;
+    } else if (cpu_temperature_predicted >= p2l_warm_predicted_temp) {
+      state = fan_control_state::board_hot;
+    } else if (cpu_temperature_predicted >= p2l_hold_predicted_temp || cpu_temperature_increase != 0) {
+      state = fan_control_state::wait;
+    } else {
+      state = fan_control_state::board_cool;
+    }
+    break;
+#else
+    timeout1 = wait_round_ticks; // Next decision in 20 * 50 ticks = 20 s
+#endif
 
     if (sensors.CPU_temperature > critical_cpu_temp || sensors.board_temperature > critical_board_temp) {
       state = fan_control_state::overheated;
@@ -171,6 +241,9 @@ void update_fan_temp() {
     flags.cold_reset_request = true;
     flags.run_after_reset = false;
     flags.overheated = true; // SMI shuts the Xbox down once this clears
+#if SMC_FIRMWARE_P2L
+    flags.audio_clamp_request = true; // P2L (0xF4A) also mutes the audio
+#endif
     timeout1 = 0xFA;
     timeout2 = 0xB3;
     state = fan_control_state::overheated_cooldown;
@@ -180,6 +253,16 @@ void update_fan_temp() {
     if (--timeout1 != 0) {
       return;
     }
+#if SMC_FIRMWARE_P2L
+    // P2L (0xF59) only stops early on a sensor error or at 98 °C: it checks
+    // for "cooled down" but ignores the result, so it cools for the full time
+    if (!read_temperatures() || sensors.CPU_temperature >= p2l_shutdown_cpu_temp) {
+      flags.overheated = false;
+    } else {
+      state = fan_control_state::overheated_wait;
+    }
+    break;
+#endif
     read_temperatures();
     if (sensors.CPU_temperature > shutdown_cpu_temp || sensors.board_temperature > shutdown_board_temp) {
       /* Still far too hot, shut down now */
@@ -227,7 +310,7 @@ void update_fan_temp() {
       return;
     }
     if (--timeout2 != 0) {
-      timeout1 = 0x32;
+      timeout1 = wait_round_ticks;
     } else {
       state = fan_control_state::start_sampling;
     }
@@ -246,8 +329,8 @@ void update_fan_temp() {
       if (--retry_timeout != 0) {
         return;
       }
-      if (bus_recovery_allowed && !SMC_FIRMWARE_DXF) {
-        /* Try once to free the bus, then retry. DXF doesn't (0x47D) */
+      if (bus_recovery_allowed && bus_recovery) {
+        /* Try once to free the bus, then retry */
         bus_recovery_allowed = false;
         hal::i2c_bus_recovery();
         retry_timeout = read_retries;
@@ -262,15 +345,25 @@ void update_fan_temp() {
     }
 
     bus_recovery_allowed = true;
+#if SMC_FIRMWARE_P2L
+    cpu_sum += sensors.CPU_temperature;
+    board_sum += sensors.board_temperature;
+#else
     cpu_samples[samples_left - 1] = sensors.CPU_temperature;
     board_samples[samples_left - 1] = sensors.board_temperature;
+#endif
     retry_timeout = read_retries;
     if (--samples_left != 0) {
       return;
     }
 
+#if SMC_FIRMWARE_P2L
+    sensors.CPU_temperature = cpu_sum / sample_count;
+    sensors.board_temperature = board_sum / sample_count; // Not used for decisions
+#else
     sensors.CPU_temperature = median(cpu_samples);
     sensors.board_temperature = median(board_samples);
+#endif
     predictCpuTemperature();
     debug::print_message("FAN: CPU " + std::to_string(sensors.CPU_temperature) + " board " +
                          std::to_string(sensors.board_temperature) + " predicted " +
@@ -288,6 +381,10 @@ void update_fan_temp() {
   case fan_control_state::start_sampling:
     samples_left = sample_count;
     retry_timeout = read_retries;
+#if SMC_FIRMWARE_P2L
+    cpu_sum = 0;
+    board_sum = 0;
+#endif
     state = fan_control_state::sample_temperatures;
     break;
 
@@ -299,6 +396,10 @@ void update_fan_temp() {
 
 uint8_t getFanSpeed() {
   return fan_speed;
+}
+
+void raiseSpeedTo(const uint8_t speed) {
+  raise_to_speed = speed;
 }
 
 void setCustomSpeed(const uint8_t in) {

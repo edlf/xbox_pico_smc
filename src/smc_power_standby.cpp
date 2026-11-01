@@ -46,7 +46,8 @@ uint8_t update() {
 
   case power_standby_state::turn_on_power_no_av: // State 3
     hal::turn_on_psu();
-    hal::set_fan_speed(hal::FAN_MIN_SPEED); // The PIC holds the pin high (speed 0)
+    // The PIC holds the pin high (speed 0), P2L (0xCA5) starts at 30
+    hal::set_fan_speed(SMC_FIRMWARE_P2L ? 30 : hal::FAN_MIN_SPEED);
     power_timeout3 = 50;
     flags.power_change_requested = false;
     state = power_standby_state::powered_up_wait_power_ok;
@@ -85,7 +86,8 @@ uint8_t update() {
   case power_standby_state::turn_on_power_alternative: // State 7
     flags.tray_open_expected = true; // Powered on by the eject button
     hal::turn_on_psu();
-    hal::set_fan_speed(hal::FAN_MIN_SPEED); // The PIC holds the pin high (speed 0)
+    // The PIC holds the pin high (speed 0), P2L (0xCA5) starts at 30
+    hal::set_fan_speed(SMC_FIRMWARE_P2L ? 30 : hal::FAN_MIN_SPEED);
     power_timeout3 = 0x32; // 50 cycles
     state = power_standby_state::powered_up_wait_power_ok_alternative;
     break;

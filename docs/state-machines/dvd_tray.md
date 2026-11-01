@@ -60,6 +60,12 @@ While the tray is open the SMC closes it on its own. While it's closed the eject
 button only raises an SMI, and the OS opens the tray with SMBus 0x0C. Pulses
 are skipped while the drive reports 0x70 or 0x20.
 
+P2L also switches to closed when a tray that isn't moving reports 0x00, and to
+open when it reports 0x10, except right after an eject press or pulse. Every
+eject pulse also starts the tray moving tracking, and in the tray moving state
+machine a closing tray (0x50) always ends the eject phase. The start-up delay
+of the debounce is 39 ticks instead of 32.
+
 ## Tray moving (`update_dvd_tray_three_state`, PIC 0x519)
 
 Sets `tray_moving`, reported in SMBus 0x03 bit 0 and shown as a quick green blink.

@@ -50,7 +50,9 @@ void printState() {
 static void releaseResetAndConfigureEncoder() {
   hal::liftSystemReset();
   flags.system_reset_released = true;
-#if SMC_FIRMWARE_P11
+#if SMC_FIRMWARE_P2L
+  // P2L (0x94B) only releases SYSRESET, nothing is written
+#elif SMC_FIRMWARE_P11
   busy_wait_us(3000);
   configureTemperatureSensor();
 #else

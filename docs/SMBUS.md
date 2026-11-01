@@ -4,10 +4,10 @@ The SMC is an SMBus slave at address **0x10** (0x20 write / 0x21 read in 8-bit
 form). Each command is one register byte: a write sends the command and one data
 byte; a read sends the command, then a repeated START, then reads one byte.
 
-Behavior follows the original PIC firmware chosen with `SMC_FIRMWARE`: P11 (the
-default), P01, or the debug kit versions D01 and DXF. Unknown commands are
-ignored on write and read as 0x00, and so are writes to read-only commands and
-reads of write-only ones. Times are in SMC ticks of 20 ms.
+Behavior follows the original firmware chosen with `SMC_FIRMWARE`: P11 (the
+default), P01, the debug kit versions D01 and DXF, or P2L (v1.6). Unknown
+commands are ignored on write and read as 0x00, and so are writes to read-only
+commands and reads of write-only ones. Times are in SMC ticks of 20 ms.
 
 ## Overview
 
@@ -53,7 +53,7 @@ three (for example `'P'`, `'1'`, `'1'`). The position is kept between
 transactions. Writing any value restarts at the first character.
 
 The string is set by `SMC_REPORT_VERSION`: `AUTO` (the default) reports the
-`SMC_FIRMWARE` version. `P01`, `P11`, `D01` and `DXF` report that version
+`SMC_FIRMWARE` version. `P01`, `P11`, `D01`, `DXF` and `P2L` report that version
 whatever the behavior is: only the reported string changes, the behavior
 still follows `SMC_FIRMWARE`. The boot log shows the reported version.
 
@@ -109,10 +109,14 @@ Bit 0 = 1: run the fan at the speed from 0x06 instead of the temperature
 control. Only accepted once 0x06 holds a valid speed (≤ 50), so send 0x06
 first. Bit 0 = 0: back to automatic.
 
+P2L: always accepted (the 0x06 speed starts at 50), and turning it off raises
+the fan to at least 30.
+
 ### 0x06 Fan speed (write)
 
 Speed for the fan override, 0-50 (the scale of 0x10). The fan never runs below
 10 while the Xbox is on, so 0-9 run at 10.
+P2L clamps values above 50 to 50.
 
 ### 0x07 LED override (write)
 
@@ -144,6 +148,7 @@ In °C, read from the ADM1032 temperature sensor (address 0x4C, remote channel).
 ### 0x0A Board temperature (read)
 
 In °C, from the temperature sensor's internal probe.
+P2L has no board sensor and returns the CPU temperature.
 
 ### 0x0B Audio clamp (write)
 
@@ -195,6 +200,7 @@ Why the SMI line was pulsed. Cleared by reading it.
 
 Written by the BIOS after its RAM test, 0x13 first. The test counts as passed
 when the 0x13 value is 0x00 or 0xFF, or when 0x13 is 0x0F and 0x12 is 0xF0.
+P2L is stricter: 0x13 = 0x00 or 0xFF also needs 0x12 = 0x00.
 Without a passed test the SMC doesn't wait for the OS at power off.
 Read back with 0x14 and 0x15.
 
@@ -221,6 +227,7 @@ first 0x19 write after a reset decides:
 Bit 0 = 1: the OS is running and handles power off. From then on the power
 button sends an SMI and waits for the 0x0D answer instead of powering off
 right away. Cleared at every reset.
+P2L copies bit 0, so writing 0 clears it again.
 
 ### 0x1B Scratch (read/write)
 

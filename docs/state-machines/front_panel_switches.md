@@ -24,5 +24,8 @@ stateDiagram-v2
 A power button press sets `power_change_requested`. An eject button press sets
 `eject_change_requested` and `eject_button_event`.
 
+P2L interlocks the buttons: a power press only counts while the eject button's
+state machine is idle, and the other way round.
+
 The buttons are read with the pad input enabled only while reading (RP2350
 erratum E9, see `readButton()` in `src/hal.cpp`).

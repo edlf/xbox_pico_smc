@@ -19,6 +19,14 @@ The debug kit firmwares differ (`SMC_FIRMWARE=D01` or `DXF`):
   `rtc_dump_start`, then `reboot` holds RTC dump high for 100 ticks (2 s) while
   the system is held in reset, and the boot is retried.
 
+P2L (v1.6) follows P11 with these changes: it waits 15 ticks for the RAM test,
+`initial` also lets the system run and restarts the tray tracking, the answer
+is only checked after a passed RAM test and then it goes back to
+`challenge_wait_for_reply` (`challenge_passed` is never used), every reset
+makes a new challenge and resets the power cycle countdown, a boot failure
+mutes the audio, and FRAG only lets the eject button open the tray when the
+Xbox isn't overheated.
+
 ```mermaid
 stateDiagram-v2
     [*] --> initial

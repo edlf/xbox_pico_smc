@@ -131,7 +131,8 @@ uint8_t smbus_read_handler(uint8_t command) {
     break;
 
   case Command::AIR_TEMPERATURE: // 0x0A
-    response = sensors.board_temperature;
+    // P2L (0x4D1) has no board sensor and reports the CPU temperature
+    response = SMC_FIRMWARE_P2L ? sensors.CPU_temperature : sensors.board_temperature;
     break;
 
   case Command::READ_FAN_SPEED: // 0x10
@@ -234,16 +235,25 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
   case Command::FAN_OVERRIDE: // 0x05
     // Same as the PIC (0x14A): bit 0 = use the speed from 0x06 (fan_override), only
     // accepted when that speed is valid
+#if SMC_FIRMWARE_P2L
+    // P2L (0x5B3): always accepted (the speed starts at 50); turning it off
+    // raises the fan to at least 30
+    flags.fan_override = data & 0x01;
+    if (!flags.fan_override) {
+      Fan::raiseSpeedTo(30);
+    }
+#else
     if (!(data & 0x01)) {
       flags.fan_override = false;
     } else if (Fan::getCustomFanSpeed() <= hal::FAN_MAX_SPEED) {
       flags.fan_override = true;
     }
+#endif
     break;
 
   case Command::REQUEST_FAN_SPEED: // 0x06
-    // Speed used while 0x05 override is on (0-50)
-    Fan::setCustomSpeed(data);
+    // Speed used while 0x05 override is on (0-50). P2L (0x5C4) clamps it to 50
+    Fan::setCustomSpeed((SMC_FIRMWARE_P2L && data > hal::FAN_MAX_SPEED) ? hal::FAN_MAX_SPEED : data);
     break;
 
   case Command::LED_OVERRIDE: // 0x07
@@ -314,10 +324,18 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     flags.ram_test_submitted = true;
     flags.ram_test_passed = false;
     ram_test_response0 = data;
+#if SMC_FIRMWARE_P2L
+    // P2L (0x622): 0x13 = 0x00 or 0xFF also needs 0x12 = 0x00
+    if ((ram_test_response1 == 0x0F && ram_test_response0 == 0xF0) ||
+        ((ram_test_response1 == 0x00 || ram_test_response1 == 0xFF) && ram_test_response0 == 0x00)) {
+      flags.ram_test_passed = true;
+    }
+#else
     if (ram_test_response1 == 0xFF || ram_test_response1 == 0x00 ||
         (ram_test_response1 == 0x0F && ram_test_response0 == 0xF0)) {
       flags.ram_test_passed = true;
     }
+#endif
     break;
 
   case Command::CHALLENGE_RESPONSE0: // 0x20
@@ -361,9 +379,13 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
   case Command::OS_READY: // 0x1A
     // Same as the PIC (0x1B1): bit 0 enables interrupts (os_ready), which lets a
     // power off go through the OS instead of cutting power right away
+#if SMC_FIRMWARE_P2L
+    flags.os_ready = data & 0x01; // P2L (0x66C): 0 clears it
+#else
     if (data & 0x01) {
       flags.os_ready = true;
     }
+#endif
     break;
 
   case Command::SCRATCH: // 0x1B

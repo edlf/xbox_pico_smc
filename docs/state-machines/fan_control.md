@@ -5,15 +5,23 @@ temperature and adjusts the fan speed (10-50) every 20 s. Detects overheating.
 
 Thresholds (°C) differ between firmwares:
 
-| Threshold | P01 | P11 |
-|-----------|-----|-----|
-| CPU hot (+3) | 74 | 67 |
-| Predicted CPU warm (+1) | 74 | 67 |
-| Predicted CPU cool (-1) | 73 | 66 |
-| Predicted CPU hot (+3) | 86 | 86 |
-| Board warm (+1) / cool (-1) | 60 / 57 | 60 / 57 |
-| Overheat CPU / board | 88 / 75 | 88 / 75 |
-| Give up cooling CPU / board | 97 / 84 | 97 / 84 |
+| Threshold (above / below) | P01 | P11 | P2L |
+|-----------|-----|-----|-----|
+| CPU hot (+3) | 74 | 67 | 77 |
+| Predicted CPU warm (+1) | 74 | 67 | 77 |
+| Predicted CPU cool (-1) | 73 | 66 | 76 |
+| Predicted CPU hot (+3) | 86 | 86 | 86 |
+| Board warm (+1) / cool (-1) | 60 / 57 | 60 / 57 | - |
+| Overheat CPU / board | 88 / 75 | 88 / 75 | 88 / - |
+| Give up cooling CPU / board | 97 / 84 | 97 / 84 | 97 / - |
+
+P2L (v1.6) only uses the CPU temperature. Between "warm" and "cool" it holds
+the speed, and it also holds while the CPU temperature is rising. Each reading
+is the average of 128 samples (one per tick) instead of the median of 3, and
+the 20 s cycle includes the sampling. An overheat also mutes the audio, and the
+cooldown always runs its full ~15 min: P2L only stops early above 97 °C or on a
+sensor error. The fan starts at 30 when the PSU turns on, there is no I2C bus
+recovery, and turning off the SMBus 0x05 override raises the fan to at least 30.
 
 ```mermaid
 stateDiagram-v2
@@ -58,9 +66,9 @@ stateDiagram-v2
 | 8 | `board_hot` | Speed +1 |
 | 9 | `wait` | 50 × 20 ticks (20 s). Keeps applying the override speed |
 | 10 | `start_delay` | Waits the 5 start ticks, then speed 10 |
-| 11 | `sample_temperatures` | One reading per tick, 3 in all. A failed reading is retried for 20 ticks, then the bus is recovered once (not on DXF); if the sensor still doesn't answer the SMC forces an overheat |
+| 11 | `sample_temperatures` | One reading per tick, 3 in all. A failed reading is retried for 20 ticks, then the bus is recovered once (not on DXF or P2L); if the sensor still doesn't answer the SMC forces an overheat |
 | 12 | `cpu_hot` | Speed +3 |
-| 13 | `start_sampling` | Starts a set of 3 readings |
+| 13 | `start_sampling` | Starts a set of 3 readings (P2L: 128) |
 
 Clearing `overheated` lets the SMI state machine finish the shutdown it started
 in `overheat_cooldown_wait`.
