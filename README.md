@@ -28,3 +28,7 @@ Very very experimental, currently it boots on 1.0 boards (although the fan curve
 - Team Resurgent
 - Cerbios
 - To everyone in the xbox-scene community
+
+## Documentation
+- [SMBUS commands](/docs/SMBUS.md)
+- [State Machines](/docs/StateMachines.md)
