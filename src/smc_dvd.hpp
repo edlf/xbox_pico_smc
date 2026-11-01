@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+#include "smc_types.hpp"
+
 // Set by CMake (option SMC_DVD_SUPPORT). Without it there are no tray state
 // machines, and the tray is reported as closed and empty.
 #ifndef SMC_DVD_SUPPORT
@@ -44,7 +46,7 @@ bool isTrayClosing();
 void restartTrayDebounce();
 // Boot challenge start: restart the tray debounce and tray moving state machines
 void restartTrayTracking();
-uint8_t readTrayState(); // Tray state pins, PORTB & 0x70 on the PIC
+drive_tray_state readTrayState(); // Tray state pins, PORTB & 0x70 on the PIC
 
 } // namespace Dvd
 } // namespace SMC

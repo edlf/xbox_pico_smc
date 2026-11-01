@@ -367,7 +367,9 @@ uint8_t update() {
   case smi_power_state::wait_for_tray_stable:
     sensors.tray_status = Dvd::readTrayState();
 
-    if ((sensors.tray_status == 0x00) || (sensors.tray_status == 0x40) || (sensors.tray_status == 0x60)) {
+    if (sensors.tray_status == drive_tray_state::closed ||
+        sensors.tray_status == drive_tray_state::no_disc ||
+        sensors.tray_status == drive_tray_state::disc_detected) {
       state = smi_power_state::leds_off;
     } else if (--power_timeout == 0) {
       state = smi_power_state::leds_off;

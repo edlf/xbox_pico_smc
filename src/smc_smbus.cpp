@@ -115,7 +115,7 @@ uint8_t smbus_read_handler(uint8_t command) {
     break;
 
   case Command::TRAY_STATE: // 0x03
-    response = sensors.tray_status;
+    response = static_cast<uint8_t>(sensors.tray_status);
     // Set bit 0 if tray_insert flag is set
     if (flags.tray_moving) {
       response |= 0x01;

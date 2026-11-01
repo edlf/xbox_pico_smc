@@ -446,7 +446,7 @@ void publishStatus() {
   s.board_temperature = sensors.board_temperature;
   s.fan_speed = Fan::getFanSpeed();
   s.fan_override = flags.fan_override;
-  s.tray_state = (sensors.tray_status >> 4) & 0x07;
+  s.tray_state = (static_cast<uint8_t>(sensors.tray_status) >> 4) & 0x07;
   s.tray_closed = Dvd::isTrayClosing();
   s.av_pack = (sensors.vmode >> 1) & 0x07;
   s.av_missing = flags.av_cable_missing;

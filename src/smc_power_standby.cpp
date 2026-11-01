@@ -24,7 +24,7 @@ uint8_t update() {
     hal::led_green_off();
     hal::fan_pin_low();
     hal::timer1_init(hal::TICK_US);
-    sensors.tray_status = 0;
+    sensors.tray_status = drive_tray_state::closed;
     sensors.vmode = 0x0A;
     state = power_standby_state::read_av;
     break;

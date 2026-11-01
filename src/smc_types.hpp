@@ -88,10 +88,23 @@ typedef struct {
   bool temperature_read_failed; // 74.0
 } flags_struct;
 
+// Tray state reported by the DVD drive on its three state pins (PORTB & 0x70 on
+// the PIC), as returned by SMBus 0x03 (without the "moving" bit 0)
+enum class drive_tray_state : uint8_t {
+  closed = 0x00,
+  open = 0x10,
+  unloading = 0x20,
+  opening = 0x30,
+  no_disc = 0x40,       // Closed, no disc
+  closing = 0x50,
+  disc_detected = 0x60, // Closed, disc found
+  drive_off = 0x70      // Or no drive
+};
+
 typedef struct {
   uint8_t CPU_temperature;
   uint8_t board_temperature;
-  uint8_t tray_status;
+  drive_tray_state tray_status;
   uint8_t vmode;
 } sensors_struct;
 

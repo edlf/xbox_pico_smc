@@ -217,7 +217,7 @@ void globals_init() {
 
   sensors.CPU_temperature = 0x17;
   sensors.board_temperature = 0x17;
-  sensors.tray_status = 0;
+  sensors.tray_status = drive_tray_state::closed;
   sensors.vmode = 0;
 }
 
