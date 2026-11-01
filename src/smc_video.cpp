@@ -98,16 +98,14 @@ void update() {
     break;
 
   case video_state::cable_removed:
-    // The PIC means to debounce here, but compares vmode_raw with itself, so
-    // the removal is always accepted right away. P2L (0x11DC) does debounce:
-    // back to watching unless it still reads no cable.
-#if SMC_FIRMWARE_P2L
-    if (readMode() != no_cable) {
+    // Debounced like P2L (0x11DC): back to watching unless it still reads no
+    // cable. The PIC means to do the same, but compares vmode_raw with itself,
+    // so it accepts the removal right away.
+    vmode_prev = readMode();
+    if (vmode_prev != no_cable) {
       state = video_state::monitor;
       break;
     }
-#endif
-    vmode_prev = readMode();
     flags.av_cable_missing = true; // No AV cable (LEDs, audio clamp)
     flags.av_unplugged_event = true; // SMI to the OS
     setMode(vmode_raw);

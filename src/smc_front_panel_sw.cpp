@@ -46,8 +46,8 @@ void updatePower() {
 
   case switch_state::debouncing:
     if (hal::power_button_pressed()) {
-      // P2L (0x8C3): only counts while the eject button is idle
-      if (!SMC_FIRMWARE_P2L || eject_state == switch_state::wait_for_button_press) {
+      // Only counts while the eject button is idle (as P2L, 0x8C3)
+      if (eject_state == switch_state::wait_for_button_press) {
         flags.power_change_requested = true;
       }
       pwr_state = switch_state::wait_for_button_release;
@@ -82,8 +82,8 @@ void updateEject() {
 
   case switch_state::debouncing:
     if (hal::eject_button_pressed()) {
-      // P2L (0x782): only counts while the power button is idle
-      if (!SMC_FIRMWARE_P2L || pwr_state == switch_state::wait_for_button_press) {
+      // Only counts while the power button is idle (as P2L, 0x782)
+      if (pwr_state == switch_state::wait_for_button_press) {
         flags.eject_change_requested = true;
         flags.eject_button_event = true;
       }

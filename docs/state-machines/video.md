@@ -17,7 +17,8 @@ stateDiagram-v2
     debounce --> changed: different again
     confirmed --> monitor: report it, SMI (AV mode changed)
 
-    cable_removed --> no_cable: av_cable_missing, SMI (AV unplugged)
+    cable_removed --> monitor: cable read again
+    cable_removed --> no_cable: still no cable, av_cable_missing, SMI (AV unplugged)
     no_cable --> monitor: cable back, unclamp the audio
     no_cable --> special_debounce: special mode (0x0A)
     special_debounce --> special_done: still 0x0A, SMI as power button
@@ -31,7 +32,7 @@ stateDiagram-v2
 | 1 | `changed` | Remembers the new reading |
 | 2 | `debounce` | Reads again: the mode must be the same twice |
 | 3 | `confirmed` | Reports the new mode and raises the AV mode changed SMI |
-| 4 | `cable_removed` | Sets `av_cable_missing` (LEDs, audio clamp) and raises the AV unplugged SMI. The PIC's debounce here compares a value with itself, so the removal is always accepted at once. P2L does debounce it: it reads again and goes back to `monitor` unless it still reads no cable |
+| 4 | `cable_removed` | Reads again and goes back to `monitor` unless it still reads no cable, then sets `av_cable_missing` (LEDs, audio clamp) and raises the AV unplugged SMI. This debounce comes from P2L (v1.6) and applies to every firmware: the PIC's version compares a value with itself, so it accepts the removal at once |
 | 5 | `no_cable` | Waits for a cable or the special mode |
 | 6 | `special_debounce` | Confirms the special mode |
 | 7 | `special_done` | Stays until the state machine is re-initialised |
