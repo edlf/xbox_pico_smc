@@ -11,9 +11,8 @@ stateDiagram-v2
     initial --> boot_failure: boot challenge gave up (FRAG)
     initial --> overheat: overheated
     initial --> quick_green_orange: no AV cable
-    initial --> manual_control: LED override (P11 checks this third)
+    initial --> manual_control: LED override
     initial --> off: system not running
-    initial --> manual_control: LED override (P01 checks this fourth)
     initial --> quick_green_blink: tray moving
     initial --> solid_green: otherwise
 
@@ -43,7 +42,7 @@ stateDiagram-v2
 
 | # | State | What it does |
 |---|-------|--------------|
-| 0 | `initial` | Picks the pattern, highest priority first. The boot failure code beats everything (the PIC shows it through the LED override, below an overheat). A missing AV cable beats the LED override on every firmware; the original P11 checks the override first, so a dashboard's LED colours hid it |
+| 0 | `initial` | Picks the pattern, highest priority first. The boot failure code beats everything (the PIC shows it through the LED override, below an overheat). A missing AV cable beats the LED override on every firmware; the original P11 checks the override first, so a dashboard's LED colours hid it. The override beats the off state, as P11/P2L (P01 checks off first) |
 | 6 | `tick_update` | Holds the current phase for 6 ticks |
 | 7 | `set_gpios` | Sets both LEDs for the next phase |
 | 8 | `resetPhaseCounter` | Starts again at phase 3 |

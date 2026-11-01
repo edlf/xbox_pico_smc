@@ -122,9 +122,8 @@ P2L clamps values above 50 to 50.
 
 Bit 0 = 1: show the pattern from 0x08. Bit 0 = 0: back to the automatic
 patterns. A boot failure error code, an overheat and the "no AV cable" pattern
-always win over the
-override (the original P11 lets the override hide the AV one). On P01 the off
-state also wins; on P11 it doesn't.
+always win over the override (the original P11 lets the override hide the AV
+one). The override wins over the off state, as P11/P2L (P01 shows off first).
 Cleared by every reset.
 
 ### 0x08 LED pattern (write)

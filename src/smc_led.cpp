@@ -144,25 +144,17 @@ void update()
       return;
     }
 
-#if SMC_FIRMWARE_P11
-    // P11 checks the SMBus LED override before power off
+    // The SMBus LED override comes before power off, as P11/P2L (P01 checks
+    // power off first)
     if (manual_control) {
       state = led_state::manual_control;
       return;
     }
-#endif
 
     if (power_off_bit) {
       state = led_state::off;
       return;
     }
-
-#if !SMC_FIRMWARE_P11
-    if (manual_control) {
-      state = led_state::manual_control;
-      return;
-    }
-#endif
 
     if (quick_green_blink) {
       state = led_state::quick_green_blink;
