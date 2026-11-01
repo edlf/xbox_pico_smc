@@ -321,22 +321,14 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     break;
 
   case Command::WRITE_RAM_TEST_RESULTS: // 0x12
-    // Same as the PIC (0x188)
+    // As P2L (0x622): passed with 0x13 = 0x0F and 0x12 = 0xF0, or 0x13 = 0x00
+    // or 0xFF and 0x12 = 0x00. The PIC (0x188) passes 0x13 = 0x00/0xFF
+    // whatever 0x12 holds
     flags.ram_test_submitted = true;
-    flags.ram_test_passed = false;
     ram_test_response0 = data;
-#if SMC_FIRMWARE_P2L
-    // P2L (0x622): 0x13 = 0x00 or 0xFF also needs 0x12 = 0x00
-    if ((ram_test_response1 == 0x0F && ram_test_response0 == 0xF0) ||
-        ((ram_test_response1 == 0x00 || ram_test_response1 == 0xFF) && ram_test_response0 == 0x00)) {
-      flags.ram_test_passed = true;
-    }
-#else
-    if (ram_test_response1 == 0xFF || ram_test_response1 == 0x00 ||
-        (ram_test_response1 == 0x0F && ram_test_response0 == 0xF0)) {
-      flags.ram_test_passed = true;
-    }
-#endif
+    flags.ram_test_passed =
+        (ram_test_response1 == 0x0F && ram_test_response0 == 0xF0) ||
+        ((ram_test_response1 == 0x00 || ram_test_response1 == 0xFF) && ram_test_response0 == 0x00);
     break;
 
   case Command::CHALLENGE_RESPONSE0: // 0x20

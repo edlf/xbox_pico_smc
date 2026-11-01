@@ -80,13 +80,14 @@ option(SMC_LED_RED_BREATHE "Red LED breathes while on" OFF)
 # - DXF (debug kit) is D01 with an RTC dump instead of a power cycle after boot
 #   failures and no I2C bus recovery.
 # - P2L (v1.6 Xyclops, 8051) is P11 with its own fan control (CPU temperature
-#   only, averaged) and SMBus 0x05/0x0A/0x12 changes. The temperature still
+#   only, averaged) and SMBus 0x05/0x0A changes. The temperature still
 #   comes from the ADM1032, there's no Xcalibur sensor.
 # All of them interlock the power and eject buttons, debounce the AV cable
 # removal, handle the DVD tray, power cycle (SMBus 0x22 delay), order the LED
-# patterns and run the boot challenge (15-tick RAM test wait, one answer check
-# after a passed RAM test, new challenge on every reset, audio muted and no
-# FRAG eject while overheated on failure) like P2L.
+# patterns, check the RAM test result (SMBus 0x12/0x13) and run the boot
+# challenge (15-tick RAM test wait, one answer check after a passed RAM test,
+# new challenge on every reset, audio muted and no FRAG eject while overheated
+# on failure) like P2L.
 set(SMC_FIRMWARE P11 CACHE STRING "Original firmware to follow: P11, P01, D01, DXF or P2L")
 set_property(CACHE SMC_FIRMWARE PROPERTY STRINGS P11 P01 D01 DXF P2L)
 string(TOUPPER "${SMC_FIRMWARE}" SMC_FIRMWARE_SETTING)

@@ -200,8 +200,9 @@ Why the SMI line was pulsed. Cleared by reading it.
 ### 0x12 RAM test result (write) / 0x13 RAM type (write)
 
 Written by the BIOS after its RAM test, 0x13 first. The test counts as passed
-when the 0x13 value is 0x00 or 0xFF, or when 0x13 is 0x0F and 0x12 is 0xF0.
-P2L is stricter: 0x13 = 0x00 or 0xFF also needs 0x12 = 0x00.
+when 0x13 is 0x0F and 0x12 is 0xF0, or when 0x13 is 0x00 or 0xFF and 0x12 is
+0x00 (as P2L; the original P01/P11 pass 0x13 = 0x00 or 0xFF whatever 0x12
+holds).
 Without a passed test the SMC doesn't wait for the OS at power off.
 Read back with 0x14 and 0x15.
 
