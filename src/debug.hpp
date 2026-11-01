@@ -28,6 +28,7 @@ inline bool debug_enabled() { return enabled(DebugLevel::Debug); }
 
 const char* level_name();
 void print_welcome();
+void print_build_flags();
 
 } // namespace debug
 

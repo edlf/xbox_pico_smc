@@ -6,7 +6,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# Initialise pico_sdk from installed location
+# Initialize pico_sdk from installed location
 # (note this can come from environment, CMake cache etc)
 
 # == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
@@ -23,6 +23,7 @@ if (EXISTS ${picoVscode})
     include(${picoVscode})
 endif()
 # ====================================================================================
+
 set(PICO_BOARD pico2_w CACHE STRING "Board type")
 
 # Supported boards: pico, pico_w, pico2, pico2_w. Pick one with -DPICO_BOARD=...
@@ -151,12 +152,15 @@ message(STATUS "Reported version (SMBus 0x01): ${SMC_VERSION_REPORTED}")
 # open http://192.168.4.1
 set(SMC_WEB_INTERFACE AUTO CACHE STRING "Wi-Fi access point with a status and control page: AUTO (on for boards with Wi-Fi), ON or OFF")
 set_property(CACHE SMC_WEB_INTERFACE PROPERTY STRINGS AUTO ON OFF)
+
 # Build folders from before AUTO existed hold the old plain ON/OFF default
 get_property(SMC_WEB_INTERFACE_TYPE CACHE SMC_WEB_INTERFACE PROPERTY TYPE)
+
 if(SMC_WEB_INTERFACE_TYPE STREQUAL "BOOL")
   set_property(CACHE SMC_WEB_INTERFACE PROPERTY TYPE STRING)
   set_property(CACHE SMC_WEB_INTERFACE PROPERTY VALUE AUTO)
 endif()
+
 string(TOUPPER "${SMC_WEB_INTERFACE}" SMC_WEB_INTERFACE_SETTING)
 if(SMC_WEB_INTERFACE_SETTING STREQUAL "AUTO")
   if(PICO_CYW43_SUPPORTED)
@@ -171,6 +175,7 @@ elseif(SMC_WEB_INTERFACE_SETTING MATCHES "^(OFF|NO|FALSE|0)$")
 else()
   message(FATAL_ERROR "SMC_WEB_INTERFACE must be AUTO, ON or OFF, got '${SMC_WEB_INTERFACE}'")
 endif()
+
 message(STATUS "Web interface (SMC_WEB_INTERFACE=${SMC_WEB_INTERFACE}): ${SMC_WEB_ENABLED}")
 set(SMC_WIFI_SSID "OG-SMC" CACHE STRING "Access point name")
 set(SMC_WIFI_PASSWORD "" CACHE STRING "Access point WPA2 password (8-63 characters), empty: made from the board's unique ID and shown in the boot log")
@@ -180,6 +185,7 @@ if(SMC_WIFI_PASSWORD STREQUAL "og-smc-xbox")
   set_property(CACHE SMC_WIFI_PASSWORD PROPERTY VALUE "")
   set(SMC_WIFI_PASSWORD "")
 endif()
+
 if(SMC_WEB_ENABLED)
   if(NOT PICO_CYW43_SUPPORTED)
     message(FATAL_ERROR "SMC_WEB_INTERFACE needs a board with Wi-Fi (pico_w, pico2_w), PICO_BOARD is '${PICO_BOARD}'")
@@ -198,6 +204,7 @@ if(SMC_FIRMWARE_P2L)
 else()
   set(SMC_FAN_SRC ${SMC_SRC_DIR}/smc_fan_pic.cpp)
 endif()
+
 add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/debug.cpp
                       ${SMC_SRC_DIR}/main.cpp
