@@ -12,6 +12,19 @@ namespace PowerStandby {
 power_standby_state state;
 static uint16_t power_timeout3 = 0;
 
+// The Pico's onboard LED breathes while the Xbox is off (solid while it runs)
+constexpr uint8_t breathe_ticks = 200; // 4 s per breath
+static uint8_t breathe_step = 0;
+
+static void breathePicoLed() {
+  const uint8_t half = breathe_ticks / 2;
+  const uint8_t ramp = breathe_step < half ? breathe_step : breathe_ticks - breathe_step;
+  hal::set_pico_led_level((uint16_t)255 * ramp / half);
+  if (++breathe_step >= breathe_ticks) {
+    breathe_step = 0;
+  }
+}
+
 void init(){
   state = power_standby_state::initial;
 }
@@ -24,6 +37,7 @@ uint8_t update() {
     hal::led_green_off();
     hal::fan_pin_low();
     hal::timer1_init(hal::TICK_US);
+    breathe_step = 0; // Start from dark
     Dvd::sensors.tray_status = Dvd::drive_tray_state::closed;
     Video::sensors.vmode = Video::av_pack::special;
     state = power_standby_state::read_av;
@@ -78,6 +92,7 @@ uint8_t update() {
 
   case power_standby_state::idle: // State 6
     update_LEDs();
+    breathePicoLed();
     hal::timer1_wait();
     state = power_standby_state::read_av; // Loop back to AV reading
     return 0;
@@ -112,6 +127,7 @@ uint8_t update() {
     break;
 
   case power_standby_state::powered_up:
+    hal::pico_led_on(); // Solid while the Xbox runs
     PLL_Reset::flags.run_after_reset = true;
     Led::flags.led_override = false;
     SMI::flags.first_execution = true;

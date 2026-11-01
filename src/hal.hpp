@@ -24,6 +24,9 @@ bool power_button_pressed();
 bool eject_button_pressed();
 void pico_led_on();
 void pico_led_off();
+// 0 (off) to 255 (full), Pico and Pico 2 only (on the W boards the LED is on
+// the wireless chip)
+void set_pico_led_level(uint8_t level);
 
 void smi_pin_on();
 void smi_pin_off();

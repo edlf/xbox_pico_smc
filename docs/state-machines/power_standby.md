@@ -35,7 +35,7 @@ stateDiagram-v2
 | 3 | `turn_on_power_no_av` | PSU on, fan at minimum speed |
 | 4 | `powered_up_wait_power_ok` | Waits for POWOK, up to 50 ticks (1 s); without it the SMC panics and the watchdog reboots it |
 | 5 | `check_eject_button` | Runs the eject button debounce |
-| 6 | `idle` | Updates the LEDs, waits for the next tick, back to `read_av` |
+| 6 | `idle` | Updates the LEDs and steps the Pico onboard LED breathe (4 s, Pico and Pico 2 only; solid once the Xbox is on), waits for the next tick, back to `read_av` |
 | 7 | `turn_on_power_alternative` | Same as 3, for the eject button: also marks that the tray is expected to open |
 | 8 | `powered_up_wait_power_ok_alternative` | Same as 4 |
 | 9 | `powered_up_alt` | Sends the eject SMI (`InterruptReason_eject_sw_pressed`) so the OS opens the tray |

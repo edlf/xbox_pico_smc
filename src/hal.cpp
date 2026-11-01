@@ -104,15 +104,26 @@ uint8_t get_led_brightness() {
   return led_brightness;
 }
 
+// Pico onboard LED, PWM driven (same rate as the front panel LEDs) so it can
+// breathe while the Xbox is off
 void pico_led_on() {
 #ifdef PICO_DEFAULT_LED_PIN
-  gpio_put(pins::PICO_LED, 1);
+  pwm_set_gpio_level(pins::PICO_LED, LED_PWM_WRAP + 1);
 #endif
 }
 
 void pico_led_off() {
 #ifdef PICO_DEFAULT_LED_PIN
-  gpio_put(pins::PICO_LED, 0);
+  pwm_set_gpio_level(pins::PICO_LED, 0);
+#endif
+}
+
+void set_pico_led_level(const uint8_t level) {
+#ifdef PICO_DEFAULT_LED_PIN
+  // Squared, so the change looks even
+  pwm_set_gpio_level(pins::PICO_LED, (uint32_t)(LED_PWM_WRAP + 1) * level * level / (255 * 255));
+#else
+  (void)level;
 #endif
 }
 
@@ -563,8 +574,15 @@ void init() {
   gpio_disable_pulls(pins::DVD_ACTIVE);
 
 #ifdef PICO_DEFAULT_LED_PIN
-  gpio_init(pins::PICO_LED);
-  gpio_set_dir(pins::PICO_LED, GPIO_OUT);
+  {
+    const uint slice = pwm_gpio_to_slice_num(pins::PICO_LED);
+    pwm_config cfg = pwm_get_default_config();
+    pwm_config_set_clkdiv(&cfg, (float)clock_get_hz(clk_sys) / (LED_PWM_HZ * (LED_PWM_WRAP + 1)));
+    pwm_config_set_wrap(&cfg, LED_PWM_WRAP);
+    pwm_init(slice, &cfg, true);
+    pwm_set_gpio_level(pins::PICO_LED, 0);
+    gpio_set_function(pins::PICO_LED, GPIO_FUNC_PWM);
+  }
 #endif
 
   gpio_set_function(pins::I2C_SDA, GPIO_FUNC_I2C);
