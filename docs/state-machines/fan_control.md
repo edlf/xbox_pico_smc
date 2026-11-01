@@ -58,7 +58,7 @@ stateDiagram-v2
 | 8 | `board_hot` | Speed +1 |
 | 9 | `wait` | 50 × 20 ticks (20 s). Keeps applying the override speed |
 | 10 | `start_delay` | Waits the 5 start ticks, then speed 10 |
-| 11 | `sample_temperatures` | One reading per tick, 3 in all. A failed reading is retried for 20 ticks, then the bus is recovered once; if the sensor still doesn't answer the SMC forces an overheat |
+| 11 | `sample_temperatures` | One reading per tick, 3 in all. A failed reading is retried for 20 ticks, then the bus is recovered once (not on DXF); if the sensor still doesn't answer the SMC forces an overheat |
 | 12 | `cpu_hot` | Speed +3 |
 | 13 | `start_sampling` | Starts a set of 3 readings |
 

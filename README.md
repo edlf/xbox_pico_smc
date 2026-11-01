@@ -19,6 +19,7 @@ Very very experimental, currently it boots on 1.0 boards (although the fan curve
 
 ## Notes
 - *Heavily* based on the work Prehistoricman did. [Xbox_SMC](https://github.com/Prehistoricman/Xbox_SMC)
+- By default it mimics the P11 SMC behavior, except the boot challenge is optional.
 - Some AI assistance was used (claude), mostly for the web interface.
 
 ## Thanks

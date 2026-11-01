@@ -24,7 +24,8 @@ enum class boot_challenge_state {
   retry_boot,
   check_response,
   challenge_passed,
-  reboot
+  reboot,
+  rtc_dump_start // DXF only
 };
 
 typedef struct {

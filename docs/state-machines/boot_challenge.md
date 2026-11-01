@@ -9,6 +9,16 @@ paths below are taken instead of the failure handling. With
 `SMC_BOOT_CHALLENGE=ON` the SMC resets, power cycles and finally locks up
 (FRAG) like the original.
 
+The debug kit firmwares differ (`SMC_FIRMWARE=D01` or `DXF`):
+
+- **D01 and DXF** have no challenge. The challenge bytes are never filled in
+  and nothing is computed; after the RAM test, `challenge_wait_for_reply` only
+  waits for the next reset, so `check_response` and `challenge_passed` are never
+  reached. `SMC_BOOT_CHALLENGE=ON` then only enforces the RAM test.
+- **DXF** doesn't power cycle after repeated failures: `boot_failed` goes to
+  `rtc_dump_start`, then `reboot` holds RTC dump high for 100 ticks (2 s) while
+  the system is held in reset, and the boot is retried.
+
 ```mermaid
 stateDiagram-v2
     [*] --> initial
@@ -50,4 +60,5 @@ stateDiagram-v2
 | 8 | `retry_boot` | Cold reset and run again |
 | 9 | `check_response` | Compares SMBus 0x20/0x21 with the expected answer |
 | 10 | `challenge_passed` | Waits for the next reset, then starts a new challenge |
-| 11 | `reboot` | After 4 ticks, powers the Xbox off, pulses RTC dump for 100 ticks (2 s) and powers it on again. Blocks the main loop while it runs |
+| 11 | `reboot` | After 4 ticks, powers the Xbox off, pulses RTC dump for 100 ticks (2 s) and powers it on again. Blocks the main loop while it runs. DXF: RTC dump for 100 ticks without a power cycle, one tick per step |
+| 12 | `rtc_dump_start` | DXF only: one tick before `reboot` |

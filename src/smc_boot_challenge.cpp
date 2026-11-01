@@ -22,7 +22,8 @@ constexpr const char* state_names[] = {
   "Retry boot",
   "Check response",
   "Challenge passed",
-  "Reboot"
+  "Reboot",
+  "RTC dump start"
 };
 
 // Error codes readable via SMBus 0x0F
@@ -56,8 +57,12 @@ static uint8_t slowTimerByte() {
   return (uint8_t)(time_us_32() >> 3);
 }
 
-// Called on every standby loop iteration (0x23B)
+// Called on every standby loop iteration (0x23B). D01/DXF have no challenge
+// and leave the bytes alone, also in seedPowerUp().
 void seedStandby() {
+#if SMC_FIRMWARE_NO_CHALLENGE
+  return;
+#endif
   challenge.input_byte0++;
   challenge.input_byte1 = fastTimerByte();
   if (challenge.input_byte1 == 0) {
@@ -67,6 +72,9 @@ void seedStandby() {
 
 // Called when the Xbox has powered up (0x250), and to reseed after a reset
 void seedPowerUp() {
+#if SMC_FIRMWARE_NO_CHALLENGE
+  return;
+#endif
   challenge.input_byte2 = slowTimerByte() + challenge.input_byte0;
   challenge.input_byte3 = sensors.CPU_temperature ^ challenge.input_byte1;
 }
@@ -115,6 +123,7 @@ static void lockUp() {
   state = boot_challenge_state::lock_up;
 }
 
+#if !SMC_FIRMWARE_DXF // DXF only pulses RTC dump, without a power cycle
 // Power cycles the Xbox while dumping the RTC, as the PIC does after repeated
 // boot failures (0x987). Blocks the main loop like the original.
 static bool powerCycleWithRtcDump() {
@@ -157,6 +166,7 @@ static bool powerCycleWithRtcDump() {
   setPowerOkIrq(true);
   return true;
 }
+#endif
 
 // Without SMC_BOOT_CHALLENGE the state machine still runs to log the results,
 // but a failure never resets the Xbox or locks it up: it carries on with the
@@ -165,7 +175,9 @@ void update() {
   switch (state) {
   case boot_challenge_state::initial:
     boot_response_timeout = 12;
-    compute();
+#if !SMC_FIRMWARE_NO_CHALLENGE
+    compute(); // D01/DXF (0x8DA) skip it
+#endif
     state = boot_challenge_state::wait_for_ram_test_result;
     break;
 
@@ -212,12 +224,17 @@ void update() {
     break;
 
   case boot_challenge_state::challenge_wait_for_reply:
+#if SMC_FIRMWARE_NO_CHALLENGE
+    // D01/DXF (0x905): no challenge, the RAM test is all that's checked
+    waitForReset();
+#else
     if (!flags.warm_reset_request && !flags.cold_reset_request) {
       boot_response_timeout = SMC_FIRMWARE_P11 ? 4 : 2; // 0x90A
       state = boot_challenge_state::check_response;
     } else {
       waitForReset();
     }
+#endif
     break;
 
   case boot_challenge_state::boot_failed:
@@ -226,10 +243,15 @@ void update() {
       state = boot_challenge_state::retry_boot;
     } else if (--failure_countdown != 0) {
       failure_count = 0;
-      rtc_dump_time = 4;
       flags.cold_reset_request = true;
       flags.run_after_reset = false;
+#if SMC_FIRMWARE_DXF
+      rtc_dump_time = 100; // DXF (0x94D): RTC dump while held in reset
+      state = boot_challenge_state::rtc_dump_start;
+#else
+      rtc_dump_time = 4;
       state = boot_challenge_state::reboot;
+#endif
     } else {
       lockUp();
     }
@@ -292,6 +314,16 @@ void update() {
     break;
 
   case boot_challenge_state::reboot:
+#if SMC_FIRMWARE_DXF
+    // DXF (0x955): no power cycle, RTC dump high for 100 ticks (2 s) while the
+    // system is held in reset, then try again
+    hal::rtc_dump_on();
+    if (--rtc_dump_time != 0) {
+      return;
+    }
+    hal::rtc_dump_off();
+    state = boot_challenge_state::retry_boot;
+#else
     if (--rtc_dump_time != 0) {
       return;
     }
@@ -300,6 +332,12 @@ void update() {
     } else {
       lockUp();
     }
+#endif
+    break;
+
+  case boot_challenge_state::rtc_dump_start:
+    // DXF (0x965): one tick before the RTC dump
+    state = boot_challenge_state::reboot;
     break;
 
   default:

@@ -69,7 +69,7 @@ stateDiagram-v2
     [*] --> initial
     initial --> eject: eject button pressed
     initial --> wait: tray in a moving state
-    wait --> initial: tray at 0x10, 0x40 or 0x60
+    wait --> initial: tray at 0x10, 0x40 or 0x60 (DXF also 0x00)
     eject --> wait: tray opening (0x30), 0x20, closing (0x50, unless opening is expected), or 255-tick timeout
 ```
 

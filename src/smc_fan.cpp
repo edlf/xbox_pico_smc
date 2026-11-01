@@ -246,8 +246,8 @@ void update_fan_temp() {
       if (--retry_timeout != 0) {
         return;
       }
-      if (bus_recovery_allowed) {
-        /* Try once to free the bus, then retry */
+      if (bus_recovery_allowed && !SMC_FIRMWARE_DXF) {
+        /* Try once to free the bus, then retry. DXF doesn't (0x47D) */
         bus_recovery_allowed = false;
         hal::i2c_bus_recovery();
         retry_timeout = read_retries;

@@ -4,10 +4,10 @@ The SMC is an SMBus slave at address **0x10** (0x20 write / 0x21 read in 8-bit
 form). Each command is one register byte: a write sends the command and one data
 byte; a read sends the command, then a repeated START, then reads one byte.
 
-Behavior follows the original PIC firmware (P01, or P11 with
-`SMC_FIRMWARE=P11`, the default). Unknown commands are ignored on write and
-read as 0x00, and so are writes to read-only commands and reads of write-only
-ones. Times are in SMC ticks of 20 ms.
+Behavior follows the original PIC firmware chosen with `SMC_FIRMWARE`: P11 (the
+default), P01, or the debug kit versions D01 and DXF. Unknown commands are
+ignored on write and read as 0x00, and so are writes to read-only commands and
+reads of write-only ones. Times are in SMC ticks of 20 ms.
 
 ## Overview
 
@@ -48,14 +48,14 @@ ones. Times are in SMC ticks of 20 ms.
 
 ### 0x01 Firmware version (read/write)
 
-Each read returns the next character of the version string, wrapping after three:
-`'P'`, `'1'`, `'1'` for P11 or `'P'`, `'0'`, `'1'` for P01. The position is kept
-between transactions. Writing any value restarts at `'P'`.
+Each read returns the next character of the version string, wrapping after
+three (for example `'P'`, `'1'`, `'1'`). The position is kept between
+transactions. Writing any value restarts at the first character.
 
-`SMC_REPORT_P01=ON` makes a P11 build report "P01". The boot log shows the
-reported version.
-
-Debug kits report other versions like D01 or DXF.
+The string is set by `SMC_REPORT_VERSION`: `AUTO` (the default) reports the
+`SMC_FIRMWARE` version. `P01`, `P11`, `D01` and `DXF` report that version
+whatever the behavior is: only the reported string changes, the behavior
+still follows `SMC_FIRMWARE`. The boot log shows the reported version.
 
 ### 0x02 Reset / power (write)
 
@@ -234,6 +234,9 @@ At boot the BIOS reads the four challenge bytes, computes the answer and writes
 it to 0x20 and 0x21 (0x21 last). By default the result is only logged; with
 `SMC_BOOT_CHALLENGE=ON` a wrong or missing answer resets the Xbox and after
 repeated failures shows the FRAG pattern, like the original.
+
+D01 and DXF (debug kits) have no challenge: the bytes stay 0x00 and the answer
+is ignored. Only the RAM test result is checked.
 
 ### 0x22 Power cycle delay (write, P11 only)
 

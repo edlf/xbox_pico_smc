@@ -71,19 +71,31 @@ endif()
 # -DSMC_LED_RED_BREATHE=ON
 option(SMC_LED_RED_BREATHE "Red LED breathes while on" OFF)
 
-# Behaviour of which original PIC firmware to follow: -DSMC_FIRMWARE=P11 or P01.
-# P11 (1.2/1.3) has lower fan thresholds, SMBus 0x22 (power cycle delay), a
-# shorter power cycle, LED overrides over the AV/off patterns and configures
-# the temperature sensor instead of the video encoder after reset.
-set(SMC_FIRMWARE P11 CACHE STRING "Original firmware to follow: P11 or P01")
-set_property(CACHE SMC_FIRMWARE PROPERTY STRINGS P11 P01)
+# Behavior of which original PIC firmware to follow: -DSMC_FIRMWARE=P11, P01,
+# D01 or DXF.
+# - P11 (1.2/1.3) has lower fan thresholds, SMBus 0x22 (power cycle delay), a
+#   shorter power cycle, LED overrides over the AV/off patterns and configures
+#   the temperature sensor instead of the video encoder after reset.
+# - D01 (debug kit) is P01 without the boot challenge: only the RAM test is
+#   checked.
+# - DXF (debug kit) is D01 with an RTC dump instead of a power cycle after boot
+#   failures, no I2C bus recovery, and the tray stops "moving" at 0x00 too.
+set(SMC_FIRMWARE P11 CACHE STRING "Original firmware to follow: P11, P01, D01 or DXF")
+set_property(CACHE SMC_FIRMWARE PROPERTY STRINGS P11 P01 D01 DXF)
 string(TOUPPER "${SMC_FIRMWARE}" SMC_FIRMWARE_SETTING)
+if(NOT SMC_FIRMWARE_SETTING MATCHES "^(P11|P01|D01|DXF)$")
+  message(FATAL_ERROR "SMC_FIRMWARE must be P11, P01, D01 or DXF, got '${SMC_FIRMWARE}'")
+endif()
+set(SMC_FIRMWARE_P11 OFF)  # P11 changes
+set(SMC_FIRMWARE_NO_CHALLENGE OFF)  # Debug kits: no boot challenge
+set(SMC_FIRMWARE_DXF OFF)  # DXF changes on top of D01
 if(SMC_FIRMWARE_SETTING STREQUAL "P11")
   set(SMC_FIRMWARE_P11 ON)
-elseif(SMC_FIRMWARE_SETTING STREQUAL "P01")
-  set(SMC_FIRMWARE_P11 OFF)
-else()
-  message(FATAL_ERROR "SMC_FIRMWARE must be P11 or P01, got '${SMC_FIRMWARE}'")
+elseif(SMC_FIRMWARE_SETTING STREQUAL "D01")
+  set(SMC_FIRMWARE_NO_CHALLENGE ON)
+elseif(SMC_FIRMWARE_SETTING STREQUAL "DXF")
+  set(SMC_FIRMWARE_NO_CHALLENGE ON)
+  set(SMC_FIRMWARE_DXF ON)
 endif()
 
 # Log verbosity on the USB/UART console: -DSMC_DEBUG_LEVEL=DEBUG adds the SMBus
@@ -97,8 +109,28 @@ if(SMC_DEBUG_LEVEL_INDEX LESS 0)
   message(FATAL_ERROR "SMC_DEBUG_LEVEL must be SILENT, CRITICAL, WARNINGS, INFO or DEBUG, got '${SMC_DEBUG_LEVEL}'")
 endif()
 
-# Report "P01" on SMBus 0x01 while following P11: -DSMC_REPORT_P01=ON
-option(SMC_REPORT_P01 "Report version P01 on SMBus 0x01, whatever SMC_FIRMWARE is" OFF)
+# Version reported on SMBus 0x01, independent of the behavior (SMC_FIRMWARE):
+# -DSMC_REPORT_VERSION=AUTO (same as SMC_FIRMWARE), P01, P11, D01 or DXF
+set(SMC_REPORT_VERSION AUTO CACHE STRING "Version reported on SMBus 0x01: AUTO (same as SMC_FIRMWARE), P01, P11, D01 or DXF")
+set_property(CACHE SMC_REPORT_VERSION PROPERTY STRINGS AUTO P01 P11 D01 DXF)
+# Replaces SMC_REPORT_P01: carry an old ON over once, then drop it
+if(DEFINED CACHE{SMC_REPORT_P01})
+  if(SMC_REPORT_P01 AND SMC_REPORT_VERSION STREQUAL "AUTO")
+    set_property(CACHE SMC_REPORT_VERSION PROPERTY VALUE P01)
+    set(SMC_REPORT_VERSION P01)
+    message(STATUS "SMC_REPORT_P01=ON is now SMC_REPORT_VERSION=P01")
+  endif()
+  unset(SMC_REPORT_P01 CACHE)
+endif()
+string(TOUPPER "${SMC_REPORT_VERSION}" SMC_REPORT_VERSION_SETTING)
+if(SMC_REPORT_VERSION_SETTING STREQUAL "AUTO")
+  set(SMC_VERSION_REPORTED "${SMC_FIRMWARE_SETTING}")
+elseif(SMC_REPORT_VERSION_SETTING MATCHES "^(P01|P11|D01|DXF)$")
+  set(SMC_VERSION_REPORTED "${SMC_REPORT_VERSION_SETTING}")
+else()
+  message(FATAL_ERROR "SMC_REPORT_VERSION must be AUTO, P01, P11, D01 or DXF, got '${SMC_REPORT_VERSION}'")
+endif()
+message(STATUS "Reported version (SMBus 0x01): ${SMC_VERSION_REPORTED}")
 
 # Wi-Fi access point with a status and control page, W boards only:
 # -DSMC_WEB_INTERFACE=AUTO (default: on for boards with Wi-Fi), ON or OFF.
@@ -171,8 +203,11 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
                                           SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
                                           SMC_LED_RED_BREATHE=$<BOOL:${SMC_LED_RED_BREATHE}>
+                                          SMC_FIRMWARE_NAME="${SMC_FIRMWARE_SETTING}"
                                           SMC_FIRMWARE_P11=$<BOOL:${SMC_FIRMWARE_P11}>
-                                          SMC_REPORT_P01=$<BOOL:${SMC_REPORT_P01}>
+                                          SMC_FIRMWARE_NO_CHALLENGE=$<BOOL:${SMC_FIRMWARE_NO_CHALLENGE}>
+                                          SMC_FIRMWARE_DXF=$<BOOL:${SMC_FIRMWARE_DXF}>
+                                          SMC_VERSION_STRING="${SMC_VERSION_REPORTED}"
                                           SMC_DEBUG_LEVEL=${SMC_DEBUG_LEVEL_INDEX}
                                           SMC_WEB_INTERFACE=$<BOOL:${SMC_WEB_ENABLED}>
                                           SMC_BOARD="${PICO_BOARD}")

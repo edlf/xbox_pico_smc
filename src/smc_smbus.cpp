@@ -49,13 +49,13 @@ static bool expecting_command = true; // Next received byte is a command byte
 static uint8_t smbus_command = 0;
 static uint8_t last_write_command = 0; // SMBus 0x16, only updated by writes
 static uint8_t last_write_data = 0;    // SMBus 0x17, only updated by writes
-// SMBus 0x01: the SMC_FIRMWARE version, or "P01" with SMC_REPORT_P01
-#if SMC_FIRMWARE_P11 && !SMC_REPORT_P01
-const char version_string[] = "P11";
-#else
-const char version_string[] = "P01";
+// SMBus 0x01, set by CMake (SMC_REPORT_VERSION): "P01", "P11", "D01" or "DXF"
+#ifndef SMC_VERSION_STRING
+#define SMC_VERSION_STRING "P11"
 #endif
-static uint8_t smbus_version_counter = 1; // 1-3 = 'P', '0' or '1', '1'
+const char version_string[] = SMC_VERSION_STRING;
+static_assert(sizeof(version_string) == 4, "The version is 3 characters");
+static uint8_t smbus_version_counter = 1; // 1-3, the character read next
 static uint8_t scratch_register = 0;      // SMBus 0x1B, kernel boot flags kept across reboots
 
 // Transactions are printed from the main loop (printSMBusLog): printing in
@@ -107,16 +107,11 @@ uint8_t smbus_read_handler(uint8_t command) {
   case Command::FIRMWARE_REVISION: // 0x01
     // One character per read, the index survives between transactions and
     // is only reset by writing 0x01 (same as the PIC, 0x07A)
-    if (smbus_version_counter == 2) {
-      response = version_string[1];
-      smbus_version_counter = 3;
-    } else if (smbus_version_counter == 3) {
-      response = '1';
+    if (smbus_version_counter < 1 || smbus_version_counter > 3) {
       smbus_version_counter = 1;
-    } else {
-      response = 'P';
-      smbus_version_counter++;
     }
+    response = version_string[smbus_version_counter - 1];
+    smbus_version_counter = (smbus_version_counter == 3) ? 1 : smbus_version_counter + 1;
     break;
 
   case Command::TRAY_STATE: // 0x03

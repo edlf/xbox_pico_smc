@@ -239,7 +239,9 @@ void updateDvdTrayThree() {
     flags.tray_moving = true;
     flags.eject_button_event = false;
 
+    // DXF (0x54B) also stops at closed (0x00)
     if (sensors.tray_status == 0x10 ||
+        (SMC_FIRMWARE_DXF && sensors.tray_status == 0x00) ||
         sensors.tray_status == 0x40 ||
         sensors.tray_status == 0x60) {
       dvd_tray_three = update_dvd_tray_three_state::initial;
