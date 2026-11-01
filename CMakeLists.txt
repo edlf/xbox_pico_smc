@@ -84,8 +84,9 @@ option(SMC_LED_RED_BREATHE "Red LED breathes while on" OFF)
 #   changes. The temperature still comes from the ADM1032, there's no
 #   Xcalibur sensor.
 # All of them interlock the power and eject buttons, debounce the AV cable
-# removal, handle the DVD tray, power cycle (SMBus 0x22 delay) and order the
-# LED patterns like P2L.
+# removal, handle the DVD tray, power cycle (SMBus 0x22 delay), order the LED
+# patterns and handle boot failures (audio muted, no FRAG eject while
+# overheated) like P2L.
 set(SMC_FIRMWARE P11 CACHE STRING "Original firmware to follow: P11, P01, D01, DXF or P2L")
 set_property(CACHE SMC_FIRMWARE PROPERTY STRINGS P11 P01 D01 DXF P2L)
 string(TOUPPER "${SMC_FIRMWARE}" SMC_FIRMWARE_SETTING)

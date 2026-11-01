@@ -84,7 +84,7 @@ The drive's tray state pins in bits 4-6, plus bit 0 while the tray is moving.
 | 0x70  | Drive off / reset |
 
 A new state is only reported after reading the same twice in a row, and the
-tray is ignored for 32 ticks after power on. Builds without `SMC_DVD_SUPPORT`
+tray is ignored for 39 ticks after power on. Builds without `SMC_DVD_SUPPORT`
 always report 0x40.
 
 ### 0x04 AV pack (read)

@@ -19,13 +19,15 @@ The debug kit firmwares differ (`SMC_FIRMWARE=D01` or `DXF`):
   `rtc_dump_start`, then `reboot` holds RTC dump high for 100 ticks (2 s) while
   the system is held in reset, and the boot is retried.
 
-P2L (v1.6) follows P11 with these changes: it waits 15 ticks for the RAM test,
-`initial` also lets the system run and restarts the tray tracking, the answer
-is only checked after a passed RAM test and then it goes back to
-`challenge_wait_for_reply` (`challenge_passed` is never used), every reset
-makes a new challenge and resets the power cycle countdown, a boot failure
-mutes the audio, and FRAG only lets the eject button open the tray when the
-Xbox isn't overheated.
+Every firmware does these as P2L (v1.6): `initial` restarts the tray tracking,
+a boot failure mutes the audio, and FRAG only lets the eject button open the
+tray when the Xbox isn't overheated.
+
+P2L also follows P11 with these changes: it waits 15 ticks for the RAM test,
+`initial` also lets the system run, the answer is only checked after a passed
+RAM test and then it goes back to `challenge_wait_for_reply`
+(`challenge_passed` is never used), and every reset makes a new challenge and
+resets the power cycle countdown.
 
 ```mermaid
 stateDiagram-v2
@@ -62,7 +64,7 @@ stateDiagram-v2
 | 2 | `ram_test_ok` | Logs the result |
 | 3 | `ram_test_failed` | Logs it. Enforced: LED pattern, error code 0x04 |
 | 4 | `challenge_failed_or_no_ram_test_result` | LED pattern, error code 0x01 |
-| 5 | `challenge_wait_for_reply` | Starts the answer timeout (P01: 2 ticks, P11: 4) unless a reset is pending |
+| 5 | `challenge_wait_for_reply` | Starts the 4-tick answer timeout (as P11, P01 waits 2) unless a reset is pending |
 | 6 | `boot_failed` | Counts failures: the first 3 reset the Xbox, then up to 3 power cycles, then FRAG |
 | 7 | `lock_up` | FRAG: shows the error LEDs, holds the system in reset; the power button turns off right away and the eject button opens the tray |
 | 8 | `retry_boot` | Cold reset and run again |

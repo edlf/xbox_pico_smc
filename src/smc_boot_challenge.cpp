@@ -272,7 +272,7 @@ void update() {
     }
 #else
     if (!flags.warm_reset_request && !flags.cold_reset_request) {
-      boot_response_timeout = SMC_FIRMWARE_P11 ? 4 : 2; // 0x90A
+      boot_response_timeout = 4; // As P11 (0x90A), P01 waits 2
       state = boot_challenge_state::check_response;
     } else {
       waitForReset();
@@ -281,9 +281,7 @@ void update() {
     break;
 
   case boot_challenge_state::boot_failed:
-#if SMC_FIRMWARE_P2L
-    flags.audio_clamp_request = true; // P2L (0xDCA) also mutes the audio
-#endif
+    flags.audio_clamp_request = true; // Also mutes the audio, as P2L (0xDCA)
     failure_count++;
     if (failure_count <= 3) {
       state = boot_challenge_state::retry_boot;
@@ -308,7 +306,7 @@ void update() {
      * here until power off */
     flags.led_override = true;
     flags.frag_power_off = true;
-    flags.frag_eject = !SMC_FIRMWARE_P2L || !flags.overheated; // P2L (0xE15): not when overheated
+    flags.frag_eject = !flags.overheated; // Not when overheated, as P2L (0xE15)
     break;
 
   case boot_challenge_state::retry_boot:
