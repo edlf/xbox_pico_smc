@@ -448,7 +448,7 @@ void publishStatus() {
   s.fan_override = flags.fan_override;
   s.tray_state = (static_cast<uint8_t>(sensors.tray_status) >> 4) & 0x07;
   s.tray_closed = Dvd::isTrayClosing();
-  s.av_pack = (sensors.vmode >> 1) & 0x07;
+  s.av_pack = static_cast<uint8_t>(sensors.vmode) >> 1;
   s.av_missing = flags.av_cable_missing;
   s.overheated = flags.overheated;
   s.led_override = flags.led_override;

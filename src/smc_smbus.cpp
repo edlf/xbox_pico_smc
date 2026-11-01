@@ -123,7 +123,7 @@ uint8_t smbus_read_handler(uint8_t command) {
     break;
 
   case Command::VIDEO_MODE: // 0x04
-    response = (sensors.vmode >> 1) & 0x07;
+    response = static_cast<uint8_t>(sensors.vmode) >> 1;
     break;
 
   case Command::CPU_TEMPERATURE: // 0x09

@@ -8,11 +8,8 @@
 namespace SMC {
 namespace Video {
 
-// Same as the PIC (0x851). Mode pins are read as PORTB & 0x0E: 0x0E (all
-// high) means no AV cable, 0x0A while unplugged is the special mode that acts
-// like a power button press.
-constexpr uint8_t no_cable = 0x0E;
-constexpr uint8_t special_mode = 0x0A;
+// Same as the PIC (0x851). The mode pins read av_pack::none (all high) with no
+// AV cable, and av_pack::special while unplugged acts like a power button press.
 
 enum class video_state {
   monitor,           // 0
@@ -27,10 +24,10 @@ enum class video_state {
 
 // Fixed AV pack from CMake (SMC_AV_PACK_OVERRIDE), as mode pins: code << 1
 constexpr bool override = SMC_AV_PACK_OVERRIDE;
-constexpr uint8_t override_mode = (SMC_AV_PACK_MODE & 0x07) << 1;
+constexpr av_pack override_mode = static_cast<av_pack>((SMC_AV_PACK_MODE & 0x07) << 1);
 video_state state;
-uint8_t vmode_raw = 0;
-uint8_t vmode_prev = 0;
+av_pack vmode_raw = av_pack::scart;
+av_pack vmode_prev = av_pack::scart;
 bool mode_printed = false; // Cable printed since power-up
 uint8_t settle_ticks = 0;  // Let the AV pack power up before trusting an unchanged mode
 
@@ -38,34 +35,35 @@ void init() {
   state = video_state::monitor;
   mode_printed = false;
   settle_ticks = 10;
-  vmode_raw = 0;
-  vmode_prev = 0;
+  vmode_raw = av_pack::scart;
+  vmode_prev = av_pack::scart;
 }
 
-static uint8_t readMode() {
-  const uint8_t mode = override ? override_mode : hal::get_video_mode();
+static av_pack readMode() {
+  const av_pack mode = override ? override_mode : static_cast<av_pack>(hal::get_video_mode());
 
   // Raw pin changes, to see what the AV port reads when a cable is swapped
   static uint8_t last_logged = 0xFF;
-  if (mode != last_logged && debug::debug_enabled()) {
+  const uint8_t pins = static_cast<uint8_t>(mode);
+  if (pins != last_logged && debug::debug_enabled()) {
     char msg[48];
-    snprintf(msg, sizeof(msg), "VIDEO: Pins 0x%02X (state %u)", mode, static_cast<unsigned>(state));
+    snprintf(msg, sizeof(msg), "VIDEO: Pins 0x%02X (state %u)", pins, static_cast<unsigned>(state));
     debug::print_debug(msg);
   }
-  last_logged = mode;
+  last_logged = pins;
 
   return mode;
 }
 
 // The AV pack's ID pins are only meaningful while the Xbox is on
-static void printModeIfPowered(uint8_t mode) {
+static void printModeIfPowered(av_pack mode) {
   if (hal::get_power_ok()) {
     printMode(mode);
     mode_printed = true;
   }
 }
 
-static void setMode(uint8_t mode) {
+static void setMode(av_pack mode) {
   if (mode != sensors.vmode) {
     printModeIfPowered(mode);
   }
@@ -76,7 +74,7 @@ void update() {
   switch (state) {
   case video_state::monitor:
     vmode_raw = readMode();
-    if (vmode_raw == no_cable) {
+    if (vmode_raw == av_pack::none) {
       state = video_state::cable_removed;
     } else if (vmode_raw != sensors.vmode) {
       state = video_state::changed;
@@ -115,7 +113,7 @@ void update() {
     // cable. The PIC means to do the same, but compares vmode_raw with itself,
     // so it accepts the removal right away.
     vmode_prev = readMode();
-    if (vmode_prev != no_cable) {
+    if (vmode_prev != av_pack::none) {
       state = video_state::monitor;
       break;
     }
@@ -128,9 +126,9 @@ void update() {
 
   case video_state::no_cable:
     vmode_raw = readMode();
-    if (vmode_raw == special_mode) {
+    if (vmode_raw == av_pack::special) {
       state = video_state::special_debounce;
-    } else if (vmode_raw != no_cable) {
+    } else if (vmode_raw != av_pack::none) {
       /* Cable is back */
       debug::print_message("VIDEO: Cable back, audio unclamped");
       flags.av_cable_missing = false;
@@ -141,7 +139,7 @@ void update() {
 
   case video_state::special_debounce:
     vmode_raw = readMode();
-    if (vmode_raw == special_mode) {
+    if (vmode_raw == av_pack::special) {
       flags.av_power_button_event = true; // SMI as power button
       flags.av_cable_missing = false;
       state = video_state::special_done;
@@ -156,35 +154,34 @@ void update() {
   }
 }
 
-void printMode(const uint8_t vm) {
+void printMode(const av_pack vm) {
   std::string message = "VIDEO: AV Cable [";
   bool recognized_cable = true;
 
-  uint8_t temp = (vm >> 1);
-  switch (temp) {
-    case 0:
+  switch (vm) {
+    case av_pack::scart:
       message += "Advanced SCART Cable";
       break;
-    case 1:
+    case av_pack::hdtv:
       message += "High Definition AV Pack";
       break;
-    case 2:
+    case av_pack::vga:
       message += "VGA / progressive RGB";
       break;
-    case 3:
+    case av_pack::rf:
       message += "RF Adapter";
       break;
-    case 4:
+    case av_pack::advanced:
       message += "Advanced AV Pack";
       break;
-    case 5:
+    case av_pack::special:
       message += "Unknown mode 5";
       recognized_cable = false;
       break;
-    case 6:
+    case av_pack::standard:
       message += "Standard AV Cable";
       break;
-    case 7:
+    case av_pack::none:
       message += "No cable connected";
       recognized_cable = false;
       break;

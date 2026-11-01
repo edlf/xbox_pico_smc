@@ -25,7 +25,7 @@ uint8_t update() {
     hal::fan_pin_low();
     hal::timer1_init(hal::TICK_US);
     sensors.tray_status = drive_tray_state::closed;
-    sensors.vmode = 0x0A;
+    sensors.vmode = av_pack::special;
     state = power_standby_state::read_av;
     break;
 
@@ -37,7 +37,7 @@ uint8_t update() {
   case power_standby_state::check_av_power_button: // State 2
     // Check power button or AVIP port kiosk power on
     FrontPanelSW::updatePower();
-    if ((sensors.vmode != 0x0E) && (!flags.power_change_requested)) {
+    if ((sensors.vmode != av_pack::none) && (!flags.power_change_requested)) {
       state = power_standby_state::check_eject_button;
     } else {
       state = power_standby_state::turn_on_power_no_av;

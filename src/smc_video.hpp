@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+#include "smc_types.hpp"
+
 // Set by CMake (options SMC_AV_PACK_OVERRIDE, SMC_AV_PACK_MODE): report a fixed
 // AV pack code instead of the one read from the AV connector
 #ifndef SMC_AV_PACK_OVERRIDE
@@ -17,7 +19,7 @@ namespace Video {
 
 void init();
 void update();
-void printMode(const uint8_t vm);
+void printMode(const av_pack vm);
 
 } // namespace Video
 } // namespace SMC

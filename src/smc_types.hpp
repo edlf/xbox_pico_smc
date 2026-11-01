@@ -101,11 +101,26 @@ enum class drive_tray_state : uint8_t {
   drive_off = 0x70      // Or no drive
 };
 
+// AV pack ID read from the AV connector's three mode pins (PORTB & 0x0E on the
+// PIC). SMBus 0x04 reports it shifted down by one (the code in the comments).
+enum class av_pack : uint8_t {
+  scart = 0x00,        // 0 Advanced SCART cable
+  hdtv = 0x02,         // 1 High Definition AV pack
+  vga = 0x04,          // 2 VGA / progressive RGB
+  rf = 0x06,           // 3 RF adapter
+  advanced = 0x08,     // 4 Advanced AV pack (S-Video)
+  special = 0x0A,      // 5 No known pack. With no cable in standby the pins read
+                       //   this (mode 1 is pulled up to POWON); while unplugged
+                       //   it acts as a power button press
+  standard = 0x0C,     // 6 Standard AV cable
+  none = 0x0E          // 7 No cable
+};
+
 typedef struct {
   uint8_t CPU_temperature;
   uint8_t board_temperature;
   drive_tray_state tray_status;
-  uint8_t vmode;
+  av_pack vmode;
 } sensors_struct;
 
 } // namespace SMC
