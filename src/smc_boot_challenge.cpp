@@ -21,7 +21,6 @@ constexpr const char* state_names[] = {
   "Lock up",
   "Retry boot",
   "Check response",
-  "Challenge passed",
   "Reboot",
   "RTC dump start"
 };
@@ -36,10 +35,8 @@ uint8_t boot_response_timeout;
 uint8_t failure_count;     // Failed boots since the last power cycle
 uint8_t failure_countdown; // Power cycles left before locking up (FRAG)
 uint8_t rtc_dump_time;
-#if SMC_FIRMWARE_P2L
-// P2L (bit 26.3): the answer is only checked after a passed RAM test
+// As P2L (bit 26.3): the answer is only checked after a passed RAM test
 static bool challenge_check_pending;
-#endif
 
 void init() {
   // Same as the PIC's RAM_init (0xB58)
@@ -49,9 +46,7 @@ void init() {
   failure_count = 0;
   failure_countdown = 3;
   rtc_dump_time = 0;
-#if SMC_FIRMWARE_P2L
   challenge_check_pending = false;
-#endif
 }
 
 // The PIC uses its free running timers as entropy: TMR0 runs at the
@@ -111,29 +106,17 @@ static void clearRamTestResult() {
   flags.ram_test_passed = false;
 }
 
-// While running: restart on a reset request, or once a pending reset
-// (cold_reset_request) is no longer held back by overheating or a shutdown
-static void waitForReset() {
-  if (flags.warm_reset_request) {
-    clearRamTestResult();
-    state = boot_challenge_state::initial;
-  } else if (flags.cold_reset_request && !flags.overheated &&
-             !flags.prepare_for_shutdown) {
-    clearRamTestResult();
-    state = boot_challenge_state::initial;
-  }
-}
-
-#if SMC_FIRMWARE_P2L
-// P2L (0xDA2): new challenge on every reset, and the power cycle count starts again
+// As P2L (0xDA2): new challenge on every reset, and the power cycle count
+// starts again. D01/DXF have no challenge and leave the bytes alone.
 static void newChallengeAfterReset() {
   clearRamTestResult();
+#if !SMC_FIRMWARE_NO_CHALLENGE
   challenge.input_byte1 = fastTimerByte();
+#endif
   seedPowerUp();
   failure_countdown = 3;
   state = boot_challenge_state::initial;
 }
-#endif
 
 static void lockUp() {
   flags.cold_reset_request = true;
@@ -186,20 +169,18 @@ static bool powerCycleWithRtcDump() {
 }
 #endif
 
-// Without SMC_BOOT_CHALLENGE the state machine still runs to log the results,
-// but a failure never resets the Xbox or locks it up: it carries on with the
-// challenge, then waits in challenge_passed for the next reset
+// Follows P2L for every firmware. Without SMC_BOOT_CHALLENGE the state machine
+// still runs to log the results, but a failure never resets the Xbox or locks
+// it up: it carries on, then waits in challenge_wait_for_reply for the next
+// reset
 void update() {
   switch (state) {
   case boot_challenge_state::initial:
-#if SMC_FIRMWARE_P2L
-    // P2L (0xD5F): 15 ticks and lets the system run
+    // As P2L (0xD5F): 15 ticks for the RAM test (the PIC waits 12), lets the
+    // system run and restarts the tray tracking
     boot_response_timeout = 15;
     flags.run_after_reset = true;
-#else
-    boot_response_timeout = 12;
-#endif
-    Dvd::restartTrayTracking(); // As P2L (0xD61)
+    Dvd::restartTrayTracking();
 #if !SMC_FIRMWARE_NO_CHALLENGE
     compute(); // D01/DXF (0x8DA) skip it
 #endif
@@ -226,9 +207,7 @@ void update() {
 
   case boot_challenge_state::ram_test_ok:
     debug::print_message("BOOT: RAM test passed, " + ramTestResult());
-#if SMC_FIRMWARE_P2L
-    challenge_check_pending = true;
-#endif
+    challenge_check_pending = !SMC_FIRMWARE_NO_CHALLENGE; // D01/DXF only check the RAM test
     state = boot_challenge_state::challenge_wait_for_reply;
     break;
 
@@ -254,11 +233,7 @@ void update() {
     break;
 
   case boot_challenge_state::challenge_wait_for_reply:
-#if SMC_FIRMWARE_NO_CHALLENGE
-    // D01/DXF (0x905): no challenge, the RAM test is all that's checked
-    waitForReset();
-#elif SMC_FIRMWARE_P2L
-    // P2L (0xD96): check the answer once after a passed RAM test, otherwise
+    // As P2L (0xD96): check the answer once after a passed RAM test, otherwise
     // wait for a reset and start a new challenge
     if (flags.warm_reset_request) {
       newChallengeAfterReset();
@@ -270,14 +245,6 @@ void update() {
     } else if (!flags.overheated && !flags.prepare_for_shutdown) {
       newChallengeAfterReset();
     }
-#else
-    if (!flags.warm_reset_request && !flags.cold_reset_request) {
-      boot_response_timeout = 4; // As P11 (0x90A), P01 waits 2
-      state = boot_challenge_state::check_response;
-    } else {
-      waitForReset();
-    }
-#endif
     break;
 
   case boot_challenge_state::boot_failed:
@@ -325,12 +292,8 @@ void update() {
       flags.challenge_response_received = false;
       if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
         debug::print_message("BOOT: Challenge passed");
-#if SMC_FIRMWARE_P2L
-        challenge_check_pending = false; // P2L (0xE49): back to waiting for a reset
+        challenge_check_pending = false; // As P2L (0xE49): back to waiting for a reset
         state = boot_challenge_state::challenge_wait_for_reply;
-#else
-        state = boot_challenge_state::challenge_passed;
-#endif
         break;
       }
       debug::print_warn("BOOT: Challenge failed, expected " + utils::toHex(challenge.expected0) + " " +
@@ -347,25 +310,9 @@ void update() {
     failure_count = 4;
     state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
 #else
-#if SMC_FIRMWARE_P2L
     challenge_check_pending = false;
     state = boot_challenge_state::challenge_wait_for_reply;
-#else
-    state = boot_challenge_state::challenge_passed;
 #endif
-#endif
-    break;
-
-  case boot_challenge_state::challenge_passed:
-    if (flags.warm_reset_request) {
-      /* Reset requested: new challenge for the next boot */
-      clearRamTestResult();
-      challenge.input_byte1 = fastTimerByte();
-      seedPowerUp();
-      state = boot_challenge_state::initial;
-    } else {
-      waitForReset();
-    }
     break;
 
   case boot_challenge_state::reboot:

@@ -23,7 +23,6 @@ enum class boot_challenge_state {
   lock_up,
   retry_boot,
   check_response,
-  challenge_passed,
   reboot,
   rtc_dump_start // DXF only
 };
