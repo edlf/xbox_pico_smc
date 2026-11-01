@@ -34,6 +34,9 @@ static fade_direction fade = fade_direction::none;
 static uint8_t fade_step;          // 0 to fade_in_ticks or fade_out_ticks
 static uint8_t red_phases_fading;  // Pattern shown while fading out
 static uint8_t green_phases_fading;
+// Faded out: dark until the power is off, so a pattern that wins over "off"
+// (the SMBus LED override) can't light up again while the tray closes
+static bool dark_until_power_off = false;
 
 constexpr const char* state_names[] = {
   "Initial",
@@ -62,11 +65,14 @@ void init() {
   green_phases_failure = 0;
   power_off_bit = true;
   fade = fade_direction::none;
+  dark_until_power_off = false;
   hal::set_led_fade(255);
 }
 
+// Called by the main loop once the Xbox is off
 void resetPhaseCounter() {
     state = led_state::resetPhaseCounter;
+    dark_until_power_off = false;
 }
 
 void clearPhases() {
@@ -101,6 +107,7 @@ static void stepFade() {
     if (fade_step == 0 || --fade_step == 0) {
       // Dark: switch off, then back to full brightness for what comes next
       fade = fade_direction::none;
+      dark_until_power_off = true;
       hal::led_red_off();
       hal::led_green_off();
       hal::set_led_fade(255);
@@ -159,6 +166,7 @@ void setPowerOff(const bool i) {
     fade = fade_direction::out;
   } else if (!i && power_off_bit) {
     // Powering up: fade in from dark (or from where a fade out had got to)
+    dark_until_power_off = false;
     if (fade == fade_direction::out) {
       fade_step = (uint16_t)fade_step * fade_in_ticks / fade_out_ticks; // Same level
     } else {
@@ -201,6 +209,11 @@ void update()
   switch (state) {
   case led_state::initial: // 0
     state_counter = 6;
+
+    if (dark_until_power_off) {
+      state = led_state::off;
+      return;
+    }
 
     // The boot failure error code wins over everything, an overheat and the
     // SMBus LED override included (the PIC shows it through the override, so a

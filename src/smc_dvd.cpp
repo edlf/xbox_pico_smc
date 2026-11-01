@@ -122,7 +122,7 @@ void updateEjectTray() {
   case update_eject_tray_state::initial:
     eject_timeout = 5;
     if (flags.eject_pulse) {
-      debug::print_debug(std::string("DVD: Eject pulse to ") +
+      debug::print_message(std::string("DVD: Eject pulse to ") +
                          (tray_position_state == tray_position::closed ? "close" : "open"));
       update_eject_tray = update_eject_tray_state::tick_timer;
     }

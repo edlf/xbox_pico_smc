@@ -309,6 +309,7 @@ uint8_t update() {
        * reset-on-eject enabled: that one still resets after the timeout */
       if (flags.tray_opening_event && !flags.reset_on_eject_disabled) {
         if (--power_timeout == 0) {
+          debug::print_message("SMI: Tray opened with reset on eject on (SMBus 0x19), resetting");
           state = smi_power_state::going_to_reset;
         }
       } else {
@@ -319,9 +320,14 @@ uint8_t update() {
     } else if (flags.power_off_request) {
       state = smi_power_state::request_tray_close;
     } else if (flags.os_reset_request) {
+      debug::print_message("SMI: OS asked for a reset (SMBus 0x0D bit 3)");
       state = smi_power_state::going_to_reset;
     } else {
       if (--power_timeout == 0) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "SMI: No OS answer (SMBus 0x0D) to interrupt 0x%02X, resetting",
+                 flags.pending_interrupt_reason);
+        debug::print_warn(msg);
         state = smi_power_state::going_to_reset;
       }
     }

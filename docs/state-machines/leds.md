@@ -60,7 +60,9 @@ looks even). On by default, `SMC_LED_FADE=OFF` switches them like the PIC:
   while it fades out over about 0.5 s (25 ticks), then switches the LEDs off
   and restores full brightness for whatever comes next. `clearPhases()` (SMI
   `leds_off`) leaves the fade to finish, and SMI `delayed_turning_off` waits
-  for it before cutting the power.
+  for it before cutting the power. Once faded out the LEDs stay dark until the
+  power is off, whatever wins over `off` (such as the dashboard's SMBus LED
+  override), so they don't light up again while the tray closes.
 
 Powering up again during a fade out (or down during a fade in) continues from
 the current level.
