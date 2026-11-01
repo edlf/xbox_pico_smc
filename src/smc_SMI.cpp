@@ -37,13 +37,13 @@ smi_power_state state;
 uint16_t power_timeout = 0;
 uint16_t power_timeout2 = 0; // How many more times the OS may answer "busy"
 static bool power_on_requested = false; // 0xBD.0, survives init()
-static volatile uint8_t power_cycle_delay = 25; // P11: SMBus 0x22, 0xBE on the PIC
+static volatile uint8_t power_cycle_delay = 25; // SMBus 0x22, 0xBE on the P11 PIC
 
 void init() {
   state = smi_power_state::initial; // Same as the PIC, goes to decision_state once powered up
   power_timeout = 0;
   power_timeout2 = 0;
-  power_cycle_delay = 25; // Reset by RAM_init on P11 (0xB5A)
+  power_cycle_delay = 25; // Reset by RAM_init (P11, 0xB5A)
 }
 
 bool takePowerOnRequest() {
@@ -277,18 +277,13 @@ uint8_t update() {
 
     if (flags.power_cycle_request) {
       flags.power_cycle_request = false;
-#if SMC_FIRMWARE_P11
       /* Power cycle requested (SMBus 0x02 bit 6): power back on after the
-       * SMBus 0x22 delay minus 2 ticks (0x7E1). Like the PIC's DECFSZ, a
-       * result of 0 counts 256 ticks */
+       * SMBus 0x22 delay minus 2 ticks, as P11/P2L (0x7E1; P01 waits 50).
+       * Like the PIC's DECFSZ, a result of 0 counts 256 ticks */
       power_timeout = (uint8_t)(power_cycle_delay - 2);
       if (power_timeout == 0) {
         power_timeout = 256;
       }
-#else
-      /* Power cycle requested (SMBus 0x02 bit 6): power back on in 50 ticks */
-      power_timeout = 0x32;
-#endif
       state = smi_power_state::wait_state_for_power_cycle;
     } else if (flags.first_execution) {
       /* Just powered up */

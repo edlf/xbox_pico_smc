@@ -39,7 +39,7 @@ constexpr uint8_t CHALLENGE_BYTE2 = 0x1E;
 constexpr uint8_t CHALLENGE_BYTE3 = 0x1F;
 constexpr uint8_t CHALLENGE_RESPONSE0 = 0x20;
 constexpr uint8_t CHALLENGE_RESPONSE1 = 0x21;
-constexpr uint8_t POWER_CYCLE_DELAY = 0x22; // P11 only
+constexpr uint8_t POWER_CYCLE_DELAY = 0x22; // P11/P2L, all firmwares here
 }; // namespace Command
 
 // SMBus state. Like the PIC, the command byte is kept after the transaction
@@ -347,12 +347,10 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     flags.challenge_response_received = true; // Response complete
     break;
 
-#if SMC_FIRMWARE_P11
   case Command::POWER_CYCLE_DELAY: // 0x22
-    // Same as P11 (0x1CA): ticks to stay off during the next power cycle
+    // Same as P11/P2L (0x1CA): ticks to stay off during the next power cycle
     SMI::setPowerCycleDelay(data);
     break;
-#endif
 
   case Command::WRITE_RAM_TYPE: // 0x13
     // Store RAM type information

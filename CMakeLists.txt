@@ -73,9 +73,9 @@ option(SMC_LED_RED_BREATHE "Red LED breathes while on" OFF)
 
 # Behavior of which original firmware to follow: -DSMC_FIRMWARE=P11, P01, D01,
 # DXF or P2L.
-# - P11 (1.2/1.3) has lower fan thresholds, SMBus 0x22 (power cycle delay), a
-#   shorter power cycle, LED overrides over the AV/off patterns and configures
-#   the temperature sensor instead of the video encoder after reset.
+# - P11 (1.2/1.3) has lower fan thresholds, LED overrides over the off pattern
+#   and configures the temperature sensor instead of the video encoder after
+#   reset.
 # - D01 (debug kit) is P01 without the boot challenge: only the RAM test is
 #   checked.
 # - DXF (debug kit) is D01 with an RTC dump instead of a power cycle after boot
@@ -85,7 +85,7 @@ option(SMC_LED_RED_BREATHE "Red LED breathes while on" OFF)
 #   changes. The temperature still comes from the ADM1032, there's no
 #   Xcalibur sensor.
 # All of them interlock the power and eject buttons, debounce the AV cable
-# removal and handle the DVD tray like P2L.
+# removal, handle the DVD tray and power cycle (SMBus 0x22 delay) like P2L.
 set(SMC_FIRMWARE P11 CACHE STRING "Original firmware to follow: P11, P01, D01, DXF or P2L")
 set_property(CACHE SMC_FIRMWARE PROPERTY STRINGS P11 P01 D01 DXF P2L)
 string(TOUPPER "${SMC_FIRMWARE}" SMC_FIRMWARE_SETTING)

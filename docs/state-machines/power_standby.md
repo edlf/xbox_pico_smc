@@ -42,5 +42,5 @@ stateDiagram-v2
 | 10 | `powered_up` | Sets up the powered state: `run_after_reset`, `first_execution`, audio clamp timer; resets the video and tray debounce, arms the POWOK interrupt. Returns 1 |
 
 After the Xbox turns off, the main loop re-initialises every state machine and
-waits 25 ticks (P11: 24, or none after a power cycle) before going back to
+waits 25 ticks (none after a power cycle, as P2L) before going back to
 `initial`.

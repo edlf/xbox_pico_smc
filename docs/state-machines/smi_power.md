@@ -74,6 +74,6 @@ stateDiagram-v2
 | 14 | `delay` | Waits for the PLL state machine to hold the system in reset, then stops watching POWOK |
 | 15 | `wait_for_tray_stable` | Waits for a closed tray state, up to 255 ticks |
 | 16 | `delayed_turning_off` | PSU off after 2 ticks |
-| 17 | `wait_state_for_power_cycle` | Waits the power cycle delay (P01: 50 ticks, P11: SMBus 0x22 minus 2), then the main loop presses the power button |
+| 17 | `wait_state_for_power_cycle` | Waits the power cycle delay (SMBus 0x22 minus 2, 23 ticks by default), then the main loop presses the power button |
 
 See [SMBUS.md](../../SMBUS.md) for 0x0D, 0x19 and 0x1A.

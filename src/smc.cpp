@@ -180,15 +180,10 @@ void main_loop() {
 
       globals_init();
 
-#if SMC_FIRMWARE_P11
-      // P11 skips the wait when powering back on after a power cycle (0x2A2)
-      // and waits one tick less otherwise (P2L, 0x2D5: the usual 25)
+      // As P2L (0x2D5): no wait when powering back on after a power cycle,
+      // 25 ticks otherwise (P11 waits 24, P01 always waits 25)
       const bool wait_after_power_off = !SMI::powerOnRequested();
-      uint8_t wait_ticks = SMC_FIRMWARE_P2L ? 25 : 24;
-#else
-      const bool wait_after_power_off = true;
       uint8_t wait_ticks = 25;
-#endif
 
       while (wait_after_power_off) {
         hal::timer1_wait();

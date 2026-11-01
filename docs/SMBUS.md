@@ -42,7 +42,7 @@ commands and reads of write-only ones. Times are in SMC ticks of 20 ms.
 | 0x1B      | Scratch              | R/W | Kernel storage, kept across reboots |
 | 0x1C-0x1F | Challenge            |  R  | Boot challenge bytes |
 | 0x20-0x21 | Challenge response   |  W  | Answer to the boot challenge |
-| 0x22      | Power cycle delay    |  W  | Off time of the next power cycle (P11 only) |
+| 0x22      | Power cycle delay    |  W  | Off time of the next power cycle |
 
 ## Commands
 
@@ -62,7 +62,7 @@ still follows `SMC_FIRMWARE`. The boot log shows the reported version.
 | Bit | Action |
 |-----|--------|
 |  0  | Reset the Xbox (warm reset through SYSRESET) |
-|  6  | Power cycle: power off, then back on. P01: about 1.5 s off. P11: the 0x22 delay, 0.5 s by default |
+|  6  | Power cycle: power off, then back on after the 0x22 delay, 0.5 s by default (as P11/P2L) |
 |  7  | Power off |
 
 Bits 6 and 7 go through the power button logic (`power_change_requested`): if
@@ -247,7 +247,7 @@ repeated failures shows the FRAG pattern, like the original.
 D01 and DXF (debug kits) have no challenge: the bytes stay 0x00 and the answer
 is ignored. Only the RAM test result is checked.
 
-### 0x22 Power cycle delay (write, P11 only)
+### 0x22 Power cycle delay (write)
 
 Off time of the next power cycle (0x02 bit 6), in ticks. Reset to 25 (0.5 s)
-at every power off. Values 0-2 wrap to about 5 s. Ignored by P01 builds.
+at every power off. Values 0-2 wrap to about 5 s. Accepted by every build (the original P01 doesn't have it).
