@@ -68,6 +68,10 @@ if(NOT SMC_LED_BRIGHTNESS MATCHES "^[0-9]+$" OR SMC_LED_BRIGHTNESS LESS 1 OR SMC
   message(FATAL_ERROR "SMC_LED_BRIGHTNESS must be 1-100, got '${SMC_LED_BRIGHTNESS}'")
 endif()
 
+# Fade the front panel LEDs in at power up and out at power down (~1 s) instead
+# of switching them like the PIC: -DSMC_LED_FADE=OFF to switch them
+option(SMC_LED_FADE "Fade the LEDs at power up and power down" ON)
+
 # Behavior of which original firmware to follow: -DSMC_FIRMWARE=P11, P01, D01,
 # DXF or P2L.
 # - P11 (1.2/1.3) has lower fan thresholds and configures the temperature
@@ -217,6 +221,7 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_AV_PACK_OVERRIDE=$<BOOL:${SMC_AV_PACK_OVERRIDE}>
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
                                           SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
+                                          SMC_LED_FADE=$<BOOL:${SMC_LED_FADE}>
                                           SMC_FIRMWARE_NAME="${SMC_FIRMWARE_SETTING}"
                                           SMC_FIRMWARE_P11=$<BOOL:${SMC_FIRMWARE_P11}>
                                           SMC_FIRMWARE_NO_CHALLENGE=$<BOOL:${SMC_FIRMWARE_NO_CHALLENGE}>

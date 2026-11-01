@@ -189,6 +189,7 @@ void main_loop() {
         hal::timer1_wait();
         hal::petWatchdog();
         FrontPanelSW::updatePower();
+        update_LEDs(); // Keeps the power down fade going
         if (--wait_ticks == 0) {
           break;
         }

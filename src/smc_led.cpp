@@ -19,11 +19,21 @@ static uint8_t red_phases;
 static bool manual_control = false;
 static bool overheat = false;
 static bool av_missing = false;
-static bool power_off_bit = false;
+static bool power_off_bit = true;
 static bool quick_green_blink = false;
 static bool boot_failure = false;
 static uint8_t red_phases_failure;
 static uint8_t green_phases_failure;
+
+// With SMC_LED_FADE the LEDs fade in when the Xbox powers up and fade out the
+// last pattern when it powers down, instead of switching at once like the PIC
+enum class fade_direction { none, in, out };
+constexpr uint8_t fade_in_ticks = 50;  // 1 s
+constexpr uint8_t fade_out_ticks = 25; // 0.5 s, power off waits for it
+static fade_direction fade = fade_direction::none;
+static uint8_t fade_step;          // 0 to fade_in_ticks or fade_out_ticks
+static uint8_t red_phases_fading;  // Pattern shown while fading out
+static uint8_t green_phases_fading;
 
 constexpr const char* state_names[] = {
   "Initial",
@@ -50,6 +60,9 @@ void init() {
   manual_control = false;
   red_phases_failure = 0;
   green_phases_failure = 0;
+  power_off_bit = true;
+  fade = fade_direction::none;
+  hal::set_led_fade(255);
 }
 
 void resetPhaseCounter() {
@@ -57,8 +70,49 @@ void resetPhaseCounter() {
 }
 
 void clearPhases() {
+    if (fade == fade_direction::out) {
+      return; // The fade turns them off
+    }
     green_phases = 0;
     red_phases = 0;
+}
+
+// Brightness for a fade step out of ticks: squared, so the change looks even
+static uint8_t fadeLevel(uint8_t step, uint8_t ticks) {
+  return (uint32_t)255 * step * step / (ticks * ticks);
+}
+
+// Called once per tick
+static void stepFade() {
+  switch (fade) {
+  case fade_direction::none:
+    break;
+
+  case fade_direction::in:
+    if (++fade_step >= fade_in_ticks) {
+      fade = fade_direction::none;
+      hal::set_led_fade(255);
+    } else {
+      hal::set_led_fade(fadeLevel(fade_step, fade_in_ticks));
+    }
+    break;
+
+  case fade_direction::out:
+    if (fade_step == 0 || --fade_step == 0) {
+      // Dark: switch off, then back to full brightness for what comes next
+      fade = fade_direction::none;
+      hal::led_red_off();
+      hal::led_green_off();
+      hal::set_led_fade(255);
+    } else {
+      hal::set_led_fade(fadeLevel(fade_step, fade_out_ticks));
+    }
+    break;
+  }
+}
+
+bool isFadingOut() {
+  return fade == fade_direction::out;
 }
 
 void setGreenPhases(const uint8_t phase) {
@@ -90,6 +144,29 @@ void setAvMissing(const bool i) {
 }
 
 void setPowerOff(const bool i) {
+  if (!SMC_LED_FADE) {
+    // Switched at once, like the PIC
+  } else if (i && !power_off_bit) {
+    // Powering down: keep showing the current pattern while it fades out,
+    // from wherever a fade in had got to
+    red_phases_fading = red_phases;
+    green_phases_fading = green_phases;
+    if (fade == fade_direction::in) {
+      fade_step = (uint16_t)fade_step * fade_out_ticks / fade_in_ticks; // Same level
+    } else {
+      fade_step = fade_out_ticks;
+    }
+    fade = fade_direction::out;
+  } else if (!i && power_off_bit) {
+    // Powering up: fade in from dark (or from where a fade out had got to)
+    if (fade == fade_direction::out) {
+      fade_step = (uint16_t)fade_step * fade_in_ticks / fade_out_ticks; // Same level
+    } else {
+      fade_step = 0;
+    }
+    fade = fade_direction::in;
+    hal::set_led_fade(fadeLevel(fade_step, fade_in_ticks));
+  }
   power_off_bit = i;
 }
 
@@ -119,6 +196,8 @@ void printState() {
 
 void update()
 {
+  stepFade();
+
   switch (state) {
   case led_state::initial: // 0
     state_counter = 6;
@@ -191,8 +270,13 @@ void update()
     break;
 
   case led_state::off: // 5
-    red_phases = 0;
-    green_phases = 0;
+    if (fade == fade_direction::out) {
+      red_phases = red_phases_fading;
+      green_phases = green_phases_fading;
+    } else {
+      red_phases = 0;
+      green_phases = 0;
+    }
     state = led_state::tick_update;
     break;
 

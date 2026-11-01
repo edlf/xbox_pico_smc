@@ -30,8 +30,24 @@ static constexpr uint16_t ledLevel(uint8_t percent) {
 
 static volatile uint8_t led_brightness = SMC_LED_BRIGHTNESS;
 static volatile uint16_t led_on_level = ledLevel(SMC_LED_BRIGHTNESS);
+static uint8_t led_fade = 255; // Power up/down fade, 255 = full brightness
 static bool green_lit = false;
 static bool red_lit = false;
+
+// PWM level of a lit LED: brightness scaled by the fade
+static uint16_t litLevel() {
+  return (uint32_t)led_on_level * led_fade / 255;
+}
+
+// Lit LEDs follow a brightness or fade change right away
+static void updateLitLeds() {
+  if (green_lit) {
+    pwm_set_gpio_level(pins::LED_GREEN, litLevel());
+  }
+  if (red_lit) {
+    pwm_set_gpio_level(pins::LED_RED, litLevel());
+  }
+}
 
 static void initLeds() {
   for (const uint8_t pin : {pins::LED_RED, pins::LED_GREEN}) {
@@ -50,7 +66,7 @@ static void initLeds() {
 
 void led_green_on() {
   green_lit = true;
-  pwm_set_gpio_level(pins::LED_GREEN, led_on_level);
+  pwm_set_gpio_level(pins::LED_GREEN, litLevel());
 }
 
 void led_green_off() {
@@ -60,7 +76,7 @@ void led_green_off() {
 
 void led_red_on() {
   red_lit = true;
-  pwm_set_gpio_level(pins::LED_RED, led_on_level);
+  pwm_set_gpio_level(pins::LED_RED, litLevel());
 }
 
 void led_red_off() {
@@ -76,13 +92,12 @@ void set_led_brightness(uint8_t percent) {
   }
   led_brightness = percent;
   led_on_level = ledLevel(percent);
-  // LEDs that are lit change right away
-  if (green_lit) {
-    pwm_set_gpio_level(pins::LED_GREEN, led_on_level);
-  }
-  if (red_lit) {
-    pwm_set_gpio_level(pins::LED_RED, led_on_level);
-  }
+  updateLitLeds();
+}
+
+void set_led_fade(uint8_t level) {
+  led_fade = level;
+  updateLitLeds();
 }
 
 uint8_t get_led_brightness() {

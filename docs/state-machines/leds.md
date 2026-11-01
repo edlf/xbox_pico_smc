@@ -50,3 +50,17 @@ stateDiagram-v2
 The LEDs are PWM driven: `SMC_LED_BRIGHTNESS` sets the brightness at start-up,
 and the web interface (Pico 2 W) can change it (1-100 %) until the Pico
 restarts.
+
+Unlike the PIC, which switches them on and off, the LEDs fade (squared so it
+looks even). On by default, `SMC_LED_FADE=OFF` switches them like the PIC:
+
+- **Power up:** when the system starts running, the pattern fades in from dark
+  over about 1 s (50 ticks).
+- **Power down:** when it stops running, `off` keeps showing the last pattern
+  while it fades out over about 0.5 s (25 ticks), then switches the LEDs off
+  and restores full brightness for whatever comes next. `clearPhases()` (SMI
+  `leds_off`) leaves the fade to finish, and SMI `delayed_turning_off` waits
+  for it before cutting the power.
+
+Powering up again during a fade out (or down during a fade in) continues from
+the current level.

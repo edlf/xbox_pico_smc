@@ -10,6 +10,11 @@
 #define SMC_LED_BRIGHTNESS 100
 #endif
 
+// Set by CMake (option SMC_LED_FADE): fade the LEDs at power up and down
+#ifndef SMC_LED_FADE
+#define SMC_LED_FADE 1
+#endif
+
 namespace hal {
 void init();
 
@@ -21,6 +26,8 @@ void led_red_off();
 // Front panel LED brightness in percent (1-100), starts at SMC_LED_BRIGHTNESS
 void set_led_brightness(uint8_t percent);
 uint8_t get_led_brightness();
+// Fade on top of the brightness, 0 (dark) to 255 (full), for power up/down
+void set_led_fade(uint8_t level);
 bool power_button_pressed();
 bool eject_button_pressed();
 void pico_led_on();

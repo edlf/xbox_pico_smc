@@ -23,6 +23,7 @@ int main() {
                        " SMC_AV_PACK_OVERRIDE=" + (SMC_AV_PACK_OVERRIDE ? "ON" : "OFF") +
                        " SMC_AV_PACK_MODE=" + std::to_string(SMC_AV_PACK_MODE) +
                        " SMC_LED_BRIGHTNESS=" + std::to_string(SMC_LED_BRIGHTNESS) +
+                       " SMC_LED_FADE=" + (SMC_LED_FADE ? "ON" : "OFF") +
                        " SMC_FIRMWARE=" + SMC_FIRMWARE_NAME +
                        " SMC_REPORT_VERSION=" + SMC::version_string +
                        " SMC_DEBUG_LEVEL=" + debug::level_name() +

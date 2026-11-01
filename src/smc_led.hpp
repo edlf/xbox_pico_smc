@@ -34,6 +34,8 @@ void setManualControl(const bool);
 void setOverheat(const bool);
 void setAvMissing(const bool);
 void setPowerOff(const bool);
+// SMC_LED_FADE: the LEDs are still fading out after power down started
+bool isFadingOut();
 void setQuickGreenBlink(const bool);
 // Boot failure (FRAG) error code, shown above every other pattern
 void setBootFailure(const bool);

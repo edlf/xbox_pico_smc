@@ -373,10 +373,15 @@ uint8_t update() {
 
   case smi_power_state::delayed_turning_off:
     /* Delayed turning power off */
-    if (--power_timeout == 0) {
-      hal::turn_off_psu();
-      state = smi_power_state::initial;
+    if (power_timeout > 1) {
+      power_timeout--;
+      break;
     }
+    if (Led::isFadingOut()) {
+      break; // SMC_LED_FADE: power off once the LEDs have faded out (0.5 s)
+    }
+    hal::turn_off_psu();
+    state = smi_power_state::initial;
     break;
 
   case smi_power_state::wait_state_for_power_cycle:
