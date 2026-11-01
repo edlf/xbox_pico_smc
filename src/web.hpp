@@ -1,11 +1,7 @@
 #ifndef WEB_HPP
 #define WEB_HPP
 
-// Set by CMake (option SMC_WEB_INTERFACE): Wi-Fi access point with a status
-// and control page, served from core 1 (W boards only)
-#ifndef SMC_WEB_INTERFACE
-#define SMC_WEB_INTERFACE 0
-#endif
+#include "config.hpp"
 
 namespace SMC {
 namespace Web {

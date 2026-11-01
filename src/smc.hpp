@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <stdio.h>
+#include "config.hpp"
 #include "debug.hpp"
 #include "smc_front_panel_sw.hpp"
 #include "smc_dvd.hpp"

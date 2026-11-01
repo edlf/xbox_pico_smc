@@ -3,12 +3,6 @@
 
 #include <cstdint>
 
-// Set by CMake (option SMC_BOOT_CHALLENGE). Without it the challenge is still
-// served over SMBus, but a failure never resets the Xbox.
-#ifndef SMC_BOOT_CHALLENGE
-#define SMC_BOOT_CHALLENGE 0
-#endif
-
 namespace SMC {
 namespace BootChallenge {
 

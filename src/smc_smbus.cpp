@@ -49,10 +49,7 @@ static bool expecting_command = true; // Next received byte is a command byte
 static uint8_t smbus_command = 0;
 static uint8_t last_write_command = 0; // SMBus 0x16, only updated by writes
 static uint8_t last_write_data = 0;    // SMBus 0x17, only updated by writes
-// SMBus 0x01, set by CMake (SMC_REPORT_VERSION): "P01", "P11", "D01" or "DXF"
-#ifndef SMC_VERSION_STRING
-#define SMC_VERSION_STRING "P11"
-#endif
+// SMBus 0x01, SMC_VERSION_STRING (CMake SMC_REPORT_VERSION)
 const char version_string[] = SMC_VERSION_STRING;
 static_assert(sizeof(version_string) == 4, "The version is 3 characters");
 static uint8_t smbus_version_counter = 1; // 1-3, the character read next

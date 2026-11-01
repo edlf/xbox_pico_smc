@@ -5,15 +5,7 @@
 #include <cstdint>
 #include <string>
 
-// Set by CMake (option SMC_LED_BRIGHTNESS): front panel LED brightness in percent
-#ifndef SMC_LED_BRIGHTNESS
-#define SMC_LED_BRIGHTNESS 100
-#endif
-
-// Set by CMake (option SMC_LED_FADE): fade the LEDs at power up and down
-#ifndef SMC_LED_FADE
-#define SMC_LED_FADE 1
-#endif
+#include "config.hpp"
 
 namespace hal {
 void init();

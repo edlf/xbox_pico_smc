@@ -1,19 +1,11 @@
 #include "debug.hpp"
+#include "config.hpp"
 #include <iostream>
 #include <iterator>
 #include "pico/time.h"
 
-// Set by CMake: the PICO_BOARD this was built for
-#ifndef SMC_BOARD
-#define SMC_BOARD "unknown"
-#endif
-
 namespace debug {
 
-// Set by CMake (SMC_DEBUG_LEVEL), the index into DebugLevel
-#ifndef SMC_DEBUG_LEVEL
-#define SMC_DEBUG_LEVEL 3 // Info
-#endif
 DebugLevel debugLevel = static_cast<DebugLevel>(SMC_DEBUG_LEVEL);
 
 struct LevelInfo {
