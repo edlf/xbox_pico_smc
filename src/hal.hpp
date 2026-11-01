@@ -10,11 +10,6 @@
 #define SMC_LED_BRIGHTNESS 100
 #endif
 
-// Set by CMake (option SMC_LED_RED_BREATHE): red LED breathes while on
-#ifndef SMC_LED_RED_BREATHE
-#define SMC_LED_RED_BREATHE 0
-#endif
-
 namespace hal {
 void init();
 
@@ -23,6 +18,9 @@ void led_green_on();
 void led_green_off();
 void led_red_on();
 void led_red_off();
+// Front panel LED brightness in percent (1-100), starts at SMC_LED_BRIGHTNESS
+void set_led_brightness(uint8_t percent);
+uint8_t get_led_brightness();
 bool power_button_pressed();
 bool eject_button_pressed();
 void pico_led_on();

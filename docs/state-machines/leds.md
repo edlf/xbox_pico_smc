@@ -47,5 +47,6 @@ stateDiagram-v2
 | 7 | `set_gpios` | Sets both LEDs for the next phase |
 | 8 | `resetPhaseCounter` | Starts again at phase 3 |
 
-The LEDs are PWM driven: `SMC_LED_BRIGHTNESS` sets the brightness and
-`SMC_LED_RED_BREATHE` makes the red LED breathe.
+The LEDs are PWM driven: `SMC_LED_BRIGHTNESS` sets the brightness at start-up,
+and the web interface (Pico 2 W) can change it (1-100 %) until the Pico
+restarts.

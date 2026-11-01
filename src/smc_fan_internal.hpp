@@ -40,6 +40,15 @@ void predictCpuTemperature();
 // Logs the readings a decision is based on
 void printReadings();
 
+// One adjustable threshold: the value in use and the firmware's default
+struct threshold_entry {
+  const char* label;
+  uint8_t default_value;
+  uint8_t* value;
+};
+// The fan control's thresholds, implemented by smc_fan_pic.cpp/smc_fan_p2l.cpp
+const threshold_entry* thresholdEntries(uint8_t& count);
+
 } // namespace Fan
 } // namespace SMC
 

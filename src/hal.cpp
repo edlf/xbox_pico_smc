@@ -18,37 +18,20 @@ uint pwm_slice;
 uint pwm_channel;
 
 // Front panel LEDs are active low, like on the PIC (RA0/RA1 low = on). They
-// run as PWM so SMC_LED_BRIGHTNESS can dim them: ~1 kHz, output inverted so
-// the level is the on-time.
+// run as PWM so they can be dimmed: ~1 kHz, output inverted so the level is the
+// on-time. The brightness starts at SMC_LED_BRIGHTNESS and the web interface
+// can change it.
 constexpr uint16_t LED_PWM_WRAP = 999;
 constexpr uint32_t LED_PWM_HZ = 1000;
-constexpr uint16_t LED_ON_LEVEL = (uint32_t)(LED_PWM_WRAP + 1) * SMC_LED_BRIGHTNESS / 100;
 
-#if SMC_LED_RED_BREATHE
-// The red LED breathes while it's on: a 1 s triangle, squared so the change
-// looks even, restarted from dark each time it turns on. A 10 ms timer steps it.
-constexpr int32_t RED_BREATH_STEP_MS = 10;
-constexpr uint16_t RED_BREATH_STEPS = 100;
-
-static volatile bool red_on = false;
-static volatile uint16_t red_breath_step = 0;
-static repeating_timer_t red_breath_timer;
-
-static uint16_t redBreathLevel(uint16_t step) {
-  constexpr uint32_t half = RED_BREATH_STEPS / 2;
-  const uint32_t x = step < half ? step : RED_BREATH_STEPS - step; // 0 -> half -> 0
-  return (uint32_t)LED_ON_LEVEL * x * x / (half * half);
+static constexpr uint16_t ledLevel(uint8_t percent) {
+  return (uint32_t)(LED_PWM_WRAP + 1) * percent / 100;
 }
 
-static bool redBreathTick(repeating_timer_t*) {
-  if (red_on) {
-    pwm_set_gpio_level(pins::LED_RED, redBreathLevel(red_breath_step));
-    red_breath_step = (red_breath_step + 1) % RED_BREATH_STEPS;
-  }
-  return true;
-}
-
-#endif
+static volatile uint8_t led_brightness = SMC_LED_BRIGHTNESS;
+static volatile uint16_t led_on_level = ledLevel(SMC_LED_BRIGHTNESS);
+static bool green_lit = false;
+static bool red_lit = false;
 
 static void initLeds() {
   for (const uint8_t pin : {pins::LED_RED, pins::LED_GREEN}) {
@@ -63,42 +46,47 @@ static void initLeds() {
   // Only now hand the pins to the PWM, so they never flash on
   gpio_set_function(pins::LED_RED, GPIO_FUNC_PWM);
   gpio_set_function(pins::LED_GREEN, GPIO_FUNC_PWM);
-
-#if SMC_LED_RED_BREATHE
-  // Negative period: every 10 ms from the previous start, not the previous end
-  add_repeating_timer_ms(-RED_BREATH_STEP_MS, redBreathTick, nullptr, &red_breath_timer);
-#endif
 }
 
 void led_green_on() {
-  pwm_set_gpio_level(pins::LED_GREEN, LED_ON_LEVEL);
+  green_lit = true;
+  pwm_set_gpio_level(pins::LED_GREEN, led_on_level);
 }
 
 void led_green_off() {
+  green_lit = false;
   pwm_set_gpio_level(pins::LED_GREEN, 0);
 }
 
 void led_red_on() {
-#if SMC_LED_RED_BREATHE
-  if (!red_on) {
-    red_breath_step = 0; // Start the breath from dark
-    red_on = true;
-  }
-#else
-  pwm_set_gpio_level(pins::LED_RED, LED_ON_LEVEL);
-#endif
+  red_lit = true;
+  pwm_set_gpio_level(pins::LED_RED, led_on_level);
 }
 
 void led_red_off() {
-#if SMC_LED_RED_BREATHE
-  // With the timer held off, so it can't light it again after this
-  const uint32_t status = save_and_disable_interrupts();
-  red_on = false;
+  red_lit = false;
   pwm_set_gpio_level(pins::LED_RED, 0);
-  restore_interrupts(status);
-#else
-  pwm_set_gpio_level(pins::LED_RED, 0);
-#endif
+}
+
+void set_led_brightness(uint8_t percent) {
+  if (percent < 1) {
+    percent = 1;
+  } else if (percent > 100) {
+    percent = 100;
+  }
+  led_brightness = percent;
+  led_on_level = ledLevel(percent);
+  // LEDs that are lit change right away
+  if (green_lit) {
+    pwm_set_gpio_level(pins::LED_GREEN, led_on_level);
+  }
+  if (red_lit) {
+    pwm_set_gpio_level(pins::LED_RED, led_on_level);
+  }
+}
+
+uint8_t get_led_brightness() {
+  return led_brightness;
 }
 
 void pico_led_on() {

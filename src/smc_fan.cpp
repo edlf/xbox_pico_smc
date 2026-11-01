@@ -36,6 +36,8 @@ void setSpeed(const uint8_t speed) {
     fan_speed = min_fan_speed;
   } else if (speed > max_fan_speed) {
     fan_speed = max_fan_speed;
+  } else {
+    fan_speed = speed;
   }
 
   hal::set_fan_speed(fan_speed);
@@ -98,6 +100,52 @@ void setCustomSpeed(const uint8_t in) {
 
 uint8_t getCustomFanSpeed() {
   return custom_fan_speed;
+}
+
+uint8_t thresholdCount() {
+  uint8_t count;
+  thresholdEntries(count);
+  return count;
+}
+
+static const threshold_entry* thresholdEntry(const uint8_t index) {
+  uint8_t count;
+  const threshold_entry* entries = thresholdEntries(count);
+  return index < count ? &entries[index] : nullptr;
+}
+
+const char* thresholdLabel(const uint8_t index) {
+  const threshold_entry* entry = thresholdEntry(index);
+  return entry != nullptr ? entry->label : "";
+}
+
+uint8_t thresholdDefault(const uint8_t index) {
+  const threshold_entry* entry = thresholdEntry(index);
+  return entry != nullptr ? entry->default_value : 0;
+}
+
+uint8_t getThreshold(const uint8_t index) {
+  const threshold_entry* entry = thresholdEntry(index);
+  return entry != nullptr ? *entry->value : 0;
+}
+
+bool setThreshold(const uint8_t index, const uint8_t value) {
+  const threshold_entry* entry = thresholdEntry(index);
+  // Never above the firmware's default: lower only makes the fan react sooner
+  // or the Xbox shut down earlier
+  if (entry == nullptr || value < min_threshold || value > entry->default_value) {
+    return false;
+  }
+  *entry->value = value;
+  return true;
+}
+
+void resetThresholds() {
+  uint8_t count;
+  const threshold_entry* entries = thresholdEntries(count);
+  for (uint8_t i = 0; i < count; i++) {
+    *entries[i].value = entries[i].default_value;
+  }
 }
 
 } // namespace Fan

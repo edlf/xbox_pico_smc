@@ -24,7 +24,7 @@ struct p2l_temperature_thresholds {
   uint8_t shutdown_cpu;      // Still overheated after the cool-down, give up
 };
 
-constexpr p2l_temperature_thresholds p2l_thresholds = {
+constexpr p2l_temperature_thresholds p2l_default_thresholds = {
   0x59, // overheat_cpu    89
   0x4E, // hot_cpu         78
   0x57, // hot_predicted   87
@@ -32,6 +32,24 @@ constexpr p2l_temperature_thresholds p2l_thresholds = {
   0x4C, // hold_predicted  76
   0x62, // shutdown_cpu    98
 };
+
+// In use, can be lowered from the web interface
+static p2l_temperature_thresholds p2l_thresholds = p2l_default_thresholds;
+
+static const threshold_entry threshold_entries[] = {
+  {"CPU overheat (at least)", p2l_default_thresholds.overheat_cpu, &p2l_thresholds.overheat_cpu},
+  {"CPU hot, +3 speed (at least)", p2l_default_thresholds.hot_cpu, &p2l_thresholds.hot_cpu},
+  {"Predicted CPU hot, +3 speed (at least)", p2l_default_thresholds.hot_predicted, &p2l_thresholds.hot_predicted},
+  {"Predicted CPU warm, +1 speed (at least)", p2l_default_thresholds.warm_predicted, &p2l_thresholds.warm_predicted},
+  {"Predicted CPU hold, below it -1 speed (at least)", p2l_default_thresholds.hold_predicted,
+   &p2l_thresholds.hold_predicted},
+  {"CPU still overheated, shut down (at least)", p2l_default_thresholds.shutdown_cpu, &p2l_thresholds.shutdown_cpu},
+};
+
+const threshold_entry* thresholdEntries(uint8_t& count) {
+  count = sizeof(threshold_entries) / sizeof(threshold_entries[0]);
+  return threshold_entries;
+}
 
 constexpr uint8_t sample_count = 128; // Average of 128 readings, one per tick (0x170E)
 // Next decision 4 x 250 ticks (20 s) after the last one, sampling included

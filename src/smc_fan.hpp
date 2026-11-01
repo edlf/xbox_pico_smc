@@ -32,6 +32,19 @@ void setCustomSpeed(const uint8_t);
 void raiseSpeedTo(const uint8_t speed);
 uint8_t getCustomFanSpeed();
 
+// Temperature thresholds (°C) of the fan control, adjustable from the web
+// interface. They can only be lowered, between min_threshold and the
+// firmware's default. Kept until the Pico restarts, not reset at power off.
+constexpr uint8_t max_thresholds = 10;
+constexpr uint8_t min_threshold = 30;
+uint8_t thresholdCount();
+const char* thresholdLabel(uint8_t index);
+uint8_t thresholdDefault(uint8_t index);
+uint8_t getThreshold(uint8_t index);
+// False (and nothing changed) when index or value is out of range
+bool setThreshold(uint8_t index, uint8_t value);
+void resetThresholds();
+
 } // namespace Fan
 } // namespace SMC
 

@@ -55,8 +55,29 @@ constexpr temperature_thresholds p11_thresholds = {
   0x54, // shutdown_board  84
 };
 
-constexpr const temperature_thresholds& thresholds =
+constexpr const temperature_thresholds& default_thresholds =
     SMC_FIRMWARE_P11 ? p11_thresholds : p01_thresholds;
+
+// In use, can be lowered from the web interface
+static temperature_thresholds thresholds = default_thresholds;
+
+static const threshold_entry threshold_entries[] = {
+  {"CPU overheat (above)", default_thresholds.critical_cpu, &thresholds.critical_cpu},
+  {"Board overheat (above)", default_thresholds.critical_board, &thresholds.critical_board},
+  {"CPU hot, +3 speed (above)", default_thresholds.hot_cpu, &thresholds.hot_cpu},
+  {"Predicted CPU hot, +3 speed (above)", default_thresholds.hot_predicted, &thresholds.hot_predicted},
+  {"Predicted CPU warm, +1 speed (above)", default_thresholds.warm_predicted, &thresholds.warm_predicted},
+  {"Board warm, +1 speed (above)", default_thresholds.warm_board, &thresholds.warm_board},
+  {"Predicted CPU cool, -1 speed (below)", default_thresholds.cool_predicted, &thresholds.cool_predicted},
+  {"Board cool, -1 speed (below)", default_thresholds.cool_board, &thresholds.cool_board},
+  {"CPU still overheated, shut down (above)", default_thresholds.shutdown_cpu, &thresholds.shutdown_cpu},
+  {"Board still overheated, shut down (above)", default_thresholds.shutdown_board, &thresholds.shutdown_board},
+};
+
+const threshold_entry* thresholdEntries(uint8_t& count) {
+  count = sizeof(threshold_entries) / sizeof(threshold_entries[0]);
+  return threshold_entries;
+}
 
 constexpr uint8_t sample_count = 3; // Median of 3 readings on 3 ticks
 // Next decision in 20 x 50 ticks (20 s)

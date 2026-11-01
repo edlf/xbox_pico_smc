@@ -32,12 +32,16 @@ enum class Command : uint8_t {
   fan_speed,   // Fixed fan speed 10-50 (SMBus 0x06 + 0x05)
   fan_auto,    // Back to temperature control
   led_pattern, // Manual LED pattern, arg = red << 4 | green (SMBus 0x08 + 0x07)
-  led_auto     // Back to the normal LED patterns
+  led_auto,    // Back to the normal LED patterns
+  threshold,   // Fan temperature threshold index = arg (°C)
+  thresholds_default, // All fan temperature thresholds back to the defaults
+  led_brightness      // Front panel LED brightness, arg = 1-100 %
 };
 
 struct CommandMessage {
   Command command;
   uint8_t arg;
+  uint8_t index;
 };
 
 struct LogMessage {
@@ -59,7 +63,9 @@ struct WebStatus {
   bool led_override;
   uint8_t led_red;
   uint8_t led_green;
+  uint8_t led_brightness;
   uint8_t interrupt_reason;
+  uint8_t thresholds[Fan::max_thresholds];
 };
 
 constexpr uint16_t http_port = 80;
@@ -99,6 +105,8 @@ h1{font-size:20px;margin:0 0 4px}#conn{color:var(--dim);font-size:13px;margin-bo
 button,select{background:#2a362a;color:var(--fg);border:1px solid #3a4a3a;border-radius:8px;padding:8px 12px;font:inherit;cursor:pointer}
 button:hover{border-color:var(--accent)}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
 input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
+.wide{grid-column:1/-1}.thr{flex:1;min-width:200px}
+input[type=number]{width:64px;background:#2a362a;color:var(--fg);border:1px solid #3a4a3a;border-radius:8px;padding:7px 8px;font:inherit}
 </style></head><body><main>
 <h1>OG SMC</h1><div id="conn">Connecting...</div>
 <div class="grid">
@@ -116,13 +124,18 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
 <option value="0,15">Green</option><option value="15,0">Red</option><option value="15,15">Orange</option>
 <option value="0,10">Blink green</option><option value="10,0">Blink red</option><option value="10,10">Blink orange</option>
 <option value="5,10">Red / green</option><option value="0,0">Off</option></select></div>
-<div class="row"><button onclick="setLed()">Set pattern</button><button onclick="act('led_auto')">Auto</button></div></div>
+<div class="row"><button onclick="setLed()">Set pattern</button><button onclick="act('led_auto')">Auto</button></div>
+<div class="row"><span>Brightness</span><input type="range" id="ledBright" min="1" max="100" value="100" oninput="brightTouched=true;ledBrightValue.textContent=this.value+'%'" onchange="brightTouched=false;act('led_brightness&percent='+this.value)"><span id="ledBrightValue">-</span></div></div>
+<div class="card wide"><h2>Fan thresholds (&deg;C)</h2><div class="note">Can only be lowered below the firmware's defaults. Kept until the Pico restarts.</div>
+<div id="thr"></div>
+<div class="row"><button onclick="act('thresholds_default').then(loadThresholds)">Defaults</button></div></div>
 </div></main>
 <script>
 const AV=["Advanced SCART","High Definition AV Pack","VGA","RF adapter","Advanced AV (S-Video)","Unknown (5)","Standard AV","No cable"];
 const TRAY=["Closed","Open","Unloading","Opening","No disc","Closing","Disc detected","Drive off"];
 const $=id=>document.getElementById(id);
 let fanTouched=false; // The slider follows the fan speed until it's moved
+let brightTouched=false; // Same for the LED brightness, until it's released
 async function act(cmd){
   if(cmd=="reset"&&!confirm("Reset the Xbox?"))return;
   try{const r=await fetch("/action?cmd="+cmd,{method:"POST"});if(!r.ok)alert(await r.text());}catch(e){alert("Not connected");}
@@ -144,9 +157,24 @@ async function tick(){
     if(!fanTouched&&s.fan>=10){$("fanSpeed").value=s.fan;$("fanValue").textContent=s.fan;}
     $("fanNote").innerHTML=s.fanOverride?'<span class="warn">Manual</span>':"Automatic";
     $("led").innerHTML=s.ledOverride?'<span class="warn">Manual</span> (red '+s.ledRed+', green '+s.ledGreen+')':"Automatic";
+    if(!brightTouched){$("ledBright").value=s.ledBrightness;$("ledBrightValue").textContent=s.ledBrightness+"%";}
   }catch(e){$("conn").textContent="Disconnected";}
 }
-setInterval(tick,1000);tick();
+async function loadThresholds(){
+  try{
+    const t=await(await fetch("/thresholds.json")).json();
+    $("thr").innerHTML=t.items.map((x,i)=>'<div class="row"><span class="thr">'+x.label+'</span>'+
+      '<input type="number" id="thr'+i+'" min="'+t.min+'" max="'+x.def+'" value="'+x.value+'">'+
+      '<span class="note'+(x.value<x.def?' warn':'')+'">default '+x.def+'</span>'+
+      '<button onclick="setThreshold('+i+')">Set</button></div>').join("");
+  }catch(e){}
+}
+async function setThreshold(i){
+  const el=$("thr"+i),v=Number(el.value);
+  if(!(v>=Number(el.min)&&v<=Number(el.max))){alert("Must be "+el.min+"-"+el.max);return;}
+  await act("threshold&index="+i+"&value="+v);loadThresholds();
+}
+setInterval(tick,1000);tick();loadThresholds();
 </script></body></html>
 )HTML";
 
@@ -159,12 +187,32 @@ int statusJson(char* out, size_t size) {
   return snprintf(out, size,
                   "{\"uptime\":%lu,\"powered\":%s,\"cpu\":%u,\"board\":%u,\"fan\":%u,\"fanOverride\":%s,"
                   "\"dvd\":%s,\"tray\":%u,\"trayClosed\":%s,\"av\":%u,\"avMissing\":%s,\"overheated\":%s,"
-                  "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"irq\":%u}",
+                  "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,\"irq\":%u}",
                   (unsigned long)s.uptime_s, s.powered ? "true" : "false", s.cpu_temperature,
                   s.board_temperature, s.fan_speed, s.fan_override ? "true" : "false",
                   SMC_DVD_SUPPORT ? "true" : "false", s.tray_state, s.tray_closed ? "true" : "false", s.av_pack,
                   s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
-                  s.led_override ? "true" : "false", s.led_red, s.led_green, s.interrupt_reason);
+                  s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness,
+                  s.interrupt_reason);
+}
+
+// Labels and defaults are constant, the values come from the core 0 snapshot
+int thresholdsJson(char* out, size_t size) {
+  uint8_t values[Fan::max_thresholds];
+  critical_section_enter_blocking(&status_lock);
+  memcpy(values, status.thresholds, sizeof(values));
+  critical_section_exit(&status_lock);
+
+  int len = snprintf(out, size, "{\"min\":%u,\"items\":[", Fan::min_threshold);
+  const uint8_t count = Fan::thresholdCount();
+  for (uint8_t i = 0; i < count && len < (int)size; i++) {
+    len += snprintf(out + len, size - len, "%s{\"label\":\"%s\",\"def\":%u,\"value\":%u}", i != 0 ? "," : "",
+                    Fan::thresholdLabel(i), Fan::thresholdDefault(i), values[i]);
+  }
+  if (len < (int)size) {
+    len += snprintf(out + len, size - len, "]}");
+  }
+  return len < (int)size ? len : (int)size - 1;
 }
 
 // Value of key in "a=1&b=2" (the query ends at a space or the end), or -1
@@ -228,6 +276,27 @@ const char* queueCommand(const char* query) {
     message = {Command::led_pattern, (uint8_t)((red << 4) | green)};
   } else if (queryIs(query, "cmd", "led_auto")) {
     message.command = Command::led_auto;
+  } else if (queryIs(query, "cmd", "threshold")) {
+    const long index = queryNumber(query, "index");
+    const long value = queryNumber(query, "value");
+    if (index < 0 || index >= Fan::thresholdCount()) {
+      return "unknown threshold";
+    }
+    // Never above the firmware's default
+    if (value < Fan::min_threshold || value > Fan::thresholdDefault(index)) {
+      static char error[48];
+      snprintf(error, sizeof(error), "value must be %u-%u", Fan::min_threshold, Fan::thresholdDefault(index));
+      return error;
+    }
+    message = {Command::threshold, (uint8_t)value, (uint8_t)index};
+  } else if (queryIs(query, "cmd", "thresholds_default")) {
+    message.command = Command::thresholds_default;
+  } else if (queryIs(query, "cmd", "led_brightness")) {
+    const long percent = queryNumber(query, "percent");
+    if (percent < 1 || percent > 100) {
+      return "percent must be 1-100";
+    }
+    message = {Command::led_brightness, (uint8_t)percent};
   } else {
     return "unknown command";
   }
@@ -255,6 +324,10 @@ void handleRequest(tcp_pcb* pcb, char* request) {
   } else if (strncmp(request, "GET /status.json ", 17) == 0) {
     char json[400];
     const int len = statusJson(json, sizeof(json));
+    respond(pcb, "200 OK", "application/json", json, len, false);
+  } else if (strncmp(request, "GET /thresholds.json ", 21) == 0) {
+    char json[900];
+    const int len = thresholdsJson(json, sizeof(json));
     respond(pcb, "200 OK", "application/json", json, len, false);
   } else if (strncmp(request, "POST /action?", 13) == 0) {
     const char* error = queueCommand(request + 13);
@@ -435,6 +508,24 @@ void runCommand(const CommandMessage& message) {
     debug::print_message("WEB: LEDs automatic");
     flags.led_override = false;
     break;
+
+  case Command::threshold:
+    if (Fan::setThreshold(message.index, message.arg)) {
+      debug::print_message(std::string("WEB: Fan threshold \"") + Fan::thresholdLabel(message.index) + "\" " +
+                           std::to_string(message.arg) + " (default " +
+                           std::to_string(Fan::thresholdDefault(message.index)) + ")");
+    }
+    break;
+
+  case Command::thresholds_default:
+    debug::print_message("WEB: Fan thresholds back to the defaults");
+    Fan::resetThresholds();
+    break;
+
+  case Command::led_brightness:
+    debug::print_message("WEB: LED brightness " + std::to_string(message.arg) + "%");
+    hal::set_led_brightness(message.arg);
+    break;
   }
 }
 
@@ -454,7 +545,11 @@ void publishStatus() {
   s.led_override = flags.led_override;
   s.led_red = Led::getRedPhases();
   s.led_green = Led::getGreenPhases();
+  s.led_brightness = hal::get_led_brightness();
   s.interrupt_reason = flags.interrupt_reason;
+  for (uint8_t i = 0; i < Fan::max_thresholds; i++) {
+    s.thresholds[i] = Fan::getThreshold(i);
+  }
 
   critical_section_enter_blocking(&status_lock);
   status = s;

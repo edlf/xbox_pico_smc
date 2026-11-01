@@ -10,6 +10,11 @@ temperature and adjusts the fan speed (10-50) every 20 s. Detects overheating.
 
 CMake builds only the state machine file for the chosen `SMC_FIRMWARE`.
 
+The web interface (Pico 2 W) can lower the thresholds below: each one between
+30 °C and the firmware's default, never above it. Lower values only make the
+fan speed up sooner or the Xbox shut down earlier. They're kept until the Pico
+restarts (not reset when the Xbox powers off), and "Defaults" restores them.
+
 Thresholds (°C) differ between firmwares:
 
 | Threshold (above / below) | P01 | P11 | P2L |
