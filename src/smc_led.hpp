@@ -20,6 +20,12 @@ enum class led_state {
   boot_failure
 };
 
+// LED flags, from the PIC's RAM (address.bit)
+struct flags_struct {
+  bool led_override; // 70.2 SMBus 0x07: show the SMBus 0x08 pattern
+};
+extern flags_struct flags;
+
 void init();
 void update();
 void resetPhaseCounter();

@@ -83,7 +83,7 @@ void update_fan_temp() {
   case fan_control_state::initial:
     // Keeps the 30 from power on, the PIC sets 0 here
     flags.overheated = false;
-    if (!flags.prepare_for_shutdown) {
+    if (!SMI::flags.prepare_for_shutdown) {
       state = fan_control_state::start;
     }
     break;
@@ -118,10 +118,10 @@ void update_fan_temp() {
     debug::print_warn("FAN: Overheated, CPU " + std::to_string(sensors.CPU_temperature) + " board " +
                       std::to_string(sensors.board_temperature));
     setSpeed(max_fan_speed);
-    flags.cold_reset_request = true;
-    flags.run_after_reset = false;
+    PLL_Reset::flags.cold_reset_request = true;
+    PLL_Reset::flags.run_after_reset = false;
     flags.overheated = true; // SMI shuts the Xbox down once this clears
-    flags.audio_clamp_request = true; // Also mutes the audio (0xF4A)
+    AudioClamp::flags.audio_clamp_request = true; // Also mutes the audio (0xF4A)
     timeout1 = 0xFA;
     timeout2 = 0xB3;
     state = fan_control_state::overheated_cooldown;

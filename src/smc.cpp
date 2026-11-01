@@ -16,27 +16,6 @@ volatile uint8_t ram_test_response0;
 volatile uint8_t ram_test_response1;
 volatile uint8_t bios_response_byte0;
 
-flags_struct flags;
-sensors_struct sensors;
-
-void resetInterruptReason() {
-  flags.interrupt_reason = 0;
-}
-
-void setInterruptReason(uint8_t ir) {
-  flags.interrupt_reason |= ir;
-}
-
-void fireSystemInterrupt() {
-  debug::print_message("SMC: Fire System Interrupt");
-
-  /* Pulse SMI signal (RA4) low to signal system interrupt. The PIC holds it
-   * low for 5 instruction cycles (2 us @ 10 MHz), see 0x68C */
-  hal::smi_pin_off();
-  busy_wait_us(2);
-  hal::smi_pin_on();
-}
-
 // P01 (0x5FB): the PIC's only encoder write, register 0xBA = 0x3F
 void configureConexantEncoder() {
   debug::print_message("SMC: Configure Conexant Encoder");
@@ -84,13 +63,13 @@ void setPowerOkIrq(bool enabled) {
 }
 
 void update_LEDs() {
-  Led::setManualControl(flags.led_override);
-  Led::setOverheat(flags.overheated);
-  Led::setAvMissing(flags.av_cable_missing);
+  Led::setManualControl(Led::flags.led_override);
+  Led::setOverheat(Fan::flags.overheated);
+  Led::setAvMissing(Video::flags.av_cable_missing);
   // system_running is set while the system is powered
-  Led::setPowerOff(!flags.system_running);
-  Led::setQuickGreenBlink(flags.tray_moving);
-  Led::setBootFailure(flags.frag_power_off); // Set once the boot challenge gives up
+  Led::setPowerOff(!SMI::flags.system_running);
+  Led::setQuickGreenBlink(Dvd::flags.tray_moving);
+  Led::setBootFailure(BootChallenge::flags.frag_power_off); // Set once the boot challenge gives up
   Led::update();
 }
 
@@ -133,7 +112,7 @@ void main_loop() {
 
     // Power cycle: press the power button for the host
     if (SMI::takePowerOnRequest()) {
-      flags.power_change_requested = true;
+      SMI::flags.power_change_requested = true;
     }
 
     uint8_t power_standby_state = PowerStandby::update();
@@ -202,19 +181,26 @@ void main_loop() {
 }
 
 void globals_init() {
-  flags = {};
+  SMI::flags = {};
+  Dvd::flags = {};
+  Video::flags = {};
+  AudioClamp::flags = {};
+  Fan::flags = {};
+  Led::flags = {};
+  PLL_Reset::flags = {};
+  BootChallenge::flags = {};
 
-  resetInterruptReason();
+  SMI::resetInterruptReason();
 
   resetSMBusRegisters();
 
   // Same as the PIC's RAM_init (0xB58): all flags clear (above) except
-  flags.tray_events_enabled = true; // First tray state change raises an interrupt
+  Dvd::flags.tray_events_enabled = true; // First tray state change raises an interrupt
 
-  sensors.CPU_temperature = 0x17;
-  sensors.board_temperature = 0x17;
-  sensors.tray_status = drive_tray_state::closed;
-  sensors.vmode = av_pack::scart; // 0, as the PIC's RAM_init
+  Fan::sensors.CPU_temperature = 0x17;
+  Fan::sensors.board_temperature = 0x17;
+  Dvd::sensors.tray_status = Dvd::drive_tray_state::closed;
+  Video::sensors.vmode = Video::av_pack::scart; // 0, as the PIC's RAM_init
 }
 
 void shutdown_xbox() {

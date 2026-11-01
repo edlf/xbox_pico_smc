@@ -9,6 +9,8 @@
 namespace SMC {
 namespace PLL_Reset {
 
+flags_struct flags;
+
 pll_sysreset_state state;
 uint8_t timeout; // Own counter, 0x49 on the PIC
 
@@ -67,10 +69,10 @@ void update() {
   case pll_sysreset_state::initial:
     hal::assertSystemReset();
     flags.cold_reset_request = false;
-    flags.os_ready = false;
-    flags.led_override = false;
-    flags.reset_on_eject_writable = true;
-    flags.reset_on_eject_disabled = true;
+    SMI::flags.os_ready = false;
+    Led::flags.led_override = false;
+    SMI::flags.reset_on_eject_writable = true;
+    SMI::flags.reset_on_eject_disabled = true;
     state = pll_sysreset_state::held_in_reset;
     break;
 
@@ -111,12 +113,12 @@ void update() {
   case pll_sysreset_state::warm_reset:
     hal::assertSystemReset();
     flags.warm_reset_request = false;
-    flags.os_ready = false;
-    flags.reset_on_eject_writable = true;
-    flags.reset_on_eject_disabled = true;
-    flags.led_override = false;
+    SMI::flags.os_ready = false;
+    SMI::flags.reset_on_eject_writable = true;
+    SMI::flags.reset_on_eject_disabled = true;
+    Led::flags.led_override = false;
     // Ignore tray changes for a while after a warm reset (P11/P2L, 0x636)
-    if (!flags.tray_moving) {
+    if (!Dvd::flags.tray_moving) {
       Dvd::restartTrayDebounce();
     }
     state = pll_sysreset_state::release_reset;

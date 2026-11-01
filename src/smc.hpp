@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <stdio.h>
 #include "debug.hpp"
-#include "smc_types.hpp"
 #include "smc_front_panel_sw.hpp"
 #include "smc_dvd.hpp"
 #include "smc_led.hpp"
@@ -19,21 +18,15 @@
 
 namespace SMC {
 
-// State shared by all modules, like the PIC's RAM: flags (0x6C-0x74), sensor
-// readings, and the boot results the BIOS writes over SMBus (0x0E, 0x12, 0x13)
-extern flags_struct flags;
-extern sensors_struct sensors;
+// Boot results the BIOS writes over SMBus (0x0E, 0x12, 0x13). The PIC's flags
+// (0x6C-0x74) and sensor readings are split per state machine, e.g.
+// SMI::flags, Dvd::flags, Fan::sensors.
 extern volatile uint8_t ram_test_response0;
 extern volatile uint8_t ram_test_response1;
 extern volatile uint8_t bios_response_byte0;
 
 void configureConexantEncoder();
 void configureTemperatureSensor();
-
-void fireSystemInterrupt();
-
-void resetInterruptReason();
-void setInterruptReason(uint8_t ir);
 
 void main_loop();
 void globals_init();

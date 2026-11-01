@@ -34,8 +34,15 @@ flowchart TD
 | [LEDs](state-machines/leds.md) | `smc_led.cpp` | Both |
 | [Front panel switches](state-machines/front_panel_switches.md) | `smc_front_panel_sw.cpp` | Both |
 
-The state machines share their state through `SMC::flags` (`src/smc_types.hpp`),
-like the PIC's RAM flags at 0x6C-0x74. The SMBus commands that drive them are
+The state machines share their state through flags, like the PIC's RAM flags
+at 0x6C-0x74. Each flag lives with the state machine that acts on it, as
+`flags` in its namespace (declared in its header): `SMI::flags`, `Dvd::flags`,
+`Video::flags`, `AudioClamp::flags`, `Fan::flags`, `Led::flags`,
+`PLL_Reset::flags` and `BootChallenge::flags`. Other modules set and read them
+through the namespace, e.g. `Dvd::flags.tray_moving`. The sensor readings are
+split the same way: `Fan::sensors` (temperatures), `Dvd::sensors` (tray state)
+and `Video::sensors` (AV pack), with the enums they use (`Dvd::drive_tray_state`,
+`Video::av_pack`, and the SMI reasons in `SMI::InterruptReason`). The SMBus commands that drive them are
 described in [SMBUS.md](../../SMBUS.md).
 
 The diagrams are Mermaid and render on GitHub and in most Markdown viewers.

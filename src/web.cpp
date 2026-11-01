@@ -468,32 +468,32 @@ void runCommand(const CommandMessage& message) {
   switch (message.command) {
   case Command::power:
     debug::print_message("WEB: Power button");
-    flags.power_change_requested = true;
+    SMI::flags.power_change_requested = true;
     break;
 
   case Command::eject:
     debug::print_message("WEB: Eject button");
-    flags.eject_change_requested = true;
-    flags.eject_button_event = true;
+    Dvd::flags.eject_change_requested = true;
+    Dvd::flags.eject_button_event = true;
     break;
 
   case Command::reset:
     if (hal::get_power_ok()) {
       debug::print_message("WEB: Reset");
-      flags.warm_reset_request = true;
-      flags.os_reset_request = true;
+      PLL_Reset::flags.warm_reset_request = true;
+      SMI::flags.os_reset_request = true;
     }
     break;
 
   case Command::fan_speed:
     debug::print_message("WEB: Fan speed " + std::to_string(message.arg));
     Fan::setCustomSpeed(message.arg);
-    flags.fan_override = true;
+    Fan::flags.fan_override = true;
     break;
 
   case Command::fan_auto:
     debug::print_message("WEB: Fan automatic");
-    flags.fan_override = false;
+    Fan::flags.fan_override = false;
     break;
 
   case Command::led_pattern:
@@ -501,12 +501,12 @@ void runCommand(const CommandMessage& message) {
                          std::to_string(message.arg & 0x0F));
     Led::setRedPhases(message.arg >> 4);
     Led::setGreenPhases(message.arg & 0x0F);
-    flags.led_override = true;
+    Led::flags.led_override = true;
     break;
 
   case Command::led_auto:
     debug::print_message("WEB: LEDs automatic");
-    flags.led_override = false;
+    Led::flags.led_override = false;
     break;
 
   case Command::threshold:
@@ -533,20 +533,20 @@ void publishStatus() {
   WebStatus s;
   s.uptime_s = time_us_64() / 1000000;
   s.powered = hal::get_power_ok();
-  s.cpu_temperature = sensors.CPU_temperature;
-  s.board_temperature = sensors.board_temperature;
+  s.cpu_temperature = Fan::sensors.CPU_temperature;
+  s.board_temperature = Fan::sensors.board_temperature;
   s.fan_speed = Fan::getFanSpeed();
-  s.fan_override = flags.fan_override;
-  s.tray_state = (static_cast<uint8_t>(sensors.tray_status) >> 4) & 0x07;
+  s.fan_override = Fan::flags.fan_override;
+  s.tray_state = (static_cast<uint8_t>(Dvd::sensors.tray_status) >> 4) & 0x07;
   s.tray_closed = Dvd::isTrayClosing();
-  s.av_pack = static_cast<uint8_t>(sensors.vmode) >> 1;
-  s.av_missing = flags.av_cable_missing;
-  s.overheated = flags.overheated;
-  s.led_override = flags.led_override;
+  s.av_pack = static_cast<uint8_t>(Video::sensors.vmode) >> 1;
+  s.av_missing = Video::flags.av_cable_missing;
+  s.overheated = Fan::flags.overheated;
+  s.led_override = Led::flags.led_override;
   s.led_red = Led::getRedPhases();
   s.led_green = Led::getGreenPhases();
   s.led_brightness = hal::get_led_brightness();
-  s.interrupt_reason = flags.interrupt_reason;
+  s.interrupt_reason = SMI::flags.interrupt_reason;
   for (uint8_t i = 0; i < Fan::max_thresholds; i++) {
     s.thresholds[i] = Fan::getThreshold(i);
   }

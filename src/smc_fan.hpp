@@ -6,6 +6,13 @@
 namespace SMC {
 namespace Fan {
 
+// Last temperatures read from the sensor (°C)
+struct sensors_struct {
+  uint8_t CPU_temperature;
+  uint8_t board_temperature;
+};
+extern sensors_struct sensors;
+
 enum class fan_control_state {
   initial,
   start,
@@ -22,6 +29,14 @@ enum class fan_control_state {
   cpu_hot,
   start_sampling
 };
+
+// Fan and temperature flags, from the PIC's RAM (address.bit)
+struct flags_struct {
+  bool overheated;              // 6E.4
+  bool fan_override;            // 6F.2 SMBus 0x05: use the speed from 0x06
+  bool temperature_read_failed; // 74.0 (never read)
+};
+extern flags_struct flags;
 
 void init();
 void update_fan_temp();

@@ -10,6 +10,8 @@
 namespace SMC {
 namespace BootChallenge {
 
+flags_struct flags;
+
 constexpr const char* state_names[] = {
   "Initial",
   "Wait for ram test result",
@@ -78,7 +80,7 @@ void seedPowerUp() {
   return;
 #endif
   challenge.input_byte2 = slowTimerByte() + challenge.input_byte0;
-  challenge.input_byte3 = sensors.CPU_temperature ^ challenge.input_byte1;
+  challenge.input_byte3 = Fan::sensors.CPU_temperature ^ challenge.input_byte1;
 }
 
 void compute() {
@@ -119,8 +121,8 @@ static void newChallengeAfterReset() {
 }
 
 static void lockUp() {
-  flags.cold_reset_request = true;
-  flags.run_after_reset = false;
+  PLL_Reset::flags.cold_reset_request = true;
+  PLL_Reset::flags.run_after_reset = false;
   state = boot_challenge_state::lock_up;
 }
 
@@ -179,7 +181,7 @@ void update() {
     // As P2L (0xD5F): 15 ticks for the RAM test (the PIC waits 12), lets the
     // system run and restarts the tray tracking
     boot_response_timeout = 15;
-    flags.run_after_reset = true;
+    PLL_Reset::flags.run_after_reset = true;
     Dvd::restartTrayTracking();
 #if !SMC_FIRMWARE_NO_CHALLENGE
     compute(); // D01/DXF (0x8DA) skip it
@@ -235,27 +237,27 @@ void update() {
   case boot_challenge_state::challenge_wait_for_reply:
     // As P2L (0xD96): check the answer once after a passed RAM test, otherwise
     // wait for a reset and start a new challenge
-    if (flags.warm_reset_request) {
+    if (PLL_Reset::flags.warm_reset_request) {
       newChallengeAfterReset();
-    } else if (!flags.cold_reset_request) {
+    } else if (!PLL_Reset::flags.cold_reset_request) {
       if (challenge_check_pending) {
         boot_response_timeout = 4;
         state = boot_challenge_state::check_response;
       }
-    } else if (!flags.overheated && !flags.prepare_for_shutdown) {
+    } else if (!Fan::flags.overheated && !SMI::flags.prepare_for_shutdown) {
       newChallengeAfterReset();
     }
     break;
 
   case boot_challenge_state::boot_failed:
-    flags.audio_clamp_request = true; // Also mutes the audio, as P2L (0xDCA)
+    AudioClamp::flags.audio_clamp_request = true; // Also mutes the audio, as P2L (0xDCA)
     failure_count++;
     if (failure_count <= 3) {
       state = boot_challenge_state::retry_boot;
     } else if (--failure_countdown != 0) {
       failure_count = 0;
-      flags.cold_reset_request = true;
-      flags.run_after_reset = false;
+      PLL_Reset::flags.cold_reset_request = true;
+      PLL_Reset::flags.run_after_reset = false;
 #if SMC_FIRMWARE_DXF
       rtc_dump_time = 100; // DXF (0x94D): RTC dump while held in reset
       state = boot_challenge_state::rtc_dump_start;
@@ -271,16 +273,16 @@ void update() {
   case boot_challenge_state::lock_up:
     /* FRAG: error code LEDs (top priority, see Led::setBootFailure), stays
      * here until power off */
-    flags.led_override = true;
+    Led::flags.led_override = true;
     flags.frag_power_off = true;
-    flags.frag_eject = !flags.overheated; // Not when overheated, as P2L (0xE15)
+    flags.frag_eject = !Fan::flags.overheated; // Not when overheated, as P2L (0xE15)
     break;
 
   case boot_challenge_state::retry_boot:
     /* Reset the Xbox and try again */
-    flags.cold_reset_request = true;
-    flags.run_after_reset = true;
-    flags.led_override = false;
+    PLL_Reset::flags.cold_reset_request = true;
+    PLL_Reset::flags.run_after_reset = true;
+    Led::flags.led_override = false;
     clearRamTestResult();
     ram_test_response0 = 0;
     ram_test_response1 = 0;

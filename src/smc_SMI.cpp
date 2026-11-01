@@ -12,6 +12,8 @@
 namespace SMC {
 namespace SMI {
 
+flags_struct flags;
+
 constexpr const char* smi_state_names[] = {
   "Decision_state",
   "Power off start",
@@ -71,9 +73,27 @@ void printState() {
     debug::print_message(msg);
 }
 
+void resetInterruptReason() {
+  flags.interrupt_reason = 0;
+}
+
+static void setInterruptReason(uint8_t ir) {
+  flags.interrupt_reason |= ir;
+}
+
+static void fireSystemInterrupt() {
+  debug::print_message("SMC: Fire System Interrupt");
+
+  /* Pulse SMI signal (RA4) low to signal system interrupt. The PIC holds it
+   * low for 5 instruction cycles (2 us @ 10 MHz), see 0x68C */
+  hal::smi_pin_off();
+  busy_wait_us(2);
+  hal::smi_pin_on();
+}
+
 // Latches the reason in both the SMBus-readable byte (6C) and the pending copy
 // (6D) that event_interrupt_handled uses to clear the source, then pulses SMI
-static void raiseInterrupt(uint8_t reason) {
+void raiseInterrupt(uint8_t reason) {
   char msg[32];
   snprintf(msg, sizeof(msg), "SMI: Interrupt reason 0x%02X", reason);
   debug::print_message(msg);
@@ -109,7 +129,7 @@ uint8_t update() {
     flags.waiting_for_os = false;
     flags.pending_interrupt_reason = 0; // Pending copy only, 6C is cleared by SMBus read 0x11
 
-    if (flags.overheated) {
+    if (Fan::flags.overheated) {
       /* System overheated */
       state = smi_power_state::overheat_cooldown_wait;
     } else if (flags.power_change_requested) {
@@ -117,9 +137,9 @@ uint8_t update() {
       flags.waiting_for_os = true;
       raiseInterrupt(InterruptReason_power_sw_pressed);
       state = smi_power_state::start_power_off;
-    } else if (flags.eject_change_requested) {
+    } else if (Dvd::flags.eject_change_requested) {
       /* Eject button pressed */
-      flags.eject_change_requested = false;
+      Dvd::flags.eject_change_requested = false;
       flags.waiting_for_os = true;
       raiseInterrupt(InterruptReason_eject_sw_pressed);
       state = smi_power_state::process_power_off_conditions;
@@ -156,7 +176,7 @@ uint8_t update() {
 
   case smi_power_state::start_power_off:
     flags.system_running = false;
-    if (flags.frag_power_off) {
+    if (BootChallenge::flags.frag_power_off) {
       /* FRAG set - go to different state */
       state = smi_power_state::leds_off;
     } else {
@@ -190,9 +210,9 @@ uint8_t update() {
     // Power off: let the OS shut down first. Without a passed RAM test or
     // SMBus 0x1A (os_ready) there is no OS to ask, so power off right away.
     if (!flags.power_off_request) {
-      if (!flags.ram_test_submitted) {
+      if (!BootChallenge::flags.ram_test_submitted) {
         state = smi_power_state::request_tray_close;
-      } else if (!flags.ram_test_passed) {
+      } else if (!BootChallenge::flags.ram_test_passed) {
         state = smi_power_state::request_tray_close;
       } else if (!flags.os_ready) {
         state = smi_power_state::request_tray_close;
@@ -246,8 +266,8 @@ uint8_t update() {
 
   case smi_power_state::leds_off:
     Led::clearPhases();
-    flags.cold_reset_request = true;
-    flags.run_after_reset = false;
+    PLL_Reset::flags.cold_reset_request = true;
+    PLL_Reset::flags.run_after_reset = false;
     flags.power_off_request = false;
     flags.os_busy = false;
     flags.waiting_for_os = false;
@@ -266,7 +286,7 @@ uint8_t update() {
     break;
 
   case smi_power_state::initial:
-    flags.frag_power_off = false;
+    BootChallenge::flags.frag_power_off = false;
     flags.system_running = false;
     flags.video_mode_changed = false;
     flags.av_unplugged_event = false;
@@ -295,7 +315,7 @@ uint8_t update() {
     break;
 
   case smi_power_state::overheat_cooldown_wait:
-    if (!flags.overheated) {
+    if (!Fan::flags.overheated) {
       power_timeout = 1;
       state = smi_power_state::delay;
     }
@@ -335,7 +355,7 @@ uint8_t update() {
 
   case smi_power_state::going_to_reset:
     flags.os_reset_request = false;
-    flags.warm_reset_request = true;
+    PLL_Reset::flags.warm_reset_request = true;
     flags.video_mode_changed = false;
     flags.av_unplugged_event = false;
     flags.tray_media_event = false;
@@ -366,11 +386,11 @@ uint8_t update() {
     break;
 
   case smi_power_state::wait_for_tray_stable:
-    sensors.tray_status = Dvd::readTrayState();
+    Dvd::sensors.tray_status = Dvd::readTrayState();
 
-    if (sensors.tray_status == drive_tray_state::closed ||
-        sensors.tray_status == drive_tray_state::no_disc ||
-        sensors.tray_status == drive_tray_state::disc_detected) {
+    if (Dvd::sensors.tray_status == Dvd::drive_tray_state::closed ||
+        Dvd::sensors.tray_status == Dvd::drive_tray_state::no_disc ||
+        Dvd::sensors.tray_status == Dvd::drive_tray_state::disc_detected) {
       state = smi_power_state::leds_off;
     } else if (--power_timeout == 0) {
       state = smi_power_state::leds_off;

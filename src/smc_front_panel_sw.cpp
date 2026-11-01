@@ -1,34 +1,49 @@
 #include "smc.hpp"
 #include "hal.hpp"
 
-#include "time.h"
-
 #include <iterator>
 #include <string>
 
 namespace SMC {
 namespace FrontPanelSW {
 
-enum class switch_state {
-  wait_for_button_press,
-  debouncing,
-  wait_for_button_release,
-  release_debounce
+// Same as the PIC (0x800 power, 0x828 eject): a press or release only counts
+// once it's read on two ticks in a row
+struct Debouncer {
+  bool pressed = false;  // Debounced level
+  bool last_raw = false; // Previous reading
+
+  // Called once per tick, true on the tick a press is confirmed
+  bool update(const bool raw) {
+    const bool stable = (raw == last_raw);
+    last_raw = raw;
+    if (stable && raw != pressed) {
+      pressed = raw;
+      return pressed;
+    }
+    return false;
+  }
+
+  // Released and no press being confirmed
+  bool idle() const {
+    return !pressed && !last_raw;
+  }
+
+  // The PIC's four states, for the log
+  const char* stateName() const {
+    if (!pressed) {
+      return last_raw ? "Debouncing" : "Wait for button press";
+    }
+    return last_raw ? "Wait for button release" : "Release debounce";
+  }
 };
 
-constexpr const char* state_names[] = {
-  "Wait for button press",
-  "Debouncing",
-  "Wait for button release",
-  "Release debounce"
-};
-
-switch_state pwr_state = switch_state::wait_for_button_press;
-switch_state eject_state = switch_state::wait_for_button_press;
+static Debouncer power;
+static Debouncer eject;
 
 void init() {
-  pwr_state = switch_state::wait_for_button_press;
-  eject_state = switch_state::wait_for_button_press;
+  power = {};
+  eject = {};
 }
 
 void update() {
@@ -37,98 +52,26 @@ void update() {
 }
 
 void updatePower() {
-  switch (pwr_state) {
-  case switch_state::wait_for_button_press:
-    if (hal::power_button_pressed()) {
-      pwr_state = switch_state::debouncing;
-    }
-    break;
-
-  case switch_state::debouncing:
-    if (hal::power_button_pressed()) {
-      // Only counts while the eject button is idle (as P2L, 0x8C3)
-      if (eject_state == switch_state::wait_for_button_press) {
-        flags.power_change_requested = true;
-      }
-      pwr_state = switch_state::wait_for_button_release;
-    } else {
-      pwr_state = switch_state::wait_for_button_press;
-    }
-    break;
-
-  case switch_state::wait_for_button_release:
-    if (!hal::power_button_pressed()) {
-      pwr_state = switch_state::release_debounce;
-    }
-    break;
-
-  case switch_state::release_debounce:
-    if (hal::power_button_pressed()) {
-      pwr_state = switch_state::wait_for_button_release;
-    } else {
-      pwr_state = switch_state::wait_for_button_press;
-    }
-    break;
+  // Only counts while the eject button is idle (as P2L, 0x8C3)
+  if (power.update(hal::power_button_pressed()) && eject.idle()) {
+    SMI::flags.power_change_requested = true;
   }
 }
 
 void updateEject() {
-  switch (eject_state) {
-  case switch_state::wait_for_button_press:
-    if (hal::eject_button_pressed()) {
-      eject_state = switch_state::debouncing;
-    }
-    break;
-
-  case switch_state::debouncing:
-    if (hal::eject_button_pressed()) {
-      // Only counts while the power button is idle (as P2L, 0x782)
-      if (pwr_state == switch_state::wait_for_button_press) {
-        flags.eject_change_requested = true;
-        flags.eject_button_event = true;
-      }
-      eject_state = switch_state::wait_for_button_release;
-    } else {
-      eject_state = switch_state::wait_for_button_press;
-    }
-    break;
-
-  case switch_state::wait_for_button_release:
-    if (!hal::eject_button_pressed()) {
-      eject_state = switch_state::release_debounce;
-    }
-    break;
-
-  case switch_state::release_debounce:
-    if (hal::eject_button_pressed()) {
-      eject_state = switch_state::wait_for_button_release;
-    } else {
-      eject_state = switch_state::wait_for_button_press;
-    }
-    break;
+  // Only counts while the power button is idle (as P2L, 0x782)
+  if (eject.update(hal::eject_button_pressed()) && power.idle()) {
+    Dvd::flags.eject_change_requested = true;
+    Dvd::flags.eject_button_event = true;
   }
 }
 
 void printPowerState() {
-    const size_t p_state = static_cast<size_t>(pwr_state);
-    std::string msg = "Power SW state [" + std::to_string(p_state) + "]";
-
-    if (p_state < std::size(state_names)) {
-        msg += std::string(" ") + state_names[p_state];
-    }
-
-    debug::print_message(msg);
+  debug::print_message(std::string("Power SW state: ") + power.stateName());
 }
 
 void printEjectState() {
-    const size_t e_state = static_cast<size_t>(eject_state);
-    std::string msg = "Eject SW state [" + std::to_string(e_state) + "]";
-
-    if (e_state < std::size(state_names)) {
-        msg += std::string(" ") + state_names[e_state];
-    }
-
-    debug::print_message(msg);
+  debug::print_message(std::string("Eject SW state: ") + eject.stateName());
 }
 
 } // namespace FrontPanelSW

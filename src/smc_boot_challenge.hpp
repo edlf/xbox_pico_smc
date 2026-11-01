@@ -38,6 +38,16 @@ typedef struct {
   uint8_t response1;
 } challenge_struct;
 
+// Boot flags, from the PIC's RAM (address.bit)
+struct flags_struct {
+  bool ram_test_submitted;          // 71.4 SMBus 0x12 written
+  bool ram_test_passed;             // 71.5
+  bool frag_power_off;              // 72.5 FRAG: the power button turns off right away
+  bool frag_eject;                  // 73.2 FRAG: the eject button opens the tray directly
+  bool challenge_response_received; // 73.4 SMBus 0x21 written
+};
+extern flags_struct flags;
+
 void init();
 void update();
 void compute();

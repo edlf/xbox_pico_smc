@@ -9,6 +9,8 @@ namespace SMC {
 
 namespace Led {
 
+flags_struct flags;
+
 static led_state state;
 static uint8_t state_counter;
 static uint8_t led_phase; // Phase bit shown next, 3 down to 0

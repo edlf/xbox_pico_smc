@@ -115,24 +115,24 @@ uint8_t smbus_read_handler(uint8_t command) {
     break;
 
   case Command::TRAY_STATE: // 0x03
-    response = static_cast<uint8_t>(sensors.tray_status);
+    response = static_cast<uint8_t>(Dvd::sensors.tray_status);
     // Set bit 0 if tray_insert flag is set
-    if (flags.tray_moving) {
+    if (Dvd::flags.tray_moving) {
       response |= 0x01;
     }
     break;
 
   case Command::VIDEO_MODE: // 0x04
-    response = static_cast<uint8_t>(sensors.vmode) >> 1;
+    response = static_cast<uint8_t>(Video::sensors.vmode) >> 1;
     break;
 
   case Command::CPU_TEMPERATURE: // 0x09
-    response = sensors.CPU_temperature;
+    response = Fan::sensors.CPU_temperature;
     break;
 
   case Command::AIR_TEMPERATURE: // 0x0A
     // P2L (0x4D1) has no board sensor and reports the CPU temperature
-    response = SMC_FIRMWARE_P2L ? sensors.CPU_temperature : sensors.board_temperature;
+    response = SMC_FIRMWARE_P2L ? Fan::sensors.CPU_temperature : Fan::sensors.board_temperature;
     break;
 
   case Command::READ_FAN_SPEED: // 0x10
@@ -140,8 +140,8 @@ uint8_t smbus_read_handler(uint8_t command) {
     break;
 
   case Command::INTERRUPT_REASON: // 0x11
-    response = flags.interrupt_reason;
-    flags.interrupt_reason = 0; // Clear after reading
+    response = SMI::flags.interrupt_reason;
+    SMI::flags.interrupt_reason = 0; // Clear after reading
     break;
 
   case Command::READ_RAM_TEST_RESULTS: // 0x14
@@ -215,16 +215,16 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // Same as the PIC (0x13B): bit 0 = reset, bit 6 = power cycle,
     // bit 7 = power off
     if (data & 0x01) {
-      flags.warm_reset_request = true;
-      flags.os_reset_request = true;
+      PLL_Reset::flags.warm_reset_request = true;
+      SMI::flags.os_reset_request = true;
     }
     if (data & 0x40) {
-      flags.power_change_requested = true;
-      flags.power_cycle_request = true;
+      SMI::flags.power_change_requested = true;
+      SMI::flags.power_cycle_request = true;
     }
     if (data & 0x80) {
-      flags.power_change_requested = true;
-      flags.power_off_request = true;
+      SMI::flags.power_change_requested = true;
+      SMI::flags.power_off_request = true;
     }
     break;
 
@@ -238,15 +238,15 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
 #if SMC_FIRMWARE_P2L
     // P2L (0x5B3): always accepted (the speed starts at 50); turning it off
     // raises the fan to at least 30
-    flags.fan_override = data & 0x01;
-    if (!flags.fan_override) {
+    Fan::flags.fan_override = data & 0x01;
+    if (!Fan::flags.fan_override) {
       Fan::raiseSpeedTo(30);
     }
 #else
     if (!(data & 0x01)) {
-      flags.fan_override = false;
+      Fan::flags.fan_override = false;
     } else if (Fan::getCustomFanSpeed() <= hal::FAN_MAX_SPEED) {
-      flags.fan_override = true;
+      Fan::flags.fan_override = true;
     }
 #endif
     break;
@@ -260,9 +260,9 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
   case Command::LED_OVERRIDE: // 0x07
     // Same as the PIC (0x159): bit 0 = show the 0x08 pattern (led_override)
     if (data & 0x01) {
-      flags.led_override = true;
+      Led::flags.led_override = true;
     } else {
-      flags.led_override = false;
+      Led::flags.led_override = false;
     }
     break;
 
@@ -276,9 +276,9 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // Same as the PIC (0x16B): bit 0 = 1 clamp, 0 unclamp,
     // carried out by AudioClamp::update
     if (data & 0x01) {
-      flags.audio_clamp_request = true;
+      AudioClamp::flags.audio_clamp_request = true;
     } else {
-      flags.audio_unclamp_request = true;
+      AudioClamp::flags.audio_unclamp_request = true;
     }
     break;
 
@@ -286,32 +286,32 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // Same as the PIC (0x170): bit 0 = 1 load, 0 eject, carried
     // out by Dvd::updateDvdTrayEject
     if (data & 0x01) {
-      flags.tray_load_request = true;
+      Dvd::flags.tray_load_request = true;
     } else {
-      flags.tray_eject_request = true;
+      Dvd::flags.tray_eject_request = true;
     }
     break;
 
   case Command::OS_RESUME: // 0x0D
     // Same as the PIC (0x175): the OS answering a power/eject SMI, only
     // while one is being handled (waiting_for_os). Without it the SMC resets the Xbox.
-    if (!flags.waiting_for_os) {
+    if (!SMI::flags.waiting_for_os) {
       break;
     }
     if (data & 0x01) {
-      flags.power_off_request = true; // Power off
+      SMI::flags.power_off_request = true; // Power off
     }
     if (data & 0x08) {
-      flags.os_reset_request = true; // Reset
+      SMI::flags.os_reset_request = true; // Reset
     }
     if (data & 0x02) {
-      flags.os_busy = true; // Busy, keep waiting
+      SMI::flags.os_busy = true; // Busy, keep waiting
     }
     if (data & 0x04) {
-      flags.os_event_handled = true; // Handled, no reset
+      SMI::flags.os_event_handled = true; // Handled, no reset
     }
     if (!(data & 0x02)) {
-      flags.waiting_for_os = false;
+      SMI::flags.waiting_for_os = false;
     }
     break;
 
@@ -324,9 +324,9 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // As P2L (0x622): passed with 0x13 = 0x0F and 0x12 = 0xF0, or 0x13 = 0x00
     // or 0xFF and 0x12 = 0x00. The PIC (0x188) passes 0x13 = 0x00/0xFF
     // whatever 0x12 holds
-    flags.ram_test_submitted = true;
+    BootChallenge::flags.ram_test_submitted = true;
     ram_test_response0 = data;
-    flags.ram_test_passed =
+    BootChallenge::flags.ram_test_passed =
         (ram_test_response1 == 0x0F && ram_test_response0 == 0xF0) ||
         ((ram_test_response1 == 0x00 || ram_test_response1 == 0xFF) && ram_test_response0 == 0x00);
     break;
@@ -337,7 +337,7 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
 
   case Command::CHALLENGE_RESPONSE1: // 0x21
     BootChallenge::getChallengeStructRef().response1 = data;
-    flags.challenge_response_received = true; // Response complete
+    BootChallenge::flags.challenge_response_received = true; // Response complete
     break;
 
   case Command::POWER_CYCLE_DELAY: // 0x22
@@ -358,20 +358,20 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     // Same as the PIC (0x1A8): bit 0 disables reset-on-eject, allowed
     // once per boot (reset_on_eject_writable is re-armed by the PLL/reset state machine)
     if (data & 0x01) {
-      if (flags.reset_on_eject_writable) {
-        flags.reset_on_eject_disabled = true;
+      if (SMI::flags.reset_on_eject_writable) {
+        SMI::flags.reset_on_eject_disabled = true;
       }
     } else {
-      flags.reset_on_eject_disabled = false;
+      SMI::flags.reset_on_eject_disabled = false;
     }
-    flags.reset_on_eject_writable = false;
+    SMI::flags.reset_on_eject_writable = false;
     break;
 
   case Command::OS_READY: // 0x1A
     // Bit 0 enables interrupts (os_ready), which lets a power off go through the
     // OS instead of cutting power right away. Writing 0 clears it, as P2L
     // (0x66C); the PIC (0x1B1) only ever sets it
-    flags.os_ready = data & 0x01;
+    SMI::flags.os_ready = data & 0x01;
     break;
 
   case Command::SCRATCH: // 0x1B
@@ -470,19 +470,19 @@ bool smbusMasterReadByte(uint8_t address, uint8_t reg, uint8_t& value) {
 // that couldn't be read keep their previous value.
 bool read_temperatures() {
   uint8_t value;
-  flags.temperature_read_failed = false;
+  Fan::flags.temperature_read_failed = false;
 
   if (!smbusMasterReadByte(I2C_TEMP_SENSOR_ADDRESS, 0x01, value)) {
-    flags.temperature_read_failed = true;
+    Fan::flags.temperature_read_failed = true;
     return false;
   }
-  sensors.CPU_temperature = value;
+  Fan::sensors.CPU_temperature = value;
 
   if (!smbusMasterReadByte(I2C_TEMP_SENSOR_ADDRESS, 0x00, value)) {
-    flags.temperature_read_failed = true;
+    Fan::flags.temperature_read_failed = true;
     return false;
   }
-  sensors.board_temperature = value;
+  Fan::sensors.board_temperature = value;
   return true;
 }
 

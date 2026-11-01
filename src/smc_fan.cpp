@@ -8,6 +8,9 @@
 namespace SMC {
 namespace Fan {
 
+flags_struct flags;
+sensors_struct sensors;
+
 // Fan speed and CPU temperature prediction, shared by the PIC (smc_fan_pic.cpp)
 // and P2L (smc_fan_p2l.cpp) fan control
 

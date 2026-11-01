@@ -8,6 +8,8 @@
 namespace SMC {
 namespace AudioClamp {
 
+flags_struct flags;
+
 // Same as the PIC (0x573). Requests: audio_clamp_request, audio_unclamp_request (SMBus
 // 0x0B), audio_clamp_timer = unclamp after a delay (set at power up). Missing AV cable
 // (av_cable_missing) or a shutdown (prepare_for_shutdown) always clamps.
@@ -28,8 +30,8 @@ void init() {
 }
 
 static bool mustClamp() {
-  return flags.av_cable_missing || flags.audio_clamp_request ||
-         flags.prepare_for_shutdown;
+  return Video::flags.av_cable_missing || flags.audio_clamp_request ||
+         SMI::flags.prepare_for_shutdown;
 }
 
 void update() {
@@ -39,7 +41,7 @@ void update() {
     flags.audio_clamp_request = false;
     audio_clamp_timeout = unclamp_delay;
 
-    if (flags.av_cable_missing) {
+    if (Video::flags.av_cable_missing) {
       return; // No AV cable
     }
     if (flags.audio_unclamp_request) {

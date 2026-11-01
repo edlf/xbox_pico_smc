@@ -5,6 +5,9 @@
 namespace SMC {
 namespace Dvd {
 
+flags_struct flags;
+sensors_struct sensors;
+
 #if SMC_DVD_SUPPORT
 
 drive_tray_state tray_status_first_read;
@@ -81,16 +84,16 @@ void updateDvdTray() {
     sensors.tray_status = tray_status_raw;
     if (tray_status_raw == drive_tray_state::opening) {
       if (flags.tray_events_enabled) {
-        flags.tray_opening_event = true;
+        SMI::flags.tray_opening_event = true;
       }
     } else if (tray_status_raw == drive_tray_state::closed) {
       if (flags.tray_events_enabled) {
-        flags.tray_state_00_event = true;
+        SMI::flags.tray_state_00_event = true;
       }
     } else if (tray_status_raw == drive_tray_state::disc_detected ||
                tray_status_raw == drive_tray_state::no_disc) {
       if (flags.tray_events_enabled) {
-        flags.tray_media_event = true;
+        SMI::flags.tray_media_event = true;
       }
     } else {
       flags.tray_events_enabled = true;
@@ -185,7 +188,7 @@ void updateDvdTrayEject() {
 
     /* Close on eject button, load request (SMBus 0x0C) or shutdown */
     if (!flags.eject_change_requested && !flags.tray_load_request &&
-        !flags.prepare_for_shutdown) {
+        !SMI::flags.prepare_for_shutdown) {
       return;
     }
     if (!trayCanMove()) {
@@ -199,7 +202,7 @@ void updateDvdTrayEject() {
     break;
 
   case tray_position::closed:
-    if (flags.prepare_for_shutdown) {
+    if (SMI::flags.prepare_for_shutdown) {
       return;
     }
 
@@ -212,13 +215,13 @@ void updateDvdTrayEject() {
     }
 
     if (flags.eject_change_requested) {
-      if (!flags.reset_on_eject_disabled) {
+      if (!SMI::flags.reset_on_eject_disabled) {
         flags.tray_open_expected = true;
       }
 
       /* FRAG'd: no OS to ask, open the tray directly */
-      if (flags.frag_eject) {
-        flags.run_after_reset = true;
+      if (BootChallenge::flags.frag_eject) {
+        PLL_Reset::flags.run_after_reset = true;
         flags.eject_pulse = true;
         flags.eject_change_requested = false;
       }
@@ -276,7 +279,7 @@ void updateDvdTrayThree() {
     if (sensors.tray_status == drive_tray_state::closing ||
         sensors.tray_status == drive_tray_state::opening ||
         sensors.tray_status == drive_tray_state::unloading ||
-        (flags.os_ready && --dvd_tray_timeout == 0)) {
+        (SMI::flags.os_ready && --dvd_tray_timeout == 0)) {
       flags.tray_open_expected = false;
       dvd_tray_three = update_dvd_tray_three_state::wait;
     }

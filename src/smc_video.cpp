@@ -8,6 +8,9 @@
 namespace SMC {
 namespace Video {
 
+flags_struct flags;
+sensors_struct sensors;
+
 // Same as the PIC (0x851). The mode pins read av_pack::none (all high) with no
 // AV cable, and av_pack::special while unplugged acts like a power button press.
 
@@ -104,7 +107,7 @@ void update() {
 
   case video_state::confirmed:
     setMode(vmode_raw);
-    flags.video_mode_changed = true; // SMI to the OS
+    SMI::flags.video_mode_changed = true; // SMI to the OS
     state = video_state::monitor;
     break;
 
@@ -118,7 +121,7 @@ void update() {
       break;
     }
     flags.av_cable_missing = true; // No AV cable (LEDs, audio clamp)
-    flags.av_unplugged_event = true; // SMI to the OS
+    SMI::flags.av_unplugged_event = true; // SMI to the OS
     setMode(vmode_raw);
     debug::print_message("VIDEO: Unplugged, SMI queued, audio clamped, LEDs orange/green");
     state = video_state::no_cable;
@@ -132,7 +135,7 @@ void update() {
       /* Cable is back */
       debug::print_message("VIDEO: Cable back, audio unclamped");
       flags.av_cable_missing = false;
-      flags.audio_unclamp_request = true; // Request unclamp
+      AudioClamp::flags.audio_unclamp_request = true; // Request unclamp
       state = video_state::monitor;
     }
     break;
@@ -140,7 +143,7 @@ void update() {
   case video_state::special_debounce:
     vmode_raw = readMode();
     if (vmode_raw == av_pack::special) {
-      flags.av_power_button_event = true; // SMI as power button
+      SMI::flags.av_power_button_event = true; // SMI as power button
       flags.av_cable_missing = false;
       state = video_state::special_done;
     } else {
