@@ -11,6 +11,9 @@ commands and reads of write-only ones. Times are in SMC ticks of 20 ms.
 
 ## Overview
 
+### Stock
+Commands available on the stock PIC/Xyclops firmware.
+
 | Command | Name | R/W | Summary |
 |-----------|----------------------|-----|----------------------------------------|
 | 0x01      | Firmware version     | R/W | Version string, one character per read |
@@ -43,6 +46,16 @@ commands and reads of write-only ones. Times are in SMC ticks of 20 ms.
 | 0x1C-0x1F | Challenge            |  R  | Boot challenge bytes |
 | 0x20-0x21 | Challenge response   |  W  | Answer to the boot challenge |
 | 0x22      | Power cycle delay    |  W  | Off time of the next power cycle |
+
+### Extra commands
+
+These commands are exclusive to this SMC, so they aren't present on the original
+PIC or Xcylops.
+
+| Command | Name | R/W | Summary |
+|-----------|----------------------|-----|----------------------------------------|
+| 0x30      | Pico temperature     |  R  | °C |
+| 0x31      | NTC temperature      |  R  | °C, 0xFF without one |
 
 ## Video encoder writes (sniffer)
 
@@ -323,4 +336,16 @@ is ignored. Only the RAM test result is checked.
 ### 0x22 Power cycle delay (write)
 
 Off time of the next power cycle (0x02 bit 6), in ticks. Reset to 25 (0.5 s)
+
+### 0x30 Pico temperature (read)
+
+Not on the PIC. The Pico's own chip temperature (RP2040/RP2350 sensor), in
+whole °C, rounded, read once a second. 0 below 0 °C, at most 0xFE. It reads a
+few degrees above the air around it.
+
+### 0x31 NTC temperature (read)
+
+Not on the PIC. The optional NTC thermistor on GP28 (`SMC_NTC_SENSOR`, see
+`docs/Wiring.md`), in whole °C, rounded, read once a second. 0xFF when there
+is no reading: the option is off, or the NTC reads open or shorted.
 at every power off. Values 0-2 wrap to about 5 s. Accepted by every build (the original P01 doesn't have it).

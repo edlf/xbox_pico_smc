@@ -24,6 +24,7 @@ Experimental, currently only confirmed to work on 1.0 boards, it should work for
 - Some AI assistance was used (claude), mostly for the web interface and documentation.
 - For the stock behavior, check the stock_smc branch.
 - It uses X-HD Redux as its reference to decode video modes.
+- All the new SMC commands are introduced from 0x30 onwards
 
 ## Thanks
 - Prehistoricman for all the work done on the SMC

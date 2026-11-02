@@ -72,9 +72,9 @@ the front panel LED brightness.
 
 ## Extra temperature sensors
 
-These are not on the PIC and aren't reported over SMBus yet; they show up in
-the log (`TEMP:` lines at DEBUG level) and the web interface, read once a
-second.
+These are not on the PIC. They're read once a second, and show up on SMBus
+(0x30 Pico, 0x31 NTC, see `docs/SMBUS.md`), in the log (`TEMP:` lines at DEBUG
+level) and in the web interface.
 
 - **Pico temperature:** the RP2040/RP2350's own sensor, always read. It
   measures the chip, so it reads a few degrees above the air around it.

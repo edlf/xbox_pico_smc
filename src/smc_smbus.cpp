@@ -40,7 +40,20 @@ constexpr uint8_t CHALLENGE_BYTE3 = 0x1F;
 constexpr uint8_t CHALLENGE_RESPONSE0 = 0x20;
 constexpr uint8_t CHALLENGE_RESPONSE1 = 0x21;
 constexpr uint8_t POWER_CYCLE_DELAY = 0x22;  // P11/P2L, all firmwares here
+// Not on the PIC (ExtraTemp)
+constexpr uint8_t PICO_TEMPERATURE = 0x30;
+constexpr uint8_t NTC_TEMPERATURE = 0x31;
 };  // namespace Command
+
+// ExtraTemp's tenths of °C as a byte of whole °C, like 0x09/0x0A. 0xFF means
+// no reading, so real values stop at 0xFE, and below 0 reads 0.
+static uint8_t temperatureByte(const int16_t tenths) {
+  const int whole = (tenths + 5) / 10;  // Rounded
+  if (whole <= 0) {
+    return 0;
+  }
+  return whole > 0xFE ? 0xFE : whole;
+}
 
 // SMBus state. Like the PIC, the command byte is kept after the transaction
 // ends: a read byte is "write command, repeated START, read", and the START
@@ -130,6 +143,15 @@ uint8_t smbus_read_handler(uint8_t command) {
     case Command::AIR_TEMPERATURE:  // 0x0A
       // P2L (0x4D1) has no board sensor and reports the CPU temperature
       response = SMC_FIRMWARE_P2L ? Fan::sensors.CPU_temperature : Fan::sensors.board_temperature;
+      break;
+
+    case Command::PICO_TEMPERATURE:  // 0x30
+      response = temperatureByte(ExtraTemp::sensors.pico_temperature);
+      break;
+
+    case Command::NTC_TEMPERATURE:  // 0x31
+      // 0xFF without an NTC (SMC_NTC_SENSOR off), or when it reads open or shorted
+      response = ExtraTemp::sensors.ntc_connected ? temperatureByte(ExtraTemp::sensors.ntc_temperature) : 0xFF;
       break;
 
     case Command::READ_FAN_SPEED:  // 0x10
@@ -385,6 +407,8 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     case Command::CPU_TEMPERATURE:        // 0x09 (read-only, ignore writes)
     case Command::AIR_TEMPERATURE:        // 0x0A (read-only, ignore writes)
     case Command::READ_FAN_SPEED:         // 0x10 (read-only, ignore writes)
+    case Command::PICO_TEMPERATURE:       // 0x30 (read-only, ignore writes)
+    case Command::NTC_TEMPERATURE:        // 0x31 (read-only, ignore writes)
     case Command::INTERRUPT_REASON:       // 0x11 (read-only, ignore writes)
     case Command::READ_RAM_TEST_RESULTS:  // 0x14 (read-only, ignore writes)
     case Command::READ_RAM_TYPE:          // 0x15 (read-only, ignore writes)
