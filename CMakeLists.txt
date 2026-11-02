@@ -93,6 +93,11 @@ endforeach()
 # to leave it out
 option(SMC_I2C_SNIFFER "Log the video encoder found and the CPU's writes to it" ON)
 
+# WS2812 RGB LED on GP27 (Pico pin 32) showing the boot phases: magenta while
+# held in reset, blue in the BIOS, cyan after the RAM test, green for 5 s once
+# booted, red on a boot failure. -DSMC_RGB_LED=OFF to leave it out
+option(SMC_RGB_LED "WS2812 RGB LED on GP27 showing the boot phases" ON)
+
 # Behavior of which original firmware to follow: -DSMC_FIRMWARE=P11, P01, D01,
 # DXF or P2L.
 # - P11 (1.2/1.3) has lower fan thresholds and configures the temperature
@@ -243,7 +248,9 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/smc_power_standby.cpp
                       ${SMC_SRC_DIR}/smc_video.cpp
                       ${SMC_SRC_DIR}/smc_extra_temp.cpp
-                      ${SMC_SRC_DIR}/smc_i2c_sniffer.cpp)
+                      ${SMC_SRC_DIR}/smc_i2c_sniffer.cpp
+                      ${SMC_SRC_DIR}/smc_rgb_led.cpp)
+pico_generate_pio_header(OG_SMC ${SMC_SRC_DIR}/ws2812.pio)
 
 target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
                                           SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
@@ -252,6 +259,7 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
                                           SMC_LED_FADE=$<BOOL:${SMC_LED_FADE}>
                                           SMC_I2C_SNIFFER=$<BOOL:${SMC_I2C_SNIFFER}>
+                                          SMC_RGB_LED=$<BOOL:${SMC_RGB_LED}>
                                           SMC_NTC_SENSOR=$<BOOL:${SMC_NTC_SENSOR}>
                                           SMC_NTC_BETA=${SMC_NTC_BETA}
                                           SMC_NTC_R25=${SMC_NTC_R25}

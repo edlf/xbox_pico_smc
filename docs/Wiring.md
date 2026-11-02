@@ -51,6 +51,24 @@ Inputs from the AV port and the DVD drive have no internal pull-ups, like the
 PIC (its PORTB pull-ups are off). Pulling up the lines of an unpowered drive
 would feed it through its pins.
 
+## RGB LED
+
+A WS2812 (NeoPixel) on GP27 (Pico pin 32) shows how far the Xbox got in
+booting (`SMC_RGB_LED`, on by default). Wire its data input to GP27, power it
+from 3.3 V (or 5 V with a level shifter on the data line) and ground. It uses
+the front panel LED brightness.
+
+| Colour | Phase |
+|--------|-------|
+| Off | Xbox off |
+| Magenta | Powered, held in reset (also after a reset from the dashboard) |
+| Blue | Out of reset, BIOS running (waiting for the RAM test) |
+| Cyan | RAM test passed, waiting for the kernel (boot challenge answer or SMBus 0x1A) |
+| Green, for 5 s | Booted (challenge passed or SMBus 0x1A written), then off |
+| Red | RAM test failed or the boot challenge gave up (FRAG) |
+
+`RGB:` lines at DEBUG level log each change.
+
 ## Extra temperature sensors
 
 These are not on the PIC and aren't reported over SMBus yet; they show up in

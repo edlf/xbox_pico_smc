@@ -40,6 +40,7 @@ uint8_t rtc_dump_time;
 // As P2L (bit 26.3): the answer is only checked after a passed RAM test
 static bool challenge_check_pending;
 static bool ram_test_failed_shown = false; // Blinking red LEDs
+static bool challenge_passed = false;
 
 void init() {
   // Same as the PIC's RAM_init (0xB58)
@@ -51,10 +52,15 @@ void init() {
   rtc_dump_time = 0;
   challenge_check_pending = false;
   ram_test_failed_shown = false;
+  challenge_passed = false;
 }
 
 bool ramTestFailed() {
   return ram_test_failed_shown;
+}
+
+bool challengePassed() {
+  return challenge_passed;
 }
 
 // The PIC uses its free running timers as entropy: TMR0 runs at the
@@ -118,6 +124,7 @@ static void clearRamTestResult() {
 // starts again. D01/DXF have no challenge and leave the bytes alone.
 static void newChallengeAfterReset() {
   clearRamTestResult();
+  challenge_passed = false;
 #if !SMC_FIRMWARE_NO_CHALLENGE
   challenge.input_byte1 = fastTimerByte();
 #endif
@@ -305,6 +312,7 @@ void update() {
       flags.challenge_response_received = false;
       if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
         debug::print_message("BOOT: Challenge passed");
+        challenge_passed = true;
         challenge_check_pending = false; // As P2L (0xE49): back to waiting for a reset
         state = boot_challenge_state::challenge_wait_for_reply;
         break;

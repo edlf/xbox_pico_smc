@@ -90,6 +90,11 @@
 #define SMC_I2C_SNIFFER 1
 #endif
 
+// WS2812 RGB LED on GP27 showing the boot phases
+#ifndef SMC_RGB_LED
+#define SMC_RGB_LED 1
+#endif
+
 // Wi-Fi access point with a status and control page, served from core 1
 // (W boards only)
 #ifndef SMC_WEB_INTERFACE

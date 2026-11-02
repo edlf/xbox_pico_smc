@@ -10,6 +10,10 @@
 #include "hal.hpp"
 #include "pin_assignments.hpp"
 #include "debug.hpp"
+#if SMC_RGB_LED
+#include "hardware/pio.h"
+#include "ws2812.pio.h"
+#endif
 
 namespace hal {
 
@@ -524,6 +528,7 @@ void init() {
 
   initLeds(); // Off
   initAdc();
+  rgb_led_init(); // Dark
 
   // Idle levels before the pins become outputs, as in the PIC's port_init:
   // SMI released, DVD eject released
@@ -645,6 +650,48 @@ void liftSystemReset() {
   debug::print_message("GPIO: Lift reset");
   gpio_put(pins::SYSTEM_RESET, 1);
 }
+
+bool system_reset_asserted() {
+  return !gpio_get_out_level(pins::SYSTEM_RESET);
+}
+
+#if SMC_RGB_LED
+// WS2812 RGB LED on pins::RGB_LED, driven by a PIO state machine
+static PIO rgb_pio;
+static uint rgb_sm;
+static bool rgb_ready = false;
+static uint32_t rgb_sent = 0xFFFFFFFF; // Nothing sent yet
+
+void rgb_led_init() {
+  uint offset;
+  if (!pio_claim_free_sm_and_add_program_for_gpio_range(&ws2812_program, &rgb_pio, &rgb_sm, &offset,
+                                                          pins::RGB_LED, 1, true)) {
+    debug::print_warn("GPIO: No free PIO state machine for the RGB LED");
+    return;
+  }
+  ws2812_program_init(rgb_pio, rgb_sm, offset, pins::RGB_LED);
+  rgb_ready = true;
+  set_rgb_led(0, 0, 0);
+}
+
+void set_rgb_led(const uint8_t red, const uint8_t green, const uint8_t blue) {
+  if (!rgb_ready) {
+    return;
+  }
+  // Same brightness as the front panel LEDs
+  const uint8_t percent = led_brightness;
+  const uint32_t grb = ((uint32_t)(green * percent / 100) << 16) | ((uint32_t)(red * percent / 100) << 8) |
+                       (blue * percent / 100);
+  if (grb == rgb_sent || pio_sm_is_tx_fifo_full(rgb_pio, rgb_sm)) {
+    return; // Unchanged, or try again next tick
+  }
+  pio_sm_put(rgb_pio, rgb_sm, grb << 8);
+  rgb_sent = grb;
+}
+#else
+void rgb_led_init() {}
+void set_rgb_led(uint8_t, uint8_t, uint8_t) {}
+#endif
 
 void enableWatchdog() {
   debug::print_message("PICO: Watchdog enabled");

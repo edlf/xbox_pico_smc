@@ -46,6 +46,8 @@ void init();
 // The last RAM test failed (blinking red LEDs, enforced or not). Cleared by a
 // passed RAM test and at power off.
 bool ramTestFailed();
+// The CPU answered this boot's challenge correctly. Cleared by a reset.
+bool challengePassed();
 void update();
 void compute();
 void seedStandby();

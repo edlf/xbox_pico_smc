@@ -72,6 +72,7 @@ void update_LEDs() {
   // Once the boot challenge gives up (FRAG), or a failed RAM test
   Led::setBootFailure(BootChallenge::flags.frag_power_off || BootChallenge::ramTestFailed());
   Led::update();
+  RgbLed::update();
 }
 
 void main_loop() {
@@ -97,6 +98,7 @@ void main_loop() {
   PLL_Reset::init();
   ExtraTemp::init();
   I2CSniffer::init();
+  RgbLed::init();
 
   debug::print_message("MAIN: Set I2C interrupt");
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);

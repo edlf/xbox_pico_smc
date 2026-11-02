@@ -2,7 +2,7 @@
 
 Original XBOX SMC implemented with a Rapsberry Pico.
 
-Very very experimental, currently it boots on 1.0 boards (although the fan curve thats used is from 1.2-1.4 units since that one ramps the fans faster).
+Experimental, currently only confirmed to work on 1.0 boards, it should work for any rev up to 1.4.
 
 ![Pico SMC](/images/test_board.jpg)
 
@@ -11,18 +11,18 @@ Very very experimental, currently it boots on 1.0 boards (although the fan curve
 - LED control
 - AV pack detection/override
 - DVD eject
-- Fan control
+- Fan control (although the fan curve thats used is from 1.2-1.4 units since that one ramps the fans faster, selectable)
 - SMC boot challenge/override
 - Version override, since it reports P11 by default most xbox homebrew will report your 1.0/1.1 unit as 1.2/1.3
+- Different LED pattern for ram test failures (red blink). Depending on the failure you might still get a regular FRAG.
 - Logging via uart
-- Experimental WiFi control, requires external power to the pico (the 3.3v standby rail is not strong enough)
+- Experimental (optional) WiFi control, requires external power to the pico (the 3.3v standby rail is not strong enough)
 
 ## Notes
 - *Heavily* based on the work Prehistoricman did. [Xbox_SMC](https://github.com/Prehistoricman/Xbox_SMC)
-- By default it mimics the P11 SMC behavior, except the boot challenge is optional.
+- By default it mimics the P2L SMC behavior, except for the fan control/thermal sensor management and the boot challenge is made optional.
 - Some AI assistance was used (claude), mostly for the web interface and documentation.
 - For the stock behavior, check the stock_smc branch.
-- This code tries to match the 1.6 smc behavior for non important things, like AV port detection and DVD drive eject behavior since those are more robust on 1.6s.
 
 ## Thanks
 - Prehistoricman for all the work done on the SMC

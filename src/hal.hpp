@@ -66,6 +66,12 @@ void i2c_bus_recovery();
 
 // Interface
 void assertSystemReset();
+// SYSRESET held low (the Xbox is in reset)
+bool system_reset_asserted();
+// WS2812 RGB LED on pins::RGB_LED (SMC_RGB_LED), 0-255 per colour, scaled by
+// the LED brightness. Only sent when it changes.
+void rgb_led_init();
+void set_rgb_led(uint8_t red, uint8_t green, uint8_t blue);
 void liftSystemReset();
 void enableWatchdog();
 void petWatchdog();

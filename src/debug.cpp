@@ -70,6 +70,7 @@ void print_build_flags(){
                                  ", R25 " + std::to_string(SMC_NTC_R25) + ", series " +
                                  std::to_string(SMC_NTC_SERIES_R) + ")" : "OFF") +
       "\n  > SMC_I2C_SNIFFER=" + (SMC_I2C_SNIFFER ? "ON" : "OFF") +
+      "\n  > SMC_RGB_LED=" + (SMC_RGB_LED ? "ON" : "OFF") +
       "\n  > SMC_FIRMWARE=" + SMC_FIRMWARE_NAME +
       "\n  > SMC_REPORT_VERSION=" + SMC_VERSION_STRING +
       "\n  > SMC_DEBUG_LEVEL=" + debug::level_name() +
