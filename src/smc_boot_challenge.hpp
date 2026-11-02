@@ -46,6 +46,9 @@ void init();
 // The last RAM test failed (blinking red LEDs, enforced or not). Cleared by a
 // passed RAM test and at power off.
 bool ramTestFailed();
+// Banks flagged by the failed RAM test (bits 0-3 of SMBus 0x12, assumed one
+// per bank), 0 when it passed or no bank was flagged
+uint8_t failedRamBanks();
 // The CPU answered this boot's challenge correctly. Cleared by a reset.
 bool challengePassed();
 void update();

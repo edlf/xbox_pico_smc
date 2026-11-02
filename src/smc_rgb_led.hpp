@@ -15,7 +15,7 @@ enum class rgb_phase {
   kernel,      // RAM test passed, waiting for the challenge answer or OS ready: cyan
   done,        // Booted: green for 5 s
   idle,        // Dark until the next reset or power off
-  failed       // RAM test failed or boot challenge gave up: red
+  failed       // RAM test failed (the failed bank's colour) or boot challenge gave up: red
 };
 
 void init();

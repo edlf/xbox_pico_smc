@@ -28,10 +28,13 @@ my @nets = (
   ['3V3_STBY',   36, 20, 'pwr'], ['GND',       38,  8, 'gnd'],
 );
 my %extra_pic = (19 => ['GND', 'gnd']);                  # Second PIC ground
-my %extra_pico = (1 => ['UART_TX', 'dbg'], 2 => ['UART_RX', 'dbg']);
+# Pico-only extras: [net, type, where the other end goes]
+my %extra_pico = (1 => ['UART_TX', 'dbg', 'debug only'], 2 => ['UART_RX', 'dbg', 'debug only'],
+  32 => ['RGB_LED', 'opt', 'WS2812 data in'], 33 => ['NTC_GND', 'opt', 'NTC, other leg'],
+  34 => ['NTC', 'opt', 'NTC + 10k to 3V3']);
 
 my %color = (out => '#c0392b', in => '#2471a3', io => '#7d3c98', pwr => '#d68910', gnd => '#424949',
-  dbg => '#1e8449');
+  dbg => '#1e8449', opt => '#138d90');
 
 my (%pico_net, %pic_net);
 for my $n (@nets) {
@@ -40,7 +43,7 @@ for my $n (@nets) {
   $pic_net{$cp} = [$name, $type, "Pico $pp · $pico[$pp]"];
 }
 $pic_net{19} = ['GND', 'gnd', 'Pico GND'];
-$pico_net{$_} = [$extra_pico{$_}[0], $extra_pico{$_}[1], 'debug only'] for keys %extra_pico;
+$pico_net{$_} = $extra_pico{$_} for keys %extra_pico;
 
 my $pitch = 25;
 my @svg;
@@ -105,7 +108,8 @@ part(1100, 90, 260, 'PIC16LC63A', 'U7 footprint, top view', \@pic, \%pic_net, 28
 
 # Legend
 my @leg = (['out', 'Pico output'], ['in', 'Pico input'], ['io', 'SMBus (I2C, both ways)'], ['pwr', '3.3 V standby'],
-  ['gnd', 'Ground'], ['dbg', 'Debug UART only']);
+  ['gnd', 'Ground'], ['dbg', 'Debug UART only'],
+  ['opt', 'Optional extras (RGB LED, NTC)']);
 my $lx = 880;
 my $ly = 515;
 e(sprintf('<text x="%d" y="%d" class="leg" font-weight="600">Legend</text>', $lx, $ly - 14));

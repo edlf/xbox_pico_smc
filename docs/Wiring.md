@@ -65,7 +65,8 @@ the front panel LED brightness.
 | Blue | Out of reset, BIOS running (waiting for the RAM test) |
 | Cyan | RAM test passed, waiting for the kernel (boot challenge answer or SMBus 0x1A) |
 | Green, for 5 s | Booted (challenge passed or SMBus 0x1A written), then off |
-| Red | RAM test failed or the boot challenge gave up (FRAG) |
+| Red | The boot challenge gave up (FRAG), or a RAM test failed with no bank flagged |
+| Yellow / orange / purple / white | RAM test failed in bank 0 / 1 / 2 / 3 (bits 0-3 of SMBus 0x12, assumed one per bank). Several failed banks: their colours in turn, 1 s each |
 
 `RGB:` lines at DEBUG level log each change.
 

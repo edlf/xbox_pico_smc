@@ -40,6 +40,7 @@ uint8_t rtc_dump_time;
 // As P2L (bit 26.3): the answer is only checked after a passed RAM test
 static bool challenge_check_pending;
 static bool ram_test_failed_shown = false; // Blinking red LEDs
+static uint8_t failed_ram_banks = 0;       // Bits 0-3 of the failed result (SMBus 0x12)
 static bool challenge_passed = false;
 
 void init() {
@@ -52,11 +53,16 @@ void init() {
   rtc_dump_time = 0;
   challenge_check_pending = false;
   ram_test_failed_shown = false;
+  failed_ram_banks = 0;
   challenge_passed = false;
 }
 
 bool ramTestFailed() {
   return ram_test_failed_shown;
+}
+
+uint8_t failedRamBanks() {
+  return ram_test_failed_shown ? failed_ram_banks : 0;
 }
 
 bool challengePassed() {
@@ -223,12 +229,24 @@ void update() {
   case boot_challenge_state::ram_test_ok:
     debug::print_message("BOOT: RAM test passed, " + ramTestResult());
     ram_test_failed_shown = false;
+    failed_ram_banks = 0;
     challenge_check_pending = !SMC_FIRMWARE_NO_CHALLENGE; // D01/DXF only check the RAM test
     state = boot_challenge_state::challenge_wait_for_reply;
     break;
 
-  case boot_challenge_state::ram_test_failed:
-    debug::print_warn("BOOT: RAM test failed, " + ramTestResult());
+  case boot_challenge_state::ram_test_failed: {
+    // Assumed: bits 0-3 of SMBus 0x12 flag the four RAM banks that failed
+    // (0x00 is a pass with 64 MB). Kept, as a retry clears the result.
+    failed_ram_banks = ram_test_response0 & 0x0F;
+    std::string banks;
+    for (uint8_t bank = 0; bank < 4; bank++) {
+      if (failed_ram_banks & (1u << bank)) {
+        banks += " " + std::to_string(bank);
+      }
+    }
+    debug::print_warn("BOOT: RAM test failed, " + ramTestResult() +
+                      (banks.empty() ? ", no bank flagged" : ", bank(s)" + banks));
+  }
     // Blinking red, only for a failed RAM test (the PIC shows red/orange, 0x0F
     // red and 0x05 green, and only when it enforces the boot challenge). Shown
     // on top of everything until a RAM test passes or the Xbox powers off.
