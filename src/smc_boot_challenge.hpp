@@ -43,6 +43,9 @@ struct flags_struct {
 extern flags_struct flags;
 
 void init();
+// The last RAM test failed (blinking red LEDs, enforced or not). Cleared by a
+// passed RAM test and at power off.
+bool ramTestFailed();
 void update();
 void compute();
 void seedStandby();

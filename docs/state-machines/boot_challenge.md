@@ -17,6 +17,8 @@ Every firmware follows P2L (v1.6). Compared with the PIC (P01/P11):
   Then it goes back to `challenge_wait_for_reply` to wait for the next reset;
   the PIC's separate "challenge passed" state is gone.
 - Every reset makes a new challenge and resets the power cycle countdown.
+- A failed RAM test shows blinking red LEDs (the PIC: red/orange), also when
+  the challenge isn't enforced.
 - A boot failure mutes the audio, and FRAG only lets the eject button open the
   tray when the Xbox isn't overheated.
 
@@ -61,8 +63,8 @@ stateDiagram-v2
 | 0 | `initial` | Computes the expected answer, starts a 15-tick timeout, lets the system run, restarts the tray tracking |
 | 1 | `wait_for_ram_test_result` | Waits for SMBus 0x12 |
 | 2 | `ram_test_ok` | Logs the result, marks the answer to be checked |
-| 3 | `ram_test_failed` | Logs it. Enforced: LED pattern, error code 0x04 |
-| 4 | `challenge_failed_or_no_ram_test_result` | LED pattern, error code 0x01 |
+| 3 | `ram_test_failed` | Logs it and shows blinking red LEDs until a RAM test passes or power off, enforced or not (the PIC shows red/orange, only when enforced). Enforced: error code 0x04 |
+| 4 | `challenge_failed_or_no_ram_test_result` | Red/green LED pattern, error code 0x01 |
 | 5 | `challenge_wait_for_reply` | On a reset: new challenge, power cycle countdown back to 3. Otherwise, if the answer is still to be checked, starts the 4-tick answer timeout |
 | 6 | `boot_failed` | Mutes the audio and counts failures: the first 3 reset the Xbox, then up to 3 power cycles, then FRAG |
 | 7 | `lock_up` | FRAG: shows the error LEDs, holds the system in reset; the power button turns off right away and the eject button opens the tray unless overheated |

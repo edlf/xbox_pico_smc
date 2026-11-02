@@ -69,7 +69,8 @@ void update_LEDs() {
   // system_running is set while the system is powered
   Led::setPowerOff(!SMI::flags.system_running);
   Led::setQuickGreenBlink(Dvd::flags.tray_moving);
-  Led::setBootFailure(BootChallenge::flags.frag_power_off); // Set once the boot challenge gives up
+  // Once the boot challenge gives up (FRAG), or a failed RAM test
+  Led::setBootFailure(BootChallenge::flags.frag_power_off || BootChallenge::ramTestFailed());
   Led::update();
 }
 

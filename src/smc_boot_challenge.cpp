@@ -39,6 +39,7 @@ uint8_t failure_countdown; // Power cycles left before locking up (FRAG)
 uint8_t rtc_dump_time;
 // As P2L (bit 26.3): the answer is only checked after a passed RAM test
 static bool challenge_check_pending;
+static bool ram_test_failed_shown = false; // Blinking red LEDs
 
 void init() {
   // Same as the PIC's RAM_init (0xB58)
@@ -49,6 +50,11 @@ void init() {
   failure_countdown = 3;
   rtc_dump_time = 0;
   challenge_check_pending = false;
+  ram_test_failed_shown = false;
+}
+
+bool ramTestFailed() {
+  return ram_test_failed_shown;
 }
 
 // The PIC uses its free running timers as entropy: TMR0 runs at the
@@ -209,16 +215,21 @@ void update() {
 
   case boot_challenge_state::ram_test_ok:
     debug::print_message("BOOT: RAM test passed, " + ramTestResult());
+    ram_test_failed_shown = false;
     challenge_check_pending = !SMC_FIRMWARE_NO_CHALLENGE; // D01/DXF only check the RAM test
     state = boot_challenge_state::challenge_wait_for_reply;
     break;
 
   case boot_challenge_state::ram_test_failed:
     debug::print_warn("BOOT: RAM test failed, " + ramTestResult());
+    // Blinking red, only for a failed RAM test (the PIC shows red/orange, 0x0F
+    // red and 0x05 green, and only when it enforces the boot challenge). Shown
+    // on top of everything until a RAM test passes or the Xbox powers off.
+    Led::setBootFailurePattern(0x0A, 0x00);
+    ram_test_failed_shown = true;
 #if SMC_BOOT_CHALLENGE
-    Led::setRedPhases(0x0F);
-    Led::setGreenPhases(0x05);
-    Led::setBootFailurePattern(0x0F, 0x05);
+    Led::setRedPhases(0x0A);
+    Led::setGreenPhases(0x00);
     bios_response_byte0 = ERROR_RAM_TEST_FAILED;
     state = boot_challenge_state::boot_failed;
 #else

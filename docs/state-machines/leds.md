@@ -8,7 +8,7 @@ shown bit 3 first. Both LEDs on make orange.
 ```mermaid
 stateDiagram-v2
     [*] --> initial
-    initial --> boot_failure: boot challenge gave up (FRAG)
+    initial --> boot_failure: boot challenge gave up (FRAG) or RAM test failed
     initial --> overheat: overheated
     initial --> quick_green_orange: no AV cable
     initial --> manual_control: LED override
@@ -38,7 +38,7 @@ stateDiagram-v2
 | 4 | `solid_green` | 0x0 | 0xF | Green |
 | 5 | `off` | 0x0 | 0x0 | Off |
 | 9 | `quick_green_orange` | 0x5 | 0xF | Alternating green / orange (no AV cable) |
-| 10 | `boot_failure` | 0xF / 0xA | 0x5 | Boot failure error code: RAM test failed (0xF) or challenge failed / no RAM test result (0xA) |
+| 10 | `boot_failure` | 0xA | 0x0 / 0x5 | Boot failure error code: RAM test failed (blinking red, 0x0, until a RAM test passes or power off, also when the boot challenge isn't enforced; the PIC shows red/orange, red 0xF green 0x5, only when enforced) or challenge failed / no RAM test result (red/green, 0x5) |
 
 | # | State | What it does |
 |---|-------|--------------|
