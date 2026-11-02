@@ -99,6 +99,7 @@ void main_loop() {
   ExtraTemp::init();
   I2CSniffer::init();
   RgbLed::init();
+  Settings::load(); // After the modules it sets
 
   debug::print_message("MAIN: Set I2C interrupt");
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);

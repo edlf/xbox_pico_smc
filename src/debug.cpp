@@ -64,7 +64,6 @@ void print_build_flags(){
       "\n  > SMC_BOOT_CHALLENGE=" + (SMC_BOOT_CHALLENGE ? "ON" : "OFF") +
       "\n  > SMC_AV_PACK_OVERRIDE=" + (SMC_AV_PACK_OVERRIDE ? "ON" : "OFF") +
       "\n  > SMC_AV_PACK_MODE=" + std::to_string(SMC_AV_PACK_MODE) +
-      "\n  > SMC_LED_BRIGHTNESS=" + std::to_string(SMC_LED_BRIGHTNESS) +
       "\n  > SMC_LED_FADE=" + (SMC_LED_FADE ? "ON" : "OFF") +
       "\n  > SMC_NTC_SENSOR=" + (SMC_NTC_SENSOR ? "ON (beta " + std::to_string(SMC_NTC_BETA) +
                                  ", R25 " + std::to_string(SMC_NTC_R25) + ", series " +

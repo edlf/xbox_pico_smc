@@ -95,6 +95,7 @@ uint8_t update() {
     breathePicoLed();
     ExtraTemp::update();
     I2CSniffer::update();
+    Settings::update(); // Only here: saving pauses both cores
     hal::timer1_wait();
     state = power_standby_state::read_av; // Loop back to AV reading
     return 0;

@@ -1,9 +1,12 @@
 #ifndef CONFIG_HPP
 #define CONFIG_HPP
 
-// Build options. CMake sets all of these (see CMakeLists.txt for what each one
-// does and the values it accepts); the defaults here are only used when a file
-// is built without CMake's definitions, such as by an editor's code model.
+// Build options. Most are set by CMake (see CMakeLists.txt for what each one
+// does and the values it accepts); their defaults here are only used when a
+// file is built without CMake's definitions, such as by an editor's code
+// model. The LED brightness and the Wi-Fi access point name and password are
+// only set here: they're the defaults, the saved settings (src/smc_settings.cpp,
+// set over USB) replace them.
 
 // PICO_BOARD this was built for
 #ifndef SMC_BOARD
@@ -59,10 +62,10 @@
 #define SMC_AV_PACK_MODE 1 // High Definition AV Pack
 #endif
 
-// Front panel LED brightness in percent at start-up
-#ifndef SMC_LED_BRIGHTNESS
+// Front panel LED brightness in percent (1-100) at start-up, the PIC only has
+// on/off. The web interface and the USB config can change it (and save it).
 #define SMC_LED_BRIGHTNESS 100
-#endif
+static_assert(SMC_LED_BRIGHTNESS >= 1 && SMC_LED_BRIGHTNESS <= 100, "SMC_LED_BRIGHTNESS must be 1-100");
 
 // Fade the LEDs at power up and down
 #ifndef SMC_LED_FADE
@@ -100,11 +103,13 @@
 #ifndef SMC_WEB_INTERFACE
 #define SMC_WEB_INTERFACE 0
 #endif
-#ifndef SMC_WIFI_SSID
+
+// Access point name, unless one is saved
 #define SMC_WIFI_SSID "OG-SMC"
-#endif
-#ifndef SMC_WIFI_PASSWORD
-#define SMC_WIFI_PASSWORD "" // Empty: made from the board's unique ID
-#endif
+// Access point WPA2 password, 8-63 characters, unless one is saved. Empty: one
+// made from the board's unique ID ("ogsmc-<id>"), shown in the boot log.
+#define SMC_WIFI_PASSWORD ""
+static_assert(sizeof(SMC_WIFI_PASSWORD) == 1 || (sizeof(SMC_WIFI_PASSWORD) >= 9 && sizeof(SMC_WIFI_PASSWORD) <= 64),
+              "SMC_WIFI_PASSWORD must be 8-63 characters, or empty for one made from the board's unique ID");
 
 #endif // CONFIG_HPP

@@ -61,13 +61,15 @@ if(NOT SMC_AV_PACK_MODE MATCHES "^[0-6]$")
   message(FATAL_ERROR "SMC_AV_PACK_MODE must be 0-6, got '${SMC_AV_PACK_MODE}'")
 endif()
 
-# Front panel LED brightness in percent at start-up (the PIC only has on/off),
-# the web interface can change it:
-# -DSMC_LED_BRIGHTNESS=n
-set(SMC_LED_BRIGHTNESS 100 CACHE STRING "LED brightness in percent (1-100)")
-if(NOT SMC_LED_BRIGHTNESS MATCHES "^[0-9]+$" OR SMC_LED_BRIGHTNESS LESS 1 OR SMC_LED_BRIGHTNESS GREATER 100)
-  message(FATAL_ERROR "SMC_LED_BRIGHTNESS must be 1-100, got '${SMC_LED_BRIGHTNESS}'")
-endif()
+# The LED brightness and the Wi-Fi access point name and password are set in
+# src/config.hpp. Build folders from before still hold them as cache entries:
+# drop those, they're no longer used.
+foreach(moved SMC_LED_BRIGHTNESS SMC_WIFI_SSID SMC_WIFI_PASSWORD)
+  if(DEFINED CACHE{${moved}})
+    message(STATUS "${moved} is now set in src/config.hpp, ignoring '${${moved}}'")
+    unset(${moved} CACHE)
+  endif()
+endforeach()
 
 # Fade the front panel LEDs in at power up and out at power down (~1 s) instead
 # of switching them like the PIC: -DSMC_LED_FADE=OFF to switch them
@@ -173,8 +175,8 @@ message(STATUS "Reported version (SMBus 0x01): ${SMC_VERSION_REPORTED}")
 
 # Wi-Fi access point with a status and control page, W boards only:
 # -DSMC_WEB_INTERFACE=AUTO (default: on for boards with Wi-Fi), ON or OFF.
-# [-DSMC_WIFI_SSID=... -DSMC_WIFI_PASSWORD=...] Connect to the network and
-# open http://192.168.4.1
+# Connect to the network (name and password in src/config.hpp) and open
+# http://192.168.4.1
 set(SMC_WEB_INTERFACE AUTO CACHE STRING "Wi-Fi access point with a status and control page: AUTO (on for boards with Wi-Fi), ON or OFF")
 set_property(CACHE SMC_WEB_INTERFACE PROPERTY STRINGS AUTO ON OFF)
 
@@ -202,22 +204,9 @@ else()
 endif()
 
 message(STATUS "Web interface (SMC_WEB_INTERFACE=${SMC_WEB_INTERFACE}): ${SMC_WEB_ENABLED}")
-set(SMC_WIFI_SSID "OG-SMC" CACHE STRING "Access point name")
-set(SMC_WIFI_PASSWORD "" CACHE STRING "Access point WPA2 password (8-63 characters), empty: made from the board's unique ID and shown in the boot log")
-# Build folders from before the per-board password still hold the old fixed
-# default, which nobody chose: drop it
-if(SMC_WIFI_PASSWORD STREQUAL "og-smc-xbox")
-  set_property(CACHE SMC_WIFI_PASSWORD PROPERTY VALUE "")
-  set(SMC_WIFI_PASSWORD "")
-endif()
-
 if(SMC_WEB_ENABLED)
   if(NOT PICO_CYW43_SUPPORTED)
     message(FATAL_ERROR "SMC_WEB_INTERFACE needs a board with Wi-Fi (pico_w, pico2_w), PICO_BOARD is '${PICO_BOARD}'")
-  endif()
-  string(LENGTH "${SMC_WIFI_PASSWORD}" SMC_WIFI_PASSWORD_LENGTH)
-  if(SMC_WIFI_PASSWORD_LENGTH GREATER 0 AND (SMC_WIFI_PASSWORD_LENGTH LESS 8 OR SMC_WIFI_PASSWORD_LENGTH GREATER 63))
-    message(FATAL_ERROR "SMC_WIFI_PASSWORD must be 8-63 characters, or empty for one made from the board's unique ID")
   endif()
 endif()
 
@@ -250,6 +239,8 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/smc_extra_temp.cpp
                       ${SMC_SRC_DIR}/smc_i2c_sniffer.cpp
                       ${SMC_SRC_DIR}/smc_encoder_mode.cpp
+                      ${SMC_SRC_DIR}/smc_settings.cpp
+                      ${SMC_SRC_DIR}/usb_config.cpp
                       ${SMC_SRC_DIR}/smc_rgb_led.cpp)
 pico_generate_pio_header(OG_SMC ${SMC_SRC_DIR}/ws2812.pio)
 
@@ -257,7 +248,6 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
                                           SMC_AV_PACK_OVERRIDE=$<BOOL:${SMC_AV_PACK_OVERRIDE}>
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
-                                          SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
                                           SMC_LED_FADE=$<BOOL:${SMC_LED_FADE}>
                                           SMC_I2C_SNIFFER=$<BOOL:${SMC_I2C_SNIFFER}>
                                           SMC_RGB_LED=$<BOOL:${SMC_RGB_LED}>
@@ -280,7 +270,7 @@ pico_set_program_version(OG_SMC "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(OG_SMC 1)
-pico_enable_stdio_usb(OG_SMC 0)
+pico_enable_stdio_usb(OG_SMC 1) # Only started in USB config mode, see src/usb_config.hpp
 
 # Add the standard library to the build
 target_link_libraries(OG_SMC
@@ -288,7 +278,9 @@ target_link_libraries(OG_SMC
         hardware_pwm
         hardware_adc
         hardware_pio
-        hardware_dma)
+        hardware_dma
+        hardware_flash
+        pico_flash)
 
 # Project headers, and lwipopts.h for the web interface
 target_include_directories(OG_SMC PRIVATE
@@ -304,8 +296,6 @@ target_link_libraries(OG_SMC
 
 if(SMC_WEB_ENABLED)
   target_sources(OG_SMC PRIVATE ${SMC_SRC_DIR}/web.cpp ${SMC_SRC_DIR}/dhcp_server.cpp)
-  target_compile_definitions(OG_SMC PRIVATE SMC_WIFI_SSID="${SMC_WIFI_SSID}"
-                                            SMC_WIFI_PASSWORD="${SMC_WIFI_PASSWORD}")
   target_link_libraries(OG_SMC pico_cyw43_arch_lwip_poll pico_multicore pico_unique_id)
 endif()
 

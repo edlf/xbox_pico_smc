@@ -4,6 +4,7 @@
 #include "dhcp_server.hpp"
 
 #include "pico/cyw43_arch.h"
+#include "pico/flash.h"
 #include "pico/multicore.h"
 #include "pico/unique_id.h"
 #include "pico/util/queue.h"
@@ -438,12 +439,13 @@ bool startHttpServer() {
   return true;
 }
 
-// SMC_WIFI_PASSWORD, or when that's empty one made from this board's unique ID:
-// different for every Pico and shown in the boot log. The SDK reads the ID at
-// boot, so this is safe from core 1.
+// The saved password (Settings, default SMC_WIFI_PASSWORD), or when that's
+// empty one made from this board's unique ID: different for every Pico and
+// shown in the boot log. The SDK reads the ID at boot, and the settings are
+// loaded before core 1 starts, so this is safe from core 1.
 bool wifiPassword(char* out, size_t size) {
-  if (SMC_WIFI_PASSWORD[0] != '\0') {
-    snprintf(out, size, "%s", SMC_WIFI_PASSWORD);
+  if (Settings::wifiPassword()[0] != '\0') {
+    snprintf(out, size, "%s", Settings::wifiPassword());
     return false;
   }
   char id[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1];
@@ -452,19 +454,31 @@ bool wifiPassword(char* out, size_t size) {
   return true;
 }
 
+// Core 1 has nothing left to do: wait here rather than return, so it still
+// answers flash_safe_execute() (a returned core 1 would stall every settings
+// save for the full timeout)
+[[noreturn]] static void idle() {
+  while (true) {
+    __wfe();
+  }
+}
+
 void core1Main() {
+  // Lets core 0 pause this core while it writes the settings to flash
+  flash_safe_execute_core_init();
+
   if (cyw43_arch_init() != 0) {
     log("WEB: Wi-Fi init failed");
-    return;
+    idle();
   }
   char password[64];
   wifiPassword(password, sizeof(password));
-  cyw43_arch_enable_ap_mode(SMC_WIFI_SSID, password, CYW43_AUTH_WPA2_AES_PSK);
+  cyw43_arch_enable_ap_mode(Settings::wifiSsid(), password, CYW43_AUTH_WPA2_AES_PSK);
 
   netif* ap = &cyw43_state.netif[CYW43_ITF_AP];
   if (!dhcp_server::start(ap) || !startHttpServer()) {
     log("WEB: Server start failed");
-    return;
+    idle();
   }
   log("WEB: Access point up, http://%s", ip4addr_ntoa(netif_ip4_addr(ap)));
   cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1); // Onboard LED: access point up
@@ -582,9 +596,9 @@ void start() {
   // Printed here, before the Wi-Fi is started, so it shows even if that fails
   char password[64];
   if (wifiPassword(password, sizeof(password))) {
-    debug::print_message(std::string("WEB: Access point \"") + SMC_WIFI_SSID + "\", password " + password);
+    debug::print_message(std::string("WEB: Access point \"") + Settings::wifiSsid() + "\", password " + password);
   } else {
-    debug::print_message(std::string("WEB: Access point \"") + SMC_WIFI_SSID + "\", password from SMC_WIFI_PASSWORD");
+    debug::print_message(std::string("WEB: Access point \"") + Settings::wifiSsid() + "\", saved password");
   }
   debug::print_message("WEB: Starting core 1");
   multicore_launch_core1_with_stack(core1Main, core1_stack, sizeof(core1_stack));
