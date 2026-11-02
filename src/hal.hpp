@@ -27,6 +27,10 @@ void pico_led_off();
 // 0 (off) to 255 (full), Pico and Pico 2 only (on the W boards the LED is on
 // the wireless chip)
 void set_pico_led_level(uint8_t level);
+// Raw 12-bit ADC readings (0-4095 of 3.3 V), averaged: the chip's temperature
+// sensor, and the NTC divider on pins::NTC_ADC (only set up with SMC_NTC_SENSOR)
+uint16_t read_pico_temperature_adc();
+uint16_t read_ntc_adc();
 
 void smi_pin_on();
 void smi_pin_off();

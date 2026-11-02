@@ -93,6 +93,7 @@ uint8_t update() {
   case power_standby_state::idle: // State 6
     update_LEDs();
     breathePicoLed();
+    ExtraTemp::update();
     hal::timer1_wait();
     state = power_standby_state::read_av; // Loop back to AV reading
     return 0;

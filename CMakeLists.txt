@@ -73,6 +73,20 @@ endif()
 # of switching them like the PIC: -DSMC_LED_FADE=OFF to switch them
 option(SMC_LED_FADE "Fade the LEDs at power up and power down" ON)
 
+# Read an NTC thermistor on GP28 (ADC2), wired from the pin to ground with
+# SMC_NTC_SERIES_R from 3.3 V to the pin. Shown in the log and the web
+# interface, not on SMBus. -DSMC_NTC_SENSOR=ON [-DSMC_NTC_BETA=3950
+# -DSMC_NTC_R25=10000 -DSMC_NTC_SERIES_R=10000]
+option(SMC_NTC_SENSOR "Read an NTC thermistor on GP28" OFF)
+set(SMC_NTC_BETA 3950 CACHE STRING "NTC beta value (K)")
+set(SMC_NTC_R25 10000 CACHE STRING "NTC resistance at 25 C (ohms)")
+set(SMC_NTC_SERIES_R 10000 CACHE STRING "Resistor from 3.3 V to the NTC pin (ohms)")
+foreach(value SMC_NTC_BETA SMC_NTC_R25 SMC_NTC_SERIES_R)
+  if(NOT ${value} MATCHES "^[1-9][0-9]*$")
+    message(FATAL_ERROR "${value} must be a positive whole number, got '${${value}}'")
+  endif()
+endforeach()
+
 # Behavior of which original firmware to follow: -DSMC_FIRMWARE=P11, P01, D01,
 # DXF or P2L.
 # - P11 (1.2/1.3) has lower fan thresholds and configures the temperature
@@ -221,7 +235,8 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/smc_audio_clamp.cpp
                       ${SMC_SRC_DIR}/smc_SMI.cpp
                       ${SMC_SRC_DIR}/smc_power_standby.cpp
-                      ${SMC_SRC_DIR}/smc_video.cpp)
+                      ${SMC_SRC_DIR}/smc_video.cpp
+                      ${SMC_SRC_DIR}/smc_extra_temp.cpp)
 
 target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
                                           SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
@@ -229,6 +244,10 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
                                           SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
                                           SMC_LED_FADE=$<BOOL:${SMC_LED_FADE}>
+                                          SMC_NTC_SENSOR=$<BOOL:${SMC_NTC_SENSOR}>
+                                          SMC_NTC_BETA=${SMC_NTC_BETA}
+                                          SMC_NTC_R25=${SMC_NTC_R25}
+                                          SMC_NTC_SERIES_R=${SMC_NTC_SERIES_R}
                                           SMC_FIRMWARE_NAME="${SMC_FIRMWARE_SETTING}"
                                           SMC_FIRMWARE_P11=$<BOOL:${SMC_FIRMWARE_P11}>
                                           SMC_FIRMWARE_NO_CHALLENGE=$<BOOL:${SMC_FIRMWARE_NO_CHALLENGE}>
@@ -249,7 +268,8 @@ pico_enable_stdio_usb(OG_SMC 0)
 # Add the standard library to the build
 target_link_libraries(OG_SMC
         pico_stdlib
-        hardware_pwm)
+        hardware_pwm
+        hardware_adc)
 
 # Project headers, and lwipopts.h for the web interface
 target_include_directories(OG_SMC PRIVATE

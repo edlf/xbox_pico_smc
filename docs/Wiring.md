@@ -51,6 +51,26 @@ Inputs from the AV port and the DVD drive have no internal pull-ups, like the
 PIC (its PORTB pull-ups are off). Pulling up the lines of an unpowered drive
 would feed it through its pins.
 
+## Extra temperature sensors
+
+These are not on the PIC and aren't reported over SMBus yet; they show up in
+the log (`TEMP:` lines at DEBUG level) and the web interface, read once a
+second.
+
+- **Pico temperature:** the RP2040/RP2350's own sensor, always read. It
+  measures the chip, so it reads a few degrees above the air around it.
+- **NTC thermistor (optional, `-DSMC_NTC_SENSOR=ON`):** on GP28 (ADC2, Pico
+  pin 34), wired as a divider:
+
+  ```
+  3V3 ── SMC_NTC_SERIES_R ──┬── GP28
+                            └── NTC ── GND (pin 33, AGND)
+  ```
+
+  Defaults: 10k NTC with beta 3950, 10k series resistor. Set `SMC_NTC_BETA`,
+  `SMC_NTC_R25` and `SMC_NTC_SERIES_R` for other parts. A reading at either end
+  of the ADC range (open or shorted NTC) shows as not connected.
+
 ## Power
 
 - The PIC runs from the 3.3 V standby rail (pin 20). Wired to the Pico's 3V3

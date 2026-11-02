@@ -53,6 +53,9 @@ struct WebStatus {
   bool powered;
   uint8_t cpu_temperature;
   uint8_t board_temperature;
+  int16_t pico_temperature; // Tenths of °C
+  int16_t ntc_temperature;  // Tenths of °C
+  bool ntc_connected;
   uint8_t fan_speed;
   bool fan_override;
   uint8_t tray_state;
@@ -112,7 +115,8 @@ input[type=number]{width:64px;background:#2a362a;color:var(--fg);border:1px soli
 <div class="grid">
 <div class="card"><h2>Power</h2><div class="value" id="power">-</div><div class="note" id="extra"></div>
 <div class="row"><button onclick="act('power')">Power button</button><button onclick="act('reset')">Reset</button></div></div>
-<div class="card"><h2>Temperatures</h2><div class="value"><span id="cpu">-</span> / <span id="board">-</span></div><div class="note">CPU / board</div></div>
+<div class="card"><h2>Temperatures</h2><div class="value"><span id="cpu">-</span> / <span id="board">-</span></div><div class="note">CPU / board</div>
+<div class="value"><span id="pico">-</span> / <span id="ntc">-</span></div><div class="note">Pico / NTC</div></div>
 <div class="card"><h2>DVD tray</h2><div class="value" id="tray">-</div><div class="note" id="trayNote"></div>
 <div class="row"><button onclick="act('eject')">Eject button</button></div></div>
 <div class="card"><h2>AV pack</h2><div class="value" id="av">-</div></div>
@@ -150,6 +154,8 @@ async function tick(){
     $("extra").innerHTML=(s.overheated?'<span class="bad">Overheated</span> ':'')+"Interrupt reasons 0x"+s.irq.toString(16).padStart(2,"0");
     $("cpu").textContent=s.powered?s.cpu+" \u00b0C":"-";
     $("board").textContent=s.powered?s.board+" \u00b0C":"-";
+    $("pico").textContent=(s.pico/10).toFixed(1)+" \u00b0C";
+    $("ntc").textContent=s.ntc===null?(s.ntcEnabled?"Not connected":"Off"):(s.ntc/10).toFixed(1)+" \u00b0C";
     $("tray").textContent=s.dvd?(s.powered?TRAY[s.tray]:"-"):"No drive";
     $("trayNote").textContent=s.dvd&&s.powered?(s.trayClosed?"Closed":"Open"):"";
     $("av").textContent=!s.powered?"-":s.avMissing?"No cable":AV[s.av];
@@ -184,12 +190,19 @@ int statusJson(char* out, size_t size) {
   s = status;
   critical_section_exit(&status_lock);
 
+  char ntc[8] = "null";
+  if (s.ntc_connected) {
+    snprintf(ntc, sizeof(ntc), "%d", s.ntc_temperature);
+  }
+
   return snprintf(out, size,
-                  "{\"uptime\":%lu,\"powered\":%s,\"cpu\":%u,\"board\":%u,\"fan\":%u,\"fanOverride\":%s,"
+                  "{\"uptime\":%lu,\"powered\":%s,\"cpu\":%u,\"board\":%u,\"pico\":%d,\"ntc\":%s,\"ntcEnabled\":%s,"
+                  "\"fan\":%u,\"fanOverride\":%s,"
                   "\"dvd\":%s,\"tray\":%u,\"trayClosed\":%s,\"av\":%u,\"avMissing\":%s,\"overheated\":%s,"
                   "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,\"irq\":%u}",
                   (unsigned long)s.uptime_s, s.powered ? "true" : "false", s.cpu_temperature,
-                  s.board_temperature, s.fan_speed, s.fan_override ? "true" : "false",
+                  s.board_temperature, s.pico_temperature, ntc, SMC_NTC_SENSOR ? "true" : "false",
+                  s.fan_speed, s.fan_override ? "true" : "false",
                   SMC_DVD_SUPPORT ? "true" : "false", s.tray_state, s.tray_closed ? "true" : "false", s.av_pack,
                   s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
                   s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness,
@@ -322,7 +335,7 @@ void handleRequest(tcp_pcb* pcb, char* request) {
   if (strncmp(request, "GET / ", 6) == 0 || strncmp(request, "GET /index.html ", 16) == 0) {
     respond(pcb, "200 OK", "text/html; charset=utf-8", page, sizeof(page) - 1, true);
   } else if (strncmp(request, "GET /status.json ", 17) == 0) {
-    char json[400];
+    char json[512];
     const int len = statusJson(json, sizeof(json));
     respond(pcb, "200 OK", "application/json", json, len, false);
   } else if (strncmp(request, "GET /thresholds.json ", 21) == 0) {
@@ -535,6 +548,9 @@ void publishStatus() {
   s.powered = hal::get_power_ok();
   s.cpu_temperature = Fan::sensors.CPU_temperature;
   s.board_temperature = Fan::sensors.board_temperature;
+  s.pico_temperature = ExtraTemp::sensors.pico_temperature;
+  s.ntc_temperature = ExtraTemp::sensors.ntc_temperature;
+  s.ntc_connected = ExtraTemp::sensors.ntc_connected;
   s.fan_speed = Fan::getFanSpeed();
   s.fan_override = Fan::flags.fan_override;
   s.tray_state = (static_cast<uint8_t>(Dvd::sensors.tray_status) >> 4) & 0x07;

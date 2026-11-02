@@ -29,6 +29,8 @@ constexpr uint8_t TRAY_STATE_0 = 20;
 constexpr uint8_t TRAY_STATE_1 = 21;
 constexpr uint8_t TRAY_STATE_2 = 22;
 constexpr uint8_t DVD_ACTIVE   = 26;
+// Optional NTC thermistor (SMC_NTC_SENSOR), ADC2
+constexpr uint8_t NTC_ADC      = 28;
 
 // Pico onboard LED: a GPIO on the Pico and Pico 2. On the W boards it's on the
 // wireless chip (and GPIO23-25 belong to that chip), so it isn't used there.

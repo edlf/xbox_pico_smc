@@ -69,6 +69,22 @@
 #define SMC_LED_FADE 1
 #endif
 
+// Read an NTC thermistor on GP28 (ADC2): NTC to ground, SMC_NTC_SERIES_R
+// from 3.3 V to the pin. Beta equation with SMC_NTC_BETA and the resistance at
+// 25 °C (SMC_NTC_R25).
+#ifndef SMC_NTC_SENSOR
+#define SMC_NTC_SENSOR 0
+#endif
+#ifndef SMC_NTC_BETA
+#define SMC_NTC_BETA 3950
+#endif
+#ifndef SMC_NTC_R25
+#define SMC_NTC_R25 10000 // Ohms
+#endif
+#ifndef SMC_NTC_SERIES_R
+#define SMC_NTC_SERIES_R 10000 // Ohms
+#endif
+
 // Wi-Fi access point with a status and control page, served from core 1
 // (W boards only)
 #ifndef SMC_WEB_INTERFACE

@@ -1,5 +1,6 @@
 #include "hardware/i2c.h"
 #include "hardware/pwm.h"
+#include "hardware/adc.h"
 #include "hardware/clocks.h"
 #include "hardware/watchdog.h"
 #include "pico/stdlib.h"
@@ -125,6 +126,35 @@ void set_pico_led_level(const uint8_t level) {
 #else
   (void)level;
 #endif
+}
+
+// ADC: the RP2040/RP2350's internal temperature sensor and the optional NTC.
+// Each read averages a few conversions (2 us each) to smooth the noise.
+constexpr uint8_t ADC_SAMPLES = 16;
+
+static uint16_t readAdc(const uint channel) {
+  adc_select_input(channel);
+  uint32_t sum = 0;
+  for (uint8_t i = 0; i < ADC_SAMPLES; i++) {
+    sum += adc_read();
+  }
+  return sum / ADC_SAMPLES;
+}
+
+static void initAdc() {
+  adc_init();
+  adc_set_temp_sensor_enabled(true);
+  if (SMC_NTC_SENSOR) {
+    adc_gpio_init(pins::NTC_ADC); // Digital input off, no pulls
+  }
+}
+
+uint16_t read_pico_temperature_adc() {
+  return readAdc(ADC_TEMPERATURE_CHANNEL_NUM);
+}
+
+uint16_t read_ntc_adc() {
+  return readAdc(pins::NTC_ADC - ADC_BASE_PIN);
 }
 
 bool state_pll = false;
@@ -493,6 +523,7 @@ void init() {
   debug::print_message("GPIO: Init");
 
   initLeds(); // Off
+  initAdc();
 
   // Idle levels before the pins become outputs, as in the PIC's port_init:
   // SMI released, DVD eject released

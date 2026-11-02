@@ -94,6 +94,7 @@ void main_loop() {
   SMI::init();
   BootChallenge::init();
   PLL_Reset::init();
+  ExtraTemp::init();
 
   debug::print_message("MAIN: Set I2C interrupt");
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
@@ -134,6 +135,7 @@ void main_loop() {
         AudioClamp::update();
         update_LEDs();
         Fan::update_fan_temp();
+        ExtraTemp::update();
 
         power_standby_state = SMI::update();
         printSMBusLog();

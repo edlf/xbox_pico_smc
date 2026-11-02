@@ -12,6 +12,7 @@
 #include "smc_boot_challenge.hpp"
 #include "smc_SMI.hpp"
 #include "smc_audio_clamp.hpp"
+#include "smc_extra_temp.hpp"
 #include "smc_smbus.hpp"
 #include "smc_fan.hpp"
 #include "smc_pll_reset.hpp"
