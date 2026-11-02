@@ -1,6 +1,7 @@
 #include "smc.hpp"
 #include "hal.hpp"
 #include "debug.hpp"
+#include "hardware/sync.h"
 
 #include <iterator>
 #include <string>
@@ -194,7 +195,24 @@ void printState() {
   debug::print_message(msg);
 }
 
+static volatile uint8_t requested_brightness = 0;  // 0: none
+
+void requestBrightness(const uint8_t percent) {
+  requested_brightness = percent;
+}
+
 void update() {
+  const uint32_t irq_state = save_and_disable_interrupts();  // Take it without losing a newer one
+  const uint8_t brightness = requested_brightness;
+  requested_brightness = 0;
+  restore_interrupts(irq_state);
+  if (brightness != 0) {
+    if (brightness != hal::get_led_brightness()) {
+      hal::set_led_brightness(brightness);
+      debug::print_message("LED: Brightness " + std::to_string(brightness) + "% (SMBus 0x33)");
+    }
+  }
+
   stepFade();
 
   switch (state) {

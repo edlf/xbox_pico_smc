@@ -40,9 +40,12 @@ constexpr uint8_t CHALLENGE_BYTE3 = 0x1F;
 constexpr uint8_t CHALLENGE_RESPONSE0 = 0x20;
 constexpr uint8_t CHALLENGE_RESPONSE1 = 0x21;
 constexpr uint8_t POWER_CYCLE_DELAY = 0x22;  // P11/P2L, all firmwares here
-// Not on the PIC (ExtraTemp)
+
+// New commands, not stock
 constexpr uint8_t PICO_TEMPERATURE = 0x30;
 constexpr uint8_t NTC_TEMPERATURE = 0x31;
+constexpr uint8_t READ_LED_BRIGHTNESS = 0x32;
+constexpr uint8_t WRITE_LED_BRIGHTNESS = 0x33;
 };  // namespace Command
 
 // ExtraTemp's tenths of °C as a byte of whole °C, like 0x09/0x0A. 0xFF means
@@ -154,6 +157,10 @@ uint8_t smbus_read_handler(uint8_t command) {
       response = ExtraTemp::sensors.ntc_connected ? temperatureByte(ExtraTemp::sensors.ntc_temperature) : 0xFF;
       break;
 
+    case Command::READ_LED_BRIGHTNESS:  // 0x32
+      response = hal::get_led_brightness();
+      break;
+
     case Command::READ_FAN_SPEED:  // 0x10
       response = Fan::getFanSpeed();
       break;
@@ -220,6 +227,7 @@ uint8_t smbus_read_handler(uint8_t command) {
     case Command::SOFTWARE_INTERRUPT:           // 0x18
     case Command::OVERRIDE_RESET_ON_TRAY_OPEN:  // 0x19
     case Command::OS_READY:                     // 0x1A
+    case Command::WRITE_LED_BRIGHTNESS:         // 0x33
                                                 // Unsupported/write-only commands - return 0
     default:
       break;
@@ -289,6 +297,14 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
       // data: LED color/state bits
       Led::setGreenPhases((data >> 0) & 0x0F);
       Led::setRedPhases((data >> 4) & 0x0F);
+      break;
+
+    case Command::WRITE_LED_BRIGHTNESS:  // 0x33
+      // Percent, 1-100, anything else is ignored. Applied by Led::update(),
+      // not saved (Settings)
+      if (data >= 1 && data <= 100) {
+        Led::requestBrightness(data);
+      }
       break;
 
     case Command::AUDIO_CLAMP:  // 0x0B

@@ -56,6 +56,8 @@ PIC or Xcylops.
 |-----------|----------------------|-----|----------------------------------------|
 | 0x30      | Pico temperature     |  R  | °C |
 | 0x31      | NTC temperature      |  R  | °C, 0xFF without one |
+| 0x32      | LED brightness       |  R  | Front panel LED brightness, percent |
+| 0x33      | LED brightness       |  W  | Set it, 1-100 percent |
 
 ## Video encoder writes (sniffer)
 
@@ -336,6 +338,7 @@ is ignored. Only the RAM test result is checked.
 ### 0x22 Power cycle delay (write)
 
 Off time of the next power cycle (0x02 bit 6), in ticks. Reset to 25 (0.5 s)
+at every power off. Values 0-2 wrap to about 5 s. Accepted by every build (the original P01 doesn't have it).
 
 ### 0x30 Pico temperature (read)
 
@@ -348,4 +351,15 @@ few degrees above the air around it.
 Not on the PIC. The optional NTC thermistor on GP28 (`SMC_NTC_SENSOR`, see
 `docs/Wiring.md`), in whole °C, rounded, read once a second. 0xFF when there
 is no reading: the option is off, or the NTC reads open or shorted.
-at every power off. Values 0-2 wrap to about 5 s. Accepted by every build (the original P01 doesn't have it).
+
+### 0x32 LED brightness (read)
+
+Not on the PIC. The front panel LED brightness in percent (1-100), as set by
+`SMC_LED_BRIGHTNESS`, the saved settings, 0x33 or the web interface.
+
+### 0x33 LED brightness (write)
+
+Not on the PIC. Sets the front panel LED brightness, 1-100 percent; other
+values are ignored. Applied on the next tick (logged as `LED: Brightness n%
+(SMBus 0x33)`), and kept until the Pico restarts: it isn't saved to flash.
+
