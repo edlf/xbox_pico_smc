@@ -20,8 +20,8 @@ volatile uint8_t bios_response_byte0;
 void configureConexantEncoder() {
   debug::print_message("SMC: Configure Conexant Encoder");
 
-  constexpr size_t len = 2;
-  uint8_t          config[len] = {0xBA, 0x3F};
+  constexpr size_t  len = 2;
+  constexpr uint8_t config[len] = {0xBA, 0x3F};
 
   if (!smbusMasterWrite(I2C_CONEXANT_ADDRESS, config, len)) {
     debug::print_warn("Conexant encoder write failed");
@@ -31,8 +31,8 @@ void configureConexantEncoder() {
 // P11: ADM1032 configuration register = 0x00, running (not standby)
 // with the ALERT output enabled
 void configureTemperatureSensor() {
-  constexpr size_t len = 2;
-  uint8_t          config[len] = {0x09, 0x00};
+  constexpr size_t  len = 2;
+  constexpr uint8_t config[len] = {0x09, 0x00};
 
   if (!smbusMasterWrite(I2C_TEMP_SENSOR_ADDRESS, config, len)) {
     debug::print_warn("Temperature sensor write failed");
@@ -224,7 +224,7 @@ void shutdown_xbox() {
   hal::turn_off_psu();
 }
 
-void panic(const std::string message) {
+void panic(const std::string& message) {
   hal::disable_and_discard_interrupts();
 
   shutdown_xbox();

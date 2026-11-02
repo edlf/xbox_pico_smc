@@ -327,7 +327,7 @@ void respond(tcp_pcb* pcb, const char* status_line, const char* type, const char
   tcp_output(pcb);
 }
 
-void handleRequest(tcp_pcb* pcb, char* request) {
+void handleRequest(tcp_pcb* pcb, const char* request) {
   if (strncmp(request, "GET / ", 6) == 0 || strncmp(request, "GET /index.html ", 16) == 0) {
     respond(pcb, "200 OK", "text/html; charset=utf-8", page, sizeof(page) - 1, true);
   } else if (strncmp(request, "GET /status.json ", 17) == 0) {

@@ -10,19 +10,19 @@ sensors_struct sensors;
 
 #if SMC_DVD_SUPPORT
 
-drive_tray_state tray_status_first_read;
+static drive_tray_state tray_status_first_read;
 
-dvd_tray_state              dvd_tray;
-update_dvd_tray_three_state dvd_tray_three;
-update_eject_tray_state     update_eject_tray;
+static dvd_tray_state              dvd_tray;
+static update_dvd_tray_three_state dvd_tray_three;
+static update_eject_tray_state     update_eject_tray;
 
-uint16_t tray_state_timer = 0;
-uint16_t eject_timeout = 0;
-uint16_t dvd_tray_timeout = 0;
+static uint16_t tray_state_timer = 0;
+static uint16_t eject_timeout = 0;
+static uint16_t dvd_tray_timeout = 0;
 // Where the tray was last sent or seen going (0 open, 1 closed)
 enum class tray_position : bool { open, closed };
-tray_position    tray_position_state;
-drive_tray_state tray_status_raw = drive_tray_state::closed;
+static tray_position    tray_position_state;
+static drive_tray_state tray_status_raw = drive_tray_state::closed;
 
 void init() {
   update_eject_tray = update_eject_tray_state::initial;

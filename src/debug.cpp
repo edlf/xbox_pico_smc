@@ -6,7 +6,7 @@
 
 namespace debug {
 
-DebugLevel debugLevel = static_cast<DebugLevel>(SMC_DEBUG_LEVEL);
+static DebugLevel debugLevel = static_cast<DebugLevel>(SMC_DEBUG_LEVEL);
 
 struct LevelInfo {
   const char* name;  // SMC_DEBUG_LEVEL value

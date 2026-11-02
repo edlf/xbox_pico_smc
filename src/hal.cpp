@@ -19,9 +19,9 @@
 namespace hal {
 
 // FAN PWM
-pwm_config pwm_cfg;
-uint       pwm_slice;
-uint       pwm_channel;
+static pwm_config pwm_cfg;
+static uint       pwm_slice;
+static uint       pwm_channel;
 
 // Front panel LEDs are active low, like on the PIC (RA0/RA1 low = on). They
 // run as PWM so they can be dimmed: ~1 kHz, output inverted so the level is the
@@ -162,7 +162,7 @@ uint16_t read_ntc_adc() {
   return readAdc(pins::NTC_ADC - ADC_BASE_PIN);
 }
 
-bool state_pll = false;
+static bool state_pll = false;
 
 void PLL_on() {
   gpio_put(pins::PLL_ENABLE, 1);
@@ -198,7 +198,7 @@ void audio_clamp_off() {
   gpio_put(pins::AUDIO_CLAMP, 0);
 }
 
-bool state_psu = false;
+static bool state_psu = false;
 
 void turn_on_psu() {
   gpio_put(pins::POWER_ON, 1);

@@ -12,8 +12,8 @@ flags_struct flags;
 
 constexpr uint8_t unclamp_delay = 0x2C;  // 44 ticks, ~0.9 s
 
-audio_state state;
-uint8_t     audio_clamp_timeout;
+static audio_state state;
+static uint8_t     audio_clamp_timeout;
 
 constexpr const char* state_names[] = {"Clamped", "Tick timer", "Unclamped"};
 

@@ -28,11 +28,11 @@ enum class video_state {
 // Fixed AV pack from CMake (SMC_AV_PACK_OVERRIDE), as mode pins: code << 1
 constexpr bool    override = SMC_AV_PACK_OVERRIDE;
 constexpr av_pack override_mode = static_cast<av_pack>((SMC_AV_PACK_MODE & 0x07) << 1);
-video_state       state;
-av_pack           vmode_raw = av_pack::scart;
-av_pack           vmode_prev = av_pack::scart;
-bool              mode_printed = false;  // Cable printed since power-up
-uint8_t           settle_ticks = 0;      // Let the AV pack power up before trusting an unchanged mode
+static video_state       state;
+static av_pack           vmode_raw = av_pack::scart;
+static av_pack           vmode_prev = av_pack::scart;
+static bool              mode_printed = false;  // Cable printed since power-up
+static uint8_t           settle_ticks = 0;      // Let the AV pack power up before trusting an unchanged mode
 
 void init() {
   state = video_state::monitor;

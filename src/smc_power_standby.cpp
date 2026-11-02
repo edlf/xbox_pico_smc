@@ -9,7 +9,7 @@
 namespace SMC {
 namespace PowerStandby {
 
-power_standby_state state;
+static power_standby_state state;
 static uint16_t     power_timeout3 = 0;
 
 // The Pico's onboard LED breathes while the Xbox is off (solid while it runs)

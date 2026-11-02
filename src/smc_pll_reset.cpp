@@ -11,8 +11,8 @@ namespace PLL_Reset {
 
 flags_struct flags;
 
-pll_sysreset_state state;
-uint8_t            timeout;  // Own counter, 0x49 on the PIC
+static pll_sysreset_state state;
+static uint8_t            timeout;  // Own counter
 
 constexpr const char* state_names[] = {"initial",       "held in reset", "start delay (unused)",     "start PLL",
                                        "release reset", "warm reset",    "restart PLL off (unused)", "restart PLL on (unused)",

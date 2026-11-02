@@ -33,9 +33,9 @@ constexpr const char* smi_state_names[] = {"Decision_state",
                                            "Delayed turning off",
                                            "Wait for power cycle"};
 
-smi_power_state         state;
-uint16_t                power_timeout = 0;
-uint16_t                power_timeout2 = 0;          // How many more times the OS may answer "busy"
+static smi_power_state         state;
+static uint16_t                power_timeout = 0;
+static uint16_t                power_timeout2 = 0;          // How many more times the OS may answer "busy"
 static bool             power_on_requested = false;  // Survives init()
 static volatile uint8_t power_cycle_delay = 25;      // SMBus 0x22
 

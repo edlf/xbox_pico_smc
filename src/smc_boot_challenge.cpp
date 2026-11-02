@@ -20,12 +20,12 @@ constexpr const char* state_names[] = {
 constexpr uint8_t ERROR_RAM_TEST_FAILED = 0x04;
 constexpr uint8_t ERROR_CHALLENGE_FAILED = 0x01;
 
-challenge_struct     challenge;
-boot_challenge_state state;
-uint8_t              boot_response_timeout;
-uint8_t              failure_count;      // Failed boots since the last power cycle
-uint8_t              failure_countdown;  // Power cycles left before locking up (FRAG)
-uint8_t              rtc_dump_time;
+static challenge_struct     challenge;
+static boot_challenge_state state;
+static uint8_t              boot_response_timeout;
+static uint8_t              failure_count;      // Failed boots since the last power cycle
+static uint8_t              failure_countdown;  // Power cycles left before locking up (FRAG)
+static uint8_t              rtc_dump_time;
 
 // As P2L: the answer is only checked after a passed RAM test
 static bool    challenge_check_pending;
@@ -138,7 +138,7 @@ static void lockUp() {
 // Power cycles the Xbox while dumping the RTC, as the PIC does after repeated
 // boot failures. Blocks the main loop like the original.
 static bool powerCycleWithRtcDump() {
-  auto tick = [] {
+  const auto tick = [] {
     hal::timer1_wait();
     hal::petWatchdog();
   };
