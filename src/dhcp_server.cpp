@@ -164,7 +164,7 @@ void receive(void*, udp_pcb*, pbuf* p, const ip_addr_t*, u16_t) {
   }
   *out++ = OPT_END;
 
-  const u16_t reply_len = out - msg;
+  const u16_t reply_len = static_cast<u16_t>(out - msg);
   pbuf*       reply = pbuf_alloc(PBUF_TRANSPORT, reply_len, PBUF_RAM);
   if (reply == nullptr) {
     return;

@@ -97,7 +97,7 @@ void predictCpuTemperature() {
   }
 
   const uint16_t predicted = sensors.CPU_temperature + margin;
-  cpu_temperature_predicted = (predicted > 0x7F) ? 0x7F : predicted;
+  cpu_temperature_predicted = static_cast<uint8_t>((predicted > 0x7F) ? 0x7F : predicted);
   previous_cpu_temperature = sensors.CPU_temperature;
 }
 

@@ -70,8 +70,8 @@ static Record current() {
   for (uint8_t i = 0; i < r.threshold_count && i < Fan::max_thresholds; i++) {
     r.thresholds[i] = Fan::getThreshold(i);
   }
-  strncpy(r.wifi_ssid, wifi_ssid, max_ssid_length);
-  strncpy(r.wifi_password, wifi_password, max_password_length);
+  memcpy(r.wifi_ssid, wifi_ssid, strlen(wifi_ssid));  // The setters keep them in range, r is zeroed
+  memcpy(r.wifi_password, wifi_password, strlen(wifi_password));
   r.web_enabled = web_enabled;
   r.checksum = checksum(r);
   return r;

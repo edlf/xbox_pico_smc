@@ -31,7 +31,7 @@ constexpr uint16_t LED_PWM_WRAP = 999;
 constexpr uint32_t LED_PWM_HZ = 1000;
 
 static constexpr uint16_t ledLevel(uint8_t percent) {
-  return (uint32_t)(LED_PWM_WRAP + 1) * percent / 100;
+  return static_cast<uint16_t>((uint32_t)(LED_PWM_WRAP + 1) * percent / 100);
 }
 
 static volatile uint8_t  led_brightness = SMC_LED_BRIGHTNESS;
@@ -42,7 +42,7 @@ static bool              red_lit = false;
 
 // PWM level of a lit LED: brightness scaled by the fade
 static uint16_t litLevel() {
-  return (uint32_t)led_on_level * led_fade / 255;
+  return static_cast<uint16_t>((uint32_t)led_on_level * led_fade / 255);
 }
 
 // Lit LEDs follow a brightness or fade change right away
@@ -127,7 +127,7 @@ void pico_led_off() {
 void set_pico_led_level(const uint8_t level) {
 #ifdef PICO_DEFAULT_LED_PIN
   // Squared, so the change looks even
-  pwm_set_gpio_level(pins::PICO_LED, (uint32_t)(LED_PWM_WRAP + 1) * level * level / (255 * 255));
+  pwm_set_gpio_level(pins::PICO_LED, static_cast<uint16_t>((uint32_t)(LED_PWM_WRAP + 1) * level * level / (255 * 255)));
 #else
   (void)level;
 #endif
@@ -143,7 +143,7 @@ static uint16_t readAdc(const uint channel) {
   for (uint8_t i = 0; i < ADC_SAMPLES; i++) {
     sum += adc_read();
   }
-  return sum / ADC_SAMPLES;
+  return static_cast<uint16_t>(sum / ADC_SAMPLES);
 }
 
 static void initAdc() {
@@ -319,7 +319,7 @@ void set_fan_speed(uint8_t speed) {
     speed = FAN_MAX_SPEED;
   }
 
-  const uint16_t level = (uint32_t)(FAN_PWM_WRAP + 1) * (FAN_MAX_SPEED - speed) / (2 * FAN_MAX_SPEED);
+  const uint16_t level = static_cast<uint16_t>((uint32_t)(FAN_PWM_WRAP + 1) * (FAN_MAX_SPEED - speed) / (2 * FAN_MAX_SPEED));
   pwm_set_chan_level(pwm_slice, pwm_channel, level);
 
   if (speed != fan_speed_set) {

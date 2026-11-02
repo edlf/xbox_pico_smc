@@ -41,8 +41,8 @@ enum class Command : uint8_t {
 
 struct CommandMessage {
   Command command;
-  uint8_t arg;
-  uint8_t index;
+  uint8_t arg = 0;
+  uint8_t index = 0;
 };
 
 struct LogMessage {
@@ -294,9 +294,9 @@ const char* queueCommand(const char* query) {
       return "unknown threshold";
     }
     // Never above the firmware's default
-    if (value < Fan::min_threshold || value > Fan::thresholdDefault(index)) {
+    if (value < Fan::min_threshold || value > Fan::thresholdDefault(static_cast<uint8_t>(index))) {
       static char error[48];
-      snprintf(error, sizeof(error), "value must be %u-%u", Fan::min_threshold, Fan::thresholdDefault(index));
+      snprintf(error, sizeof(error), "value must be %u-%u", Fan::min_threshold, Fan::thresholdDefault(static_cast<uint8_t>(index)));
       return error;
     }
     message = {Command::threshold, (uint8_t)value, (uint8_t)index};
@@ -320,9 +320,9 @@ void respond(tcp_pcb* pcb, const char* status_line, const char* type, const char
                                   "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nCache-Control: no-store\r\n"
                                   "Connection: close\r\n\r\n",
                                   status_line, type, (unsigned)len);
-  tcp_write(pcb, header, header_len, TCP_WRITE_FLAG_COPY | (len != 0 ? TCP_WRITE_FLAG_MORE : 0));
+  tcp_write(pcb, header, static_cast<u16_t>(header_len), TCP_WRITE_FLAG_COPY | (len != 0 ? TCP_WRITE_FLAG_MORE : 0));
   if (len != 0) {
-    tcp_write(pcb, body, len, body_is_static ? 0 : TCP_WRITE_FLAG_COPY);
+    tcp_write(pcb, body, static_cast<u16_t>(len), body_is_static ? 0 : TCP_WRITE_FLAG_COPY);
   }
   tcp_output(pcb);
 }
@@ -382,7 +382,7 @@ err_t onReceive(void* arg, tcp_pcb* pcb, pbuf* p, err_t err) {
   }
 
   const size_t room = max_request - connection->len;
-  const size_t copied = pbuf_copy_partial(p, connection->request + connection->len, room, 0);
+  const size_t copied = pbuf_copy_partial(p, connection->request + connection->len, static_cast<u16_t>(room), 0);
   connection->len += copied;
   connection->request[connection->len] = '\0';
   tcp_recved(pcb, p->tot_len);
@@ -551,7 +551,7 @@ void runCommand(const CommandMessage& message) {
 
 void publishStatus() {
   WebStatus s;
-  s.uptime_s = time_us_64() / 1000000;
+  s.uptime_s = static_cast<uint32_t>(time_us_64() / 1000000);
   s.powered = hal::get_power_ok();
   s.cpu_temperature = Fan::sensors.CPU_temperature;
   s.board_temperature = Fan::sensors.board_temperature;

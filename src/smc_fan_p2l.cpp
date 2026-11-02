@@ -206,8 +206,8 @@ void update_fan_temp() {
         return;
       }
 
-      sensors.CPU_temperature = cpu_sum / sample_count;
-      sensors.board_temperature = board_sum / sample_count;  // Not used for decisions
+      sensors.CPU_temperature = static_cast<uint8_t>(cpu_sum / sample_count);
+      sensors.board_temperature = static_cast<uint8_t>(board_sum / sample_count);  // Not used for decisions
       predictCpuTemperature();
       printReadings();
       state = fan_control_state::decision_state;

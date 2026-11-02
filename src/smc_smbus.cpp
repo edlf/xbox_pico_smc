@@ -55,7 +55,7 @@ static uint8_t temperatureByte(const int16_t tenths) {
   if (whole <= 0) {
     return 0;
   }
-  return whole > 0xFE ? 0xFE : whole;
+  return static_cast<uint8_t>(whole > 0xFE ? 0xFE : whole);
 }
 
 // SMBus state. Like the PIC, the command byte is kept after the transaction
@@ -84,7 +84,7 @@ static volatile uint8_t  smbus_log_head = 0;  // Written by the IRQ
 static volatile uint8_t  smbus_log_tail = 0;  // Written by the main loop
 
 static void logTransaction(bool write, uint8_t command, uint8_t data) {
-  const uint8_t next = (smbus_log_head + 1) % smbus_log_size;
+  const uint8_t next = static_cast<uint8_t>((smbus_log_head + 1) % smbus_log_size);
   if (next == smbus_log_tail) {
     return;  // Full, drop
   }
@@ -105,7 +105,7 @@ void resetSMBusRegisters() {
 void printSMBusLog() {
   while (smbus_log_tail != smbus_log_head) {
     const SMBusLogEntry entry = smbus_log[smbus_log_tail];
-    smbus_log_tail = (smbus_log_tail + 1) % smbus_log_size;
+    smbus_log_tail = static_cast<uint8_t>((smbus_log_tail + 1) % smbus_log_size);
     if (debug::debug_enabled()) {  // Debug level only, they're too frequent for Info
       debug::print_debug(std::string("SMBUS: ") + (entry.write ? "Write" : "Read ") + " cmd [" + utils::toHex(entry.command) + "] data [" +
                          utils::toHex(entry.data) + "]");

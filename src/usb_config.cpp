@@ -158,10 +158,10 @@ static void command(char* line) {
       error("brightness must be 1-100");
       return;
     }
-    hal::set_led_brightness(a);
+    hal::set_led_brightness(static_cast<uint8_t>(a));
     ok();
   } else if (strcmp(words[0], "set") == 0 && count == 4 && strcmp(words[1], "threshold") == 0) {
-    if (!parseNumber(words[2], a) || !parseNumber(words[3], b) || a < 0 || a > 255 || b < 0 || b > 255 || !SMC::Fan::setThreshold(a, b)) {
+    if (!parseNumber(words[2], a) || !parseNumber(words[3], b) || a < 0 || a > 255 || b < 0 || b > 255 || !SMC::Fan::setThreshold(static_cast<uint8_t>(a), static_cast<uint8_t>(b))) {
       error("no such threshold, or out of range (min to default)");
       return;
     }

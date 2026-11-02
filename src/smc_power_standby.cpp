@@ -19,7 +19,7 @@ static uint8_t    breathe_step = 0;
 static void breathePicoLed() {
   const uint8_t half = breathe_ticks / 2;
   const uint8_t ramp = breathe_step < half ? breathe_step : breathe_ticks - breathe_step;
-  hal::set_pico_led_level((uint16_t)255 * ramp / half);
+  hal::set_pico_led_level(static_cast<uint8_t>(255 * ramp / half));
   if (++breathe_step >= breathe_ticks) {
     breathe_step = 0;
   }

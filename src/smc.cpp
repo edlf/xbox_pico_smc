@@ -42,7 +42,7 @@ void configureTemperatureSensor() {
 // Mirrors the PIC's only external interrupt: CCP2 capture on a POWOK falling
 // edge, armed while the Xbox is powered (see setPowerOkIrq). Buttons, tray and
 // AV pins are polled by their state machines, like on the PIC.
-void smc_gpio_callback(unsigned int gpio, uint32_t events) {
+void smc_gpio_callback(unsigned int gpio, [[maybe_unused]] uint32_t events) {
   if (gpio != pins::POWER_OK) {
     return;
   }

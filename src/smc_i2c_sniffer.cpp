@@ -124,7 +124,7 @@ static void segmentEnd() {
   if (encoderName(address) == nullptr) {
     return;
   }
-  const uint8_t next = (log_head + 1) % log_size;
+  const uint8_t next = static_cast<uint8_t>((log_head + 1) % log_size);
   if (next == log_tail) {
     dropped++;
     return;
@@ -234,7 +234,7 @@ static void printFound() {
 static void printWrites() {
   for (uint8_t n = 0; n < prints_per_tick && log_tail != log_head; n++) {
     const LogEntry& entry = log_entries[log_tail];
-    log_tail = (log_tail + 1) % log_size;
+    log_tail = static_cast<uint8_t>((log_tail + 1) % log_size);
 
     std::string   msg = std::string("ENCODER: ") + encoderName(entry.address) + " [" + utils::toHex(entry.data[0]) + "] =";
     const uint8_t kept = entry.count < max_bytes - 1 ? entry.count : max_bytes - 1;

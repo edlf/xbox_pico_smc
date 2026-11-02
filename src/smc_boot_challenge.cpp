@@ -35,7 +35,7 @@ static bool    challenge_passed = false;
 
 void init() {
   // Same as the PIC's RAM_init
-  challenge = {0};
+  challenge = {};
   state = boot_challenge_state::initial;
   boot_response_timeout = 0;
   failure_count = 0;

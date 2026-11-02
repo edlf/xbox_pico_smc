@@ -78,7 +78,7 @@ void clearPhases() {
 
 // Brightness for a fade step out of ticks: squared, so the change looks even
 static uint8_t fadeLevel(uint8_t step, uint8_t ticks) {
-  return (uint32_t)255 * step * step / (ticks * ticks);
+  return static_cast<uint8_t>((uint32_t)255 * step * step / (ticks * ticks));
 }
 
 // Called once per tick

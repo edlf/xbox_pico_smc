@@ -113,7 +113,7 @@ void reset() {
 static uint8_t xcaliburModeIndex(const uint8_t mode_sel) {
   const uint16_t vtotal = xc_in_raster & 0x7FFF;
   const bool     sdtv = (xc_in_raster & 0x8000) != 0;
-  const uint8_t  width16 = xc_width >> 24;
+  const uint8_t  width16 = static_cast<uint8_t>(xc_width >> 24);
   const bool     narrow = width16 == 0x28;  // 640
 
   switch (vtotal) {

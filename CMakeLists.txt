@@ -303,4 +303,11 @@ if(SMC_WEB_ENABLED)
   target_link_libraries(OG_SMC pico_cyw43_arch_lwip_poll pico_multicore pico_unique_id)
 endif()
 
+# Extra warnings for our own sources only: the SDK, lwIP and TinyUSB build in
+# the same target and aren't written for them
+get_target_property(SMC_TARGET_SOURCES OG_SMC SOURCES)
+list(FILTER SMC_TARGET_SOURCES INCLUDE REGEX "^${SMC_SRC_DIR}/")
+set_source_files_properties(${SMC_TARGET_SOURCES} PROPERTIES
+                            COMPILE_OPTIONS "-Wall;-Wextra;-Wshadow;-Wconversion")
+
 pico_add_extra_outputs(OG_SMC)
