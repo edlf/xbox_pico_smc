@@ -56,6 +56,47 @@ power on):
 ENCODER: Found Conexant (0x45)
 ```
 
+The video mode is worked out from the CPU's writes to the encoder
+(`src/smc_encoder_mode.cpp`, decoding ported from X-HD Redux's passive SMBus
+probe) and logged at INFO once a mode set has settled (200 ms without encoder
+writes), whenever it changes:
+
+```
+ENCODER: Video mode 720x480p (Xcalibur, mode 0x08)
+ENCODER: Video mode 640x480i, NTSC, 4:3, RGB (Conexant, 0x2E = 0x00, H_ACTIVE 648)
+ENCODER: Video mode 1280x720p, 16:9, YCrCb (Conexant, 0x2E = 0xAA)
+ENCODER: Video mode 720x576i, PAL, 16:9, YCrCb (Focus, 0x92 = 0x84, IHW 702, IHO 103)
+```
+
+- **Xcalibur (1.6):** the full mode, from its raster registers (0x50 input
+  raster, 0x52 width, 0x54 output raster, 0x56 written last), plus the SD
+  aspect (0x07). 0x0F/0x10/0x11 are register-identical to 0x02/0x04/0x08 and
+  read as those.
+- **Conexant (1.0-1.3):** the raster from 0x2E (RASTER_SEL/HDTV_EN: 0x00 SD
+  interlaced, RASTER_SEL 1 = 480p (0xAD), as X-HD; 2 = 720p (0xAA, seen on a
+  720p console); 3 = 1080i from the CX25871 field order, not yet confirmed on
+  an Xbox), the SD active width
+  (H_ACTIVE, 0x78/0x86), the line standard and aspect (WSS, 0x60) and RGB or
+  YCrCb input (IN_MODE, 0xC6/0x32).
+- **Focus (1.4-1.5):** interlaced or progressive and RGB or YCrCb (0x92), the
+  SD width (IHO 0x00, or IHW 0x04/0x05 before IHO is seen) and the line
+  standard and aspect (WSS, 0x83/0x85). It doesn't say which progressive mode
+  (480p or 720p), so that shows as `progressive (480p or 720p)`.
+
+- **X-HD mode packet (any encoder):** with an X-HD HDMI board fitted, an
+  X-HD-aware BIOS or dashboard writes the exact mode to it at 0x69 (commands
+  128-131, as in X-HD Redux). That's decoded too and logged as soon as it's
+  applied, e.g. `1920x1080i, 16:9 (X-HD mode packet, mode 0x0D, encoder 0x8A,
+  mode dword 0x000D0000)`. It's the only way to get 480p vs 720p on a Focus,
+  or 1440 vs 1920 wide 1080i.
+
+The line starts with the resolution (`?` or `480/576` for a part that isn't
+known yet), then the standard, aspect and colour when known, and in brackets
+the encoder and the raw register values it was decoded from. Conexant and
+Focus don't hold the whole mode (X-HD measures the rest from the video
+signal). The WSS and SD width are dropped on a switch to progressive, which
+doesn't rewrite them.
+
 At DEBUG level every write the CPU makes to it is logged too:
 
 ```

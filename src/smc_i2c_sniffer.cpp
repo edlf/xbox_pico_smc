@@ -1,4 +1,5 @@
 #include "smc_i2c_sniffer.hpp"
+#include "smc_encoder_mode.hpp"
 #include "smc.hpp"
 #include "pin_assignments.hpp"
 #include "utils.hpp"
@@ -172,6 +173,12 @@ static void decodeSample(const uint8_t state) {
       if (byte_count < max_bytes) {
         bytes[byte_count] = current_byte;
       }
+      // Each data byte the CPU writes to an encoder or an X-HD (0x69, its mode
+      // packet), register byte at index 1
+      if (byte_count >= 2 && !ignoring && (bytes[0] & 1) == 0 &&
+          (encoderIndex(bytes[0] >> 1) >= 0 || (bytes[0] >> 1) == 0x69)) {
+        EncoderMode::onWrite(bytes[0] >> 1, bytes[1], byte_count - 2, current_byte);
+      }
       if (byte_count < 255) {
         byte_count++;
       }
@@ -307,12 +314,14 @@ void update() {
   }
   decodeCaptured();
   printFound();
+  EncoderMode::update();
   printWrites();
 }
 
 void resetFound() {
   found_mask = 0;
   logged_mask = 0;
+  EncoderMode::reset();
 }
 
 void beginOwnTransfer() {

@@ -249,6 +249,7 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/smc_video.cpp
                       ${SMC_SRC_DIR}/smc_extra_temp.cpp
                       ${SMC_SRC_DIR}/smc_i2c_sniffer.cpp
+                      ${SMC_SRC_DIR}/smc_encoder_mode.cpp
                       ${SMC_SRC_DIR}/smc_rgb_led.cpp)
 pico_generate_pio_header(OG_SMC ${SMC_SRC_DIR}/ws2812.pio)
 
