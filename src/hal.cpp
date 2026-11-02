@@ -10,6 +10,7 @@
 #include "hal.hpp"
 #include "pin_assignments.hpp"
 #include "debug.hpp"
+
 #if SMC_RGB_LED
 #include "hardware/pio.h"
 #include "ws2812.pio.h"
@@ -19,8 +20,8 @@ namespace hal {
 
 // FAN PWM
 pwm_config pwm_cfg;
-uint pwm_slice;
-uint pwm_channel;
+uint       pwm_slice;
+uint       pwm_channel;
 
 // Front panel LEDs are active low, like on the PIC (RA0/RA1 low = on). They
 // run as PWM so they can be dimmed: ~1 kHz, output inverted so the level is the
@@ -33,11 +34,11 @@ static constexpr uint16_t ledLevel(uint8_t percent) {
   return (uint32_t)(LED_PWM_WRAP + 1) * percent / 100;
 }
 
-static volatile uint8_t led_brightness = SMC_LED_BRIGHTNESS;
+static volatile uint8_t  led_brightness = SMC_LED_BRIGHTNESS;
 static volatile uint16_t led_on_level = ledLevel(SMC_LED_BRIGHTNESS);
-static uint8_t led_fade = 255; // Power up/down fade, 255 = full brightness
-static bool green_lit = false;
-static bool red_lit = false;
+static uint8_t           led_fade = 255;  // Power up/down fade, 255 = full brightness
+static bool              green_lit = false;
+static bool              red_lit = false;
 
 // PWM level of a lit LED: brightness scaled by the fade
 static uint16_t litLevel() {
@@ -62,7 +63,7 @@ static void initLeds() {
     pwm_config_set_wrap(&cfg, LED_PWM_WRAP);
     pwm_config_set_output_polarity(&cfg, true, true);
     pwm_init(slice, &cfg, true);
-    pwm_set_gpio_level(pin, 0); // Off
+    pwm_set_gpio_level(pin, 0);  // Off
   }
   // Only now hand the pins to the PWM, so they never flash on
   gpio_set_function(pins::LED_RED, GPIO_FUNC_PWM);
@@ -149,7 +150,7 @@ static void initAdc() {
   adc_init();
   adc_set_temp_sensor_enabled(true);
   if (SMC_NTC_SENSOR) {
-    adc_gpio_init(pins::NTC_ADC); // Digital input off, no pulls
+    adc_gpio_init(pins::NTC_ADC);  // Digital input off, no pulls
   }
 }
 
@@ -277,6 +278,7 @@ uint8_t get_video_mode() {
 
 uint8_t get_tray_state() {
   uint8_t tray_state = 0;
+
   // Tray state is set as 0b0111_0000
   if (gpio_get(pins::TRAY_STATE_0)) {
     tray_state = tray_state | (1 << 4);
@@ -306,7 +308,7 @@ bool eject_button_pressed() {
 // (50 - speed)% of each period. The PIC also has speed 0 (pin held high, fan
 // stopped); here the speed never goes below FAN_MIN_SPEED.
 constexpr uint16_t FAN_PWM_WRAP = 1023;
-constexpr uint32_t FAN_PWM_HZ = 9766; // PIC: 10 MHz / 4 / 256 (PR2 = 0xFF)
+constexpr uint32_t FAN_PWM_HZ = 9766;  // PIC: 10 MHz / 4 / 256 (PR2 = 0xFF)
 
 static uint8_t fan_speed_set = 0xFF;
 
@@ -337,24 +339,38 @@ void fan_pin_low() {
 // and only loses its pins for the duration of a transfer.
 namespace {
 
-constexpr uint32_t i2c_half_period_us = 5;          // ~100 kHz
+constexpr uint32_t i2c_half_period_us = 5;  // ~100 kHz
 constexpr uint32_t i2c_clock_stretch_timeout_us = 1000;
 constexpr uint32_t i2c_bus_idle_us = 50;
 
 // Open drain by hand: output low to pull down, input to let the pull-up win
-void sclLow() { gpio_set_dir(pins::I2C_SCL, GPIO_OUT); }
-void sdaLow() { gpio_set_dir(pins::I2C_SDA, GPIO_OUT); }
-void sdaRelease() { gpio_set_dir(pins::I2C_SDA, GPIO_IN); }
-void halfPeriod() { busy_wait_us(i2c_half_period_us); }
+void sclLow() {
+  gpio_set_dir(pins::I2C_SCL, GPIO_OUT);
+}
+
+void sdaLow() {
+  gpio_set_dir(pins::I2C_SDA, GPIO_OUT);
+}
+
+void sdaRelease() {
+  gpio_set_dir(pins::I2C_SDA, GPIO_IN);
+}
+
+void halfPeriod() {
+  busy_wait_us(i2c_half_period_us);
+}
 
 bool sclReleaseAndWait() {
   gpio_set_dir(pins::I2C_SCL, GPIO_IN);
+
   const absolute_time_t deadline = make_timeout_time_us(i2c_clock_stretch_timeout_us);
+
   while (!gpio_get(pins::I2C_SCL)) {
     if (time_reached(deadline)) {
       return false;
     }
   }
+
   return true;
 }
 
@@ -376,35 +392,44 @@ void returnPins() {
 // transfer (the input works whatever the pin function is)
 bool busIdle() {
   const absolute_time_t deadline = make_timeout_time_us(i2c_bus_idle_us);
+
   while (!time_reached(deadline)) {
     if (!gpio_get(pins::I2C_SCL) || !gpio_get(pins::I2C_SDA)) {
       return false;
     }
   }
+
   return true;
 }
 
 I2CMasterResult start(bool repeated) {
   sdaRelease();
   halfPeriod();
+
   if (!sclReleaseAndWait()) {
     return I2CMasterResult::timeout;
   }
+
   if (!gpio_get(pins::I2C_SDA)) {
     return repeated ? I2CMasterResult::arbitration_lost : I2CMasterResult::bus_busy;
   }
+
   halfPeriod();
   sdaLow();
+
   halfPeriod();
   sclLow();
+
   return I2CMasterResult::ok;
 }
 
 void stop() {
   sdaLow();
   halfPeriod();
+
   sclReleaseAndWait();
   halfPeriod();
+
   sdaRelease();
   halfPeriod();
 }
@@ -415,26 +440,35 @@ I2CMasterResult writeBit(bool bit) {
   } else {
     sdaLow();
   }
+
   halfPeriod();
+
   if (!sclReleaseAndWait()) {
     return I2CMasterResult::timeout;
   }
+
   // Someone else pulling SDA low while we send a 1: they win the bus
   const bool lost = bit && !gpio_get(pins::I2C_SDA);
+
   halfPeriod();
   sclLow();
+
   return lost ? I2CMasterResult::arbitration_lost : I2CMasterResult::ok;
 }
 
 I2CMasterResult readBit(bool& bit) {
   sdaRelease();
   halfPeriod();
+
   if (!sclReleaseAndWait()) {
     return I2CMasterResult::timeout;
   }
+
   bit = gpio_get(pins::I2C_SDA);
+
   halfPeriod();
   sclLow();
+
   return I2CMasterResult::ok;
 }
 
@@ -445,41 +479,52 @@ I2CMasterResult writeByte(uint8_t value) {
       return result;
     }
   }
-  bool nack;
+
+  bool                  nack;
   const I2CMasterResult result = readBit(nack);
+
   if (result != I2CMasterResult::ok) {
     return result;
   }
+
   return nack ? I2CMasterResult::nack : I2CMasterResult::ok;
 }
 
 I2CMasterResult readByte(uint8_t& value, bool ack) {
   value = 0;
+
   for (uint8_t i = 0; i < 8; i++) {
-    bool bit;
+    bool                  bit;
     const I2CMasterResult result = readBit(bit);
+
     if (result != I2CMasterResult::ok) {
       return result;
     }
+
     value = (value << 1) | bit;
   }
+
   return writeBit(!ack);
 }
 
 I2CMasterResult transfer(uint8_t address, const uint8_t* tx, size_t tx_len, uint8_t* rx, size_t rx_len) {
   I2CMasterResult result = start(false);
+
   if (result == I2CMasterResult::ok) {
     result = writeByte(address << 1);
   }
+
   for (size_t i = 0; i < tx_len && result == I2CMasterResult::ok; i++) {
     result = writeByte(tx[i]);
   }
 
   if (result == I2CMasterResult::ok && rx_len > 0) {
     result = start(true);
+
     if (result == I2CMasterResult::ok) {
       result = writeByte((address << 1) | 1);
     }
+
     for (size_t i = 0; i < rx_len && result == I2CMasterResult::ok; i++) {
       result = readByte(rx[i], i + 1 < rx_len);
     }
@@ -492,18 +537,21 @@ I2CMasterResult transfer(uint8_t address, const uint8_t* tx, size_t tx_len, uint
   } else {
     stop();
   }
+
   return result;
 }
 
-} // namespace
+}  // namespace
 
 I2CMasterResult i2c_master_transfer(uint8_t address, const uint8_t* tx, size_t tx_len, uint8_t* rx, size_t rx_len) {
   if (!busIdle()) {
     return I2CMasterResult::bus_busy;
   }
+
   takePins();
   const I2CMasterResult result = transfer(address, tx, tx_len, rx, rx_len);
   returnPins();
+
   return result;
 }
 
@@ -513,12 +561,14 @@ void i2c_bus_recovery() {
   debug::print_message("I2C: Bus recovery");
 
   takePins();
+
   for (uint8_t i = 0; i < 9; i++) {
     sclLow();
     halfPeriod();
     sclReleaseAndWait();
     halfPeriod();
   }
+
   stop();
   returnPins();
 }
@@ -526,21 +576,23 @@ void i2c_bus_recovery() {
 void init() {
   debug::print_message("GPIO: Init");
 
-  initLeds(); // Off
+  initLeds();
   initAdc();
-  rgb_led_init(); // Dark
+  rgb_led_init();
 
   // Idle levels before the pins become outputs, as in the PIC's port_init:
   // SMI released, DVD eject released
   gpio_put(pins::SMI, 1);
-  gpio_put(pins::DVD_EJECT, 0); // Open drain, only ever drives low
+  gpio_put(pins::DVD_EJECT, 0);  // Open drain, only ever drives low
 
   gpio_set_function(pins::SW_POWER, GPIO_FUNC_SIO);
   gpio_set_dir(pins::SW_POWER, GPIO_IN);
   gpio_pull_up(pins::SW_POWER);
+
   gpio_set_function(pins::SW_EJECT, GPIO_FUNC_SIO);
   gpio_set_dir(pins::SW_EJECT, GPIO_IN);
   gpio_pull_up(pins::SW_EJECT);
+
 #if PICO_RP2350
   // Input buffers only on while reading, see readWeakInput()
   gpio_set_input_enabled(pins::SW_POWER, false);
@@ -576,9 +628,7 @@ void init() {
   gpio_set_function(pins::PLL_ENABLE, GPIO_FUNC_SIO);
   gpio_set_dir(pins::PLL_ENABLE, GPIO_OUT);
 
-  // No internal pulls on the drive, AV and PSU inputs: the PIC has its PORTB
-  // pull-ups off (OPTION = 0x8C), and pulling the lines of an unpowered drive
-  // up would feed it through its pins
+  // No internal pulls on the drive, AV and PSU inputs
   gpio_set_function(pins::VIDEO_MODE_0, GPIO_FUNC_SIO);
   gpio_set_dir(pins::VIDEO_MODE_0, GPIO_IN);
   gpio_disable_pulls(pins::VIDEO_MODE_0);
@@ -588,6 +638,7 @@ void init() {
   gpio_set_function(pins::VIDEO_MODE_2, GPIO_FUNC_SIO);
   gpio_set_dir(pins::VIDEO_MODE_2, GPIO_IN);
   gpio_disable_pulls(pins::VIDEO_MODE_2);
+
 #if PICO_RP2350
   // Input buffers only on while reading, see readWeakInput()
   gpio_set_input_enabled(pins::VIDEO_MODE_0, false);
@@ -598,9 +649,11 @@ void init() {
   gpio_set_function(pins::TRAY_STATE_0, GPIO_FUNC_SIO);
   gpio_set_dir(pins::TRAY_STATE_0, GPIO_IN);
   gpio_disable_pulls(pins::TRAY_STATE_0);
+
   gpio_set_function(pins::TRAY_STATE_1, GPIO_FUNC_SIO);
   gpio_set_dir(pins::TRAY_STATE_1, GPIO_IN);
   gpio_disable_pulls(pins::TRAY_STATE_1);
+
   gpio_set_function(pins::TRAY_STATE_2, GPIO_FUNC_SIO);
   gpio_set_dir(pins::TRAY_STATE_2, GPIO_IN);
   gpio_disable_pulls(pins::TRAY_STATE_2);
@@ -633,9 +686,8 @@ void init() {
   pwm_config_set_clkdiv(&pwm_cfg, (float)clock_get_hz(clk_sys) / (FAN_PWM_HZ * (FAN_PWM_WRAP + 1)));
   pwm_config_set_wrap(&pwm_cfg, FAN_PWM_WRAP);
   pwm_init(pwm_slice, &pwm_cfg, false);
-  fan_pin_low(); // Same as the PIC's port_init
+  fan_pin_low();
   pwm_set_enabled(pwm_slice, true);
-
 
   debug::print_message("GPIO: I2C Init");
   i2c_init(I2C_PORT, I2C_BAUDRATE);
@@ -657,18 +709,19 @@ bool system_reset_asserted() {
 
 #if SMC_RGB_LED
 // WS2812 RGB LED on pins::RGB_LED, driven by a PIO state machine
-static PIO rgb_pio;
-static uint rgb_sm;
-static bool rgb_ready = false;
-static uint32_t rgb_sent = 0xFFFFFFFF; // Nothing sent yet
+static PIO      rgb_pio;
+static uint     rgb_sm;
+static bool     rgb_ready = false;
+static uint32_t rgb_sent = 0xFFFFFFFF;  // Nothing sent yet
 
 void rgb_led_init() {
   uint offset;
-  if (!pio_claim_free_sm_and_add_program_for_gpio_range(&ws2812_program, &rgb_pio, &rgb_sm, &offset,
-                                                          pins::RGB_LED, 1, true)) {
+
+  if (!pio_claim_free_sm_and_add_program_for_gpio_range(&ws2812_program, &rgb_pio, &rgb_sm, &offset, pins::RGB_LED, 1, true)) {
     debug::print_warn("GPIO: No free PIO state machine for the RGB LED");
     return;
   }
+
   ws2812_program_init(rgb_pio, rgb_sm, offset, pins::RGB_LED);
   rgb_ready = true;
   set_rgb_led(0, 0, 0);
@@ -678,13 +731,13 @@ void set_rgb_led(const uint8_t red, const uint8_t green, const uint8_t blue) {
   if (!rgb_ready) {
     return;
   }
-  // Same brightness as the front panel LEDs
-  const uint8_t percent = led_brightness;
-  const uint32_t grb = ((uint32_t)(green * percent / 100) << 16) | ((uint32_t)(red * percent / 100) << 8) |
-                       (blue * percent / 100);
+
+  const uint32_t grb = ((uint32_t)(green) << 16) | ((uint32_t)(red) << 8) | (blue);
+
   if (grb == rgb_sent || pio_sm_is_tx_fifo_full(rgb_pio, rgb_sm)) {
-    return; // Unchanged, or try again next tick
+    return;  // Unchanged, or try again next tick
   }
+
   pio_sm_put(rgb_pio, rgb_sm, grb << 8);
   rgb_sent = grb;
 }
@@ -705,7 +758,7 @@ void petWatchdog() {
 // Main loop tick, same as the PIC's Timer1: timer1_init() starts a period,
 // timer1_wait() blocks until it has elapsed (returns at once if it already
 // has) and starts the next one.
-static uint32_t timer1_period_us = TICK_US;
+static uint32_t        timer1_period_us = TICK_US;
 static absolute_time_t timer1_deadline;
 
 void timer1_init(uint32_t delay_us) {
@@ -719,7 +772,7 @@ void timer1_wait() {
 }
 
 void disable_and_discard_interrupts() {
-  (void) save_and_disable_interrupts();
+  (void)save_and_disable_interrupts();
 }
 
-} // namespace hal
+}  // namespace hal

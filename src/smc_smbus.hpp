@@ -18,6 +18,6 @@ void resetSMBusRegisters();
 // Version reported on SMBus 0x01 (SMC_REPORT_VERSION)
 extern const char version_string[];
 
-}
+}  // namespace SMC
 
-#endif // SMC_SMBUS_HPP
+#endif  // SMC_SMBUS_HPP

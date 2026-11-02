@@ -20,10 +20,10 @@ enum class power_standby_state {
   powered_up
 };
 
-void init();
+void    init();
 uint8_t update();
 
-} // namespace PowerStandby
-} // namespace SMC
+}  // namespace PowerStandby
+}  // namespace SMC
 
-#endif // SMC_POWER_STANDBY_SW_HPP
+#endif  // SMC_POWER_STANDBY_SW_HPP

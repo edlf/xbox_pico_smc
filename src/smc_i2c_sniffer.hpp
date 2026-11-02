@@ -21,7 +21,7 @@ void resetFound();
 void beginOwnTransfer();
 void endOwnTransfer();
 
-} // namespace I2CSniffer
-} // namespace SMC
+}  // namespace I2CSniffer
+}  // namespace SMC
 
-#endif // SMC_I2C_SNIFFER_HPP
+#endif  // SMC_I2C_SNIFFER_HPP

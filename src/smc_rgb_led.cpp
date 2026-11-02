@@ -5,10 +5,10 @@
 namespace SMC {
 namespace RgbLed {
 
-constexpr uint16_t done_ticks = 250; // 5 s of green
+constexpr uint16_t done_ticks = 250;  // 5 s of green
 
 static rgb_phase phase = rgb_phase::off;
-static uint16_t done_timer = 0;
+static uint16_t  done_timer = 0;
 
 struct Colour {
   uint8_t red;
@@ -18,31 +18,31 @@ struct Colour {
 
 // Indexed by rgb_phase
 constexpr Colour colours[] = {
-  {0, 0, 0},     // off
-  {255, 0, 255}, // power_on: magenta
-  {0, 0, 255},   // bios: blue
-  {0, 255, 255}, // kernel: cyan
-  {0, 255, 0},   // done: green
-  {0, 0, 0},     // idle
-  {255, 0, 0},   // failed: red
+    {0,   0,   0  }, // off
+    {255, 0,   255}, // power_on: magenta
+    {0,   0,   255}, // bios: blue
+    {0,   255, 255}, // kernel: cyan
+    {0,   255, 0  }, // done: green
+    {0,   0,   0  }, // idle
+    {255, 0,   0  }, // failed: red
 };
 
 // A failed RAM test shows the colour of the failed bank instead of red. With
 // several failed banks it steps through their colours, 1 s each.
 constexpr Colour bank_colours[] = {
-  {255, 255, 0},   // Bank 0: yellow
-  {255, 64, 0},    // Bank 1: orange
-  {128, 0, 255},   // Bank 2: purple
-  {255, 255, 255}, // Bank 3: white
+    {255, 255, 0  }, // Bank 0: yellow
+    {255, 64,  0  }, // Bank 1: orange
+    {128, 0,   255}, // Bank 2: purple
+    {255, 255, 255}, // Bank 3: white
 };
-constexpr uint8_t bank_ticks = 50; // 1 s per bank
-static uint8_t bank_timer = 0;
-static uint8_t bank_shown = 0;
+constexpr uint8_t bank_ticks = 50;  // 1 s per bank
+static uint8_t    bank_timer = 0;
+static uint8_t    bank_shown = 0;
 
 static Colour failedColour() {
   const uint8_t banks = BootChallenge::failedRamBanks();
   if (banks == 0) {
-    return colours[static_cast<uint8_t>(rgb_phase::failed)]; // FRAG, or no bank flagged
+    return colours[static_cast<uint8_t>(rgb_phase::failed)];  // FRAG, or no bank flagged
   }
   if (bank_timer == 0 || !(banks & (1u << bank_shown))) {
     // Next failed bank
@@ -82,40 +82,40 @@ static void nextPhase() {
     return;
   }
   if (hal::system_reset_asserted()) {
-    setPhase(rgb_phase::power_on); // Also a reset from the dashboard: start over
+    setPhase(rgb_phase::power_on);  // Also a reset from the dashboard: start over
     return;
   }
 
   const bool booted = BootChallenge::challengePassed() || SMI::flags.os_ready;
   switch (phase) {
-  case rgb_phase::off:
-  case rgb_phase::power_on:
-  case rgb_phase::failed: // A retry got out of reset
-    setPhase(rgb_phase::bios);
-    break;
+    case rgb_phase::off:
+    case rgb_phase::power_on:
+    case rgb_phase::failed:  // A retry got out of reset
+      setPhase(rgb_phase::bios);
+      break;
 
-  case rgb_phase::bios:
-    if (booted) {
-      setPhase(rgb_phase::done);
-    } else if (BootChallenge::flags.ram_test_submitted && BootChallenge::flags.ram_test_passed) {
-      setPhase(rgb_phase::kernel);
-    }
-    break;
+    case rgb_phase::bios:
+      if (booted) {
+        setPhase(rgb_phase::done);
+      } else if (BootChallenge::flags.ram_test_submitted && BootChallenge::flags.ram_test_passed) {
+        setPhase(rgb_phase::kernel);
+      }
+      break;
 
-  case rgb_phase::kernel:
-    if (booted) {
-      setPhase(rgb_phase::done);
-    }
-    break;
+    case rgb_phase::kernel:
+      if (booted) {
+        setPhase(rgb_phase::done);
+      }
+      break;
 
-  case rgb_phase::done:
-    if (--done_timer == 0) {
-      setPhase(rgb_phase::idle);
-    }
-    break;
+    case rgb_phase::done:
+      if (--done_timer == 0) {
+        setPhase(rgb_phase::idle);
+      }
+      break;
 
-  case rgb_phase::idle:
-    break;
+    case rgb_phase::idle:
+      break;
   }
 }
 
@@ -136,5 +136,5 @@ void update() {
   hal::set_rgb_led(c.red, c.green, c.blue);
 }
 
-} // namespace RgbLed
-} // namespace SMC
+}  // namespace RgbLed
+}  // namespace SMC

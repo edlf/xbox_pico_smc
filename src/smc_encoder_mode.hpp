@@ -17,13 +17,15 @@ namespace EncoderMode {
 
 // Power on: forget everything decoded
 void reset();
+
 // One data byte the CPU wrote: encoder address, register byte of the write,
 // index of the data byte after it, and its value
 void onWrite(uint8_t address, uint8_t reg, uint8_t index, uint8_t value);
+
 // Called once per tick: logs the mode once a mode set has settled
 void update();
 
-} // namespace EncoderMode
-} // namespace SMC
+}  // namespace EncoderMode
+}  // namespace SMC
 
-#endif // SMC_ENCODER_MODE_HPP
+#endif  // SMC_ENCODER_MODE_HPP

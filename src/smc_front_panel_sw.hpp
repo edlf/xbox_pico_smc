@@ -11,7 +11,7 @@ void updateEject();
 void printPowerState();
 void printEjectState();
 
-} // namespace FrontPanelSW
-} // namespace SMC
+}  // namespace FrontPanelSW
+}  // namespace SMC
 
-#endif // SMC_FRONT_PANEL_SW_HPP
+#endif  // SMC_FRONT_PANEL_SW_HPP

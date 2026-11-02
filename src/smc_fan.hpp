@@ -32,19 +32,19 @@ enum class fan_control_state {
 
 // Fan and temperature flags, from the PIC's RAM (address.bit)
 struct flags_struct {
-  bool overheated;              // 6E.4
-  bool fan_override;            // 6F.2 SMBus 0x05: use the speed from 0x06
-  bool temperature_read_failed; // 74.0 (never read)
+  bool overheated;               // 6E.4
+  bool fan_override;             // 6F.2 SMBus 0x05: use the speed from 0x06
+  bool temperature_read_failed;  // 74.0 (never read)
 };
 extern flags_struct flags;
 
-void init();
-void update_fan_temp();
-void powerOff();
+void    init();
+void    update_fan_temp();
+void    powerOff();
 uint8_t getFanSpeed();
-void setCustomSpeed(const uint8_t);
+void    setCustomSpeed(const uint8_t);
 // Raise the fan to at least this speed on the next tick (P2L, SMBus 0x05 off)
-void raiseSpeedTo(const uint8_t speed);
+void    raiseSpeedTo(const uint8_t speed);
 uint8_t getCustomFanSpeed();
 
 // Temperature thresholds (°C) of the fan control, adjustable from the web
@@ -53,15 +53,15 @@ uint8_t getCustomFanSpeed();
 // reset at power off.
 constexpr uint8_t max_thresholds = 10;
 constexpr uint8_t min_threshold = 30;
-uint8_t thresholdCount();
-const char* thresholdLabel(uint8_t index);
-uint8_t thresholdDefault(uint8_t index);
-uint8_t getThreshold(uint8_t index);
+uint8_t           thresholdCount();
+const char*       thresholdLabel(uint8_t index);
+uint8_t           thresholdDefault(uint8_t index);
+uint8_t           getThreshold(uint8_t index);
 // False (and nothing changed) when index or value is out of range
 bool setThreshold(uint8_t index, uint8_t value);
 void resetThresholds();
 
-} // namespace Fan
-} // namespace SMC
+}  // namespace Fan
+}  // namespace SMC
 
-#endif // SMC_FAN_HPP
+#endif  // SMC_FAN_HPP

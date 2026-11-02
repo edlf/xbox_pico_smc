@@ -8,7 +8,7 @@
 namespace SMC {
 namespace Fan {
 
-flags_struct flags;
+flags_struct   flags;
 sensors_struct sensors;
 
 // Fan speed and CPU temperature prediction, shared by the PIC (smc_fan_pic.cpp)
@@ -19,8 +19,8 @@ uint8_t custom_fan_speed;
 uint8_t cpu_temperature_increase;
 uint8_t cpu_temperature_predicted;
 
-static uint8_t previous_cpu_temperature;
-static volatile uint8_t raise_to_speed; // P2L: SMBus 0x05 off, applied on the next tick
+static uint8_t          previous_cpu_temperature;
+static volatile uint8_t raise_to_speed;  // P2L: SMBus 0x05 off, applied on the next tick
 
 void initShared(const uint8_t custom_speed) {
   fan_speed = 0;
@@ -65,11 +65,21 @@ void predictCpuTemperature() {
 
   uint8_t margin;
   switch (cpu_temperature_increase) {
-  case 0:  margin = 0;    break;
-  case 1:  margin = 2;    break;
-  case 2:  margin = 8;    break;
-  case 3:  margin = 0x12; break;
-  default: margin = 0x19; break;
+    case 0:
+      margin = 0;
+      break;
+    case 1:
+      margin = 2;
+      break;
+    case 2:
+      margin = 8;
+      break;
+    case 3:
+      margin = 0x12;
+      break;
+    default:
+      margin = 0x19;
+      break;
   }
 
   const uint16_t predicted = sensors.CPU_temperature + margin;
@@ -78,14 +88,13 @@ void predictCpuTemperature() {
 }
 
 void printReadings() {
-  debug::print_message("FAN: CPU " + std::to_string(sensors.CPU_temperature) + " board " +
-                       std::to_string(sensors.board_temperature) + " predicted " +
+  debug::print_message("FAN: CPU " + std::to_string(sensors.CPU_temperature) + " board " + std::to_string(sensors.board_temperature) + " predicted " +
                        std::to_string(cpu_temperature_predicted) + " speed " + std::to_string(fan_speed));
 }
 
 // Called by the main loop once the Xbox is off (0x279)
 void powerOff() {
-  fan_speed = 0; // No power to the fan
+  fan_speed = 0;  // No power to the fan
   hal::fan_pin_low();
 }
 
@@ -112,7 +121,7 @@ uint8_t thresholdCount() {
 }
 
 static const threshold_entry* thresholdEntry(const uint8_t index) {
-  uint8_t count;
+  uint8_t                count;
   const threshold_entry* entries = thresholdEntries(count);
   return index < count ? &entries[index] : nullptr;
 }
@@ -144,12 +153,12 @@ bool setThreshold(const uint8_t index, const uint8_t value) {
 }
 
 void resetThresholds() {
-  uint8_t count;
+  uint8_t                count;
   const threshold_entry* entries = thresholdEntries(count);
   for (uint8_t i = 0; i < count; i++) {
     *entries[i].value = entries[i].default_value;
   }
 }
 
-} // namespace Fan
-} // namespace SMC
+}  // namespace Fan
+}  // namespace SMC

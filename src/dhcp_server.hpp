@@ -9,6 +9,6 @@ namespace dhcp_server {
 // x.x.x.16-23 in the access point's subnet. Call from the lwIP core (core 1).
 bool start(netif* nif);
 
-} // namespace dhcp_server
+}  // namespace dhcp_server
 
-#endif // DHCP_SERVER_HPP
+#endif  // DHCP_SERVER_HPP

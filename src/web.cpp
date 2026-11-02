@@ -27,16 +27,16 @@ namespace Web {
 namespace {
 
 enum class Command : uint8_t {
-  power,       // Press the power button
-  eject,       // Press the eject button
-  reset,       // Reset (SMBus 0x02 bit 0)
-  fan_speed,   // Fixed fan speed 10-50 (SMBus 0x06 + 0x05)
-  fan_auto,    // Back to temperature control
-  led_pattern, // Manual LED pattern, arg = red << 4 | green (SMBus 0x08 + 0x07)
-  led_auto,    // Back to the normal LED patterns
-  threshold,   // Fan temperature threshold index = arg (°C)
-  thresholds_default, // All fan temperature thresholds back to the defaults
-  led_brightness      // Front panel LED brightness, arg = 1-100 %
+  power,               // Press the power button
+  eject,               // Press the eject button
+  reset,               // Reset (SMBus 0x02 bit 0)
+  fan_speed,           // Fixed fan speed 10-50 (SMBus 0x06 + 0x05)
+  fan_auto,            // Back to temperature control
+  led_pattern,         // Manual LED pattern, arg = red << 4 | green (SMBus 0x08 + 0x07)
+  led_auto,            // Back to the normal LED patterns
+  threshold,           // Fan temperature threshold index = arg (°C)
+  thresholds_default,  // All fan temperature thresholds back to the defaults
+  led_brightness       // Front panel LED brightness, arg = 1-100 %
 };
 
 struct CommandMessage {
@@ -51,42 +51,42 @@ struct LogMessage {
 
 struct WebStatus {
   uint32_t uptime_s;
-  bool powered;
-  uint8_t cpu_temperature;
-  uint8_t board_temperature;
-  int16_t pico_temperature; // Tenths of °C
-  int16_t ntc_temperature;  // Tenths of °C
-  bool ntc_connected;
-  uint8_t fan_speed;
-  bool fan_override;
-  uint8_t tray_state;
-  bool tray_closed;
-  uint8_t av_pack;
-  bool av_missing;
-  bool overheated;
-  bool led_override;
-  uint8_t led_red;
-  uint8_t led_green;
-  uint8_t led_brightness;
-  uint8_t interrupt_reason;
-  uint8_t thresholds[Fan::max_thresholds];
+  bool     powered;
+  uint8_t  cpu_temperature;
+  uint8_t  board_temperature;
+  int16_t  pico_temperature;  // Tenths of °C
+  int16_t  ntc_temperature;   // Tenths of °C
+  bool     ntc_connected;
+  uint8_t  fan_speed;
+  bool     fan_override;
+  uint8_t  tray_state;
+  bool     tray_closed;
+  uint8_t  av_pack;
+  bool     av_missing;
+  bool     overheated;
+  bool     led_override;
+  uint8_t  led_red;
+  uint8_t  led_green;
+  uint8_t  led_brightness;
+  uint8_t  interrupt_reason;
+  uint8_t  thresholds[Fan::max_thresholds];
 };
 
 constexpr uint16_t http_port = 80;
-constexpr uint8_t max_connections = 4;
-constexpr size_t max_request = 512;
+constexpr uint8_t  max_connections = 4;
+constexpr size_t   max_request = 512;
 
 critical_section_t status_lock;
-WebStatus status;
-queue_t commands;
-queue_t log_messages;
-alignas(8) uint32_t core1_stack[2048]; // 8 KB for lwIP and the HTTP handlers
+WebStatus          status;
+queue_t            commands;
+queue_t            log_messages;
+alignas(8) uint32_t core1_stack[2048];  // 8 KB for lwIP and the HTTP handlers
 
 // ---- Core 1 -----------------------------------------------------------------
 
 void log(const char* format, ...) {
   LogMessage message;
-  va_list args;
+  va_list    args;
   va_start(args, format);
   vsnprintf(message.text, sizeof(message.text), format, args);
   va_end(args);
@@ -201,13 +201,10 @@ int statusJson(char* out, size_t size) {
                   "\"fan\":%u,\"fanOverride\":%s,"
                   "\"dvd\":%s,\"tray\":%u,\"trayClosed\":%s,\"av\":%u,\"avMissing\":%s,\"overheated\":%s,"
                   "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,\"irq\":%u}",
-                  (unsigned long)s.uptime_s, s.powered ? "true" : "false", s.cpu_temperature,
-                  s.board_temperature, s.pico_temperature, ntc, SMC_NTC_SENSOR ? "true" : "false",
-                  s.fan_speed, s.fan_override ? "true" : "false",
-                  SMC_DVD_SUPPORT ? "true" : "false", s.tray_state, s.tray_closed ? "true" : "false", s.av_pack,
-                  s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
-                  s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness,
-                  s.interrupt_reason);
+                  (unsigned long)s.uptime_s, s.powered ? "true" : "false", s.cpu_temperature, s.board_temperature, s.pico_temperature, ntc,
+                  SMC_NTC_SENSOR ? "true" : "false", s.fan_speed, s.fan_override ? "true" : "false", SMC_DVD_SUPPORT ? "true" : "false", s.tray_state,
+                  s.tray_closed ? "true" : "false", s.av_pack, s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
+                  s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness, s.interrupt_reason);
 }
 
 // Labels and defaults are constant, the values come from the core 0 snapshot
@@ -217,11 +214,11 @@ int thresholdsJson(char* out, size_t size) {
   memcpy(values, status.thresholds, sizeof(values));
   critical_section_exit(&status_lock);
 
-  int len = snprintf(out, size, "{\"min\":%u,\"items\":[", Fan::min_threshold);
+  int           len = snprintf(out, size, "{\"min\":%u,\"items\":[", Fan::min_threshold);
   const uint8_t count = Fan::thresholdCount();
   for (uint8_t i = 0; i < count && len < (int)size; i++) {
-    len += snprintf(out + len, size - len, "%s{\"label\":\"%s\",\"def\":%u,\"value\":%u}", i != 0 ? "," : "",
-                    Fan::thresholdLabel(i), Fan::thresholdDefault(i), values[i]);
+    len += snprintf(out + len, size - len, "%s{\"label\":\"%s\",\"def\":%u,\"value\":%u}", i != 0 ? "," : "", Fan::thresholdLabel(i), Fan::thresholdDefault(i),
+                    values[i]);
   }
   if (len < (int)size) {
     len += snprintf(out + len, size - len, "]}");
@@ -232,10 +229,10 @@ int thresholdsJson(char* out, size_t size) {
 // Value of key in "a=1&b=2" (the query ends at a space or the end), or -1
 long queryNumber(const char* query, const char* key) {
   const size_t key_len = strlen(key);
-  const char* p = query;
+  const char*  p = query;
   while (p != nullptr && *p != '\0' && *p != ' ') {
     if (strncmp(p, key, key_len) == 0 && p[key_len] == '=') {
-      char* end;
+      char*      end;
       const long value = strtol(p + key_len + 1, &end, 10);
       return end == p + key_len + 1 ? -1 : value;
     }
@@ -250,7 +247,7 @@ long queryNumber(const char* query, const char* key) {
 bool queryIs(const char* query, const char* key, const char* value) {
   const size_t key_len = strlen(key);
   const size_t value_len = strlen(value);
-  const char* p = query;
+  const char*  p = query;
   while (p != nullptr && *p != '\0' && *p != ' ') {
     if (strncmp(p, key, key_len) == 0 && p[key_len] == '=' && strncmp(p + key_len + 1, value, value_len) == 0) {
       const char next = p[key_len + 1 + value_len];
@@ -317,14 +314,12 @@ const char* queueCommand(const char* query) {
   return queue_try_add(&commands, &message) ? nullptr : "busy, try again";
 }
 
-void respond(tcp_pcb* pcb, const char* status_line, const char* type, const char* body, size_t len,
-             bool body_is_static) {
-  char header[192];
-  const int header_len =
-      snprintf(header, sizeof(header),
-               "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nCache-Control: no-store\r\n"
-               "Connection: close\r\n\r\n",
-               status_line, type, (unsigned)len);
+void respond(tcp_pcb* pcb, const char* status_line, const char* type, const char* body, size_t len, bool body_is_static) {
+  char      header[192];
+  const int header_len = snprintf(header, sizeof(header),
+                                  "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nCache-Control: no-store\r\n"
+                                  "Connection: close\r\n\r\n",
+                                  status_line, type, (unsigned)len);
   tcp_write(pcb, header, header_len, TCP_WRITE_FLAG_COPY | (len != 0 ? TCP_WRITE_FLAG_MORE : 0));
   if (len != 0) {
     tcp_write(pcb, body, len, body_is_static ? 0 : TCP_WRITE_FLAG_COPY);
@@ -336,11 +331,11 @@ void handleRequest(tcp_pcb* pcb, char* request) {
   if (strncmp(request, "GET / ", 6) == 0 || strncmp(request, "GET /index.html ", 16) == 0) {
     respond(pcb, "200 OK", "text/html; charset=utf-8", page, sizeof(page) - 1, true);
   } else if (strncmp(request, "GET /status.json ", 17) == 0) {
-    char json[512];
+    char      json[512];
     const int len = statusJson(json, sizeof(json));
     respond(pcb, "200 OK", "application/json", json, len, false);
   } else if (strncmp(request, "GET /thresholds.json ", 21) == 0) {
-    char json[900];
+    char      json[900];
     const int len = thresholdsJson(json, sizeof(json));
     respond(pcb, "200 OK", "application/json", json, len, false);
   } else if (strncmp(request, "POST /action?", 13) == 0) {
@@ -357,9 +352,9 @@ void handleRequest(tcp_pcb* pcb, char* request) {
 
 struct Connection {
   tcp_pcb* pcb;
-  char request[max_request + 1];
-  size_t len;
-  bool in_use;
+  char     request[max_request + 1];
+  size_t   len;
+  bool     in_use;
 };
 
 Connection connections[max_connections];
@@ -421,7 +416,7 @@ err_t onAccept(void*, tcp_pcb* pcb, err_t err) {
       return ERR_OK;
     }
   }
-  tcp_abort(pcb); // All busy
+  tcp_abort(pcb);  // All busy
   return ERR_ABRT;
 }
 
@@ -481,7 +476,7 @@ void core1Main() {
     idle();
   }
   log("WEB: Access point up, http://%s", ip4addr_ntoa(netif_ip4_addr(ap)));
-  cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1); // Onboard LED: access point up
+  cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 1);  // Onboard LED: access point up
 
   while (true) {
     cyw43_arch_poll();
@@ -493,66 +488,64 @@ void core1Main() {
 
 void runCommand(const CommandMessage& message) {
   switch (message.command) {
-  case Command::power:
-    debug::print_message("WEB: Power button");
-    SMI::flags.power_change_requested = true;
-    break;
+    case Command::power:
+      debug::print_message("WEB: Power button");
+      SMI::flags.power_change_requested = true;
+      break;
 
-  case Command::eject:
-    debug::print_message("WEB: Eject button");
-    Dvd::flags.eject_change_requested = true;
-    Dvd::flags.eject_button_event = true;
-    break;
+    case Command::eject:
+      debug::print_message("WEB: Eject button");
+      Dvd::flags.eject_change_requested = true;
+      Dvd::flags.eject_button_event = true;
+      break;
 
-  case Command::reset:
-    if (hal::get_power_ok()) {
-      debug::print_message("WEB: Reset");
-      PLL_Reset::flags.warm_reset_request = true;
-      SMI::flags.os_reset_request = true;
-    }
-    break;
+    case Command::reset:
+      if (hal::get_power_ok()) {
+        debug::print_message("WEB: Reset");
+        PLL_Reset::flags.warm_reset_request = true;
+        SMI::flags.os_reset_request = true;
+      }
+      break;
 
-  case Command::fan_speed:
-    debug::print_message("WEB: Fan speed " + std::to_string(message.arg));
-    Fan::setCustomSpeed(message.arg);
-    Fan::flags.fan_override = true;
-    break;
+    case Command::fan_speed:
+      debug::print_message("WEB: Fan speed " + std::to_string(message.arg));
+      Fan::setCustomSpeed(message.arg);
+      Fan::flags.fan_override = true;
+      break;
 
-  case Command::fan_auto:
-    debug::print_message("WEB: Fan automatic");
-    Fan::flags.fan_override = false;
-    break;
+    case Command::fan_auto:
+      debug::print_message("WEB: Fan automatic");
+      Fan::flags.fan_override = false;
+      break;
 
-  case Command::led_pattern:
-    debug::print_message("WEB: LED pattern red " + std::to_string(message.arg >> 4) + " green " +
-                         std::to_string(message.arg & 0x0F));
-    Led::setRedPhases(message.arg >> 4);
-    Led::setGreenPhases(message.arg & 0x0F);
-    Led::flags.led_override = true;
-    break;
+    case Command::led_pattern:
+      debug::print_message("WEB: LED pattern red " + std::to_string(message.arg >> 4) + " green " + std::to_string(message.arg & 0x0F));
+      Led::setRedPhases(message.arg >> 4);
+      Led::setGreenPhases(message.arg & 0x0F);
+      Led::flags.led_override = true;
+      break;
 
-  case Command::led_auto:
-    debug::print_message("WEB: LEDs automatic");
-    Led::flags.led_override = false;
-    break;
+    case Command::led_auto:
+      debug::print_message("WEB: LEDs automatic");
+      Led::flags.led_override = false;
+      break;
 
-  case Command::threshold:
-    if (Fan::setThreshold(message.index, message.arg)) {
-      debug::print_message(std::string("WEB: Fan threshold \"") + Fan::thresholdLabel(message.index) + "\" " +
-                           std::to_string(message.arg) + " (default " +
-                           std::to_string(Fan::thresholdDefault(message.index)) + ")");
-    }
-    break;
+    case Command::threshold:
+      if (Fan::setThreshold(message.index, message.arg)) {
+        debug::print_message(std::string("WEB: Fan threshold \"") + Fan::thresholdLabel(message.index) + "\" " + std::to_string(message.arg) + " (default " +
+                             std::to_string(Fan::thresholdDefault(message.index)) + ")");
+      }
+      break;
 
-  case Command::thresholds_default:
-    debug::print_message("WEB: Fan thresholds back to the defaults");
-    Fan::resetThresholds();
-    break;
+    case Command::thresholds_default:
+      debug::print_message("WEB: Fan thresholds back to the defaults");
+      Fan::resetThresholds();
+      break;
 
-  case Command::led_brightness:
-    debug::print_message("WEB: LED brightness " + std::to_string(message.arg) + "%");
-    hal::set_led_brightness(message.arg);
-    break;
+    case Command::led_brightness:
+      debug::print_message("WEB: LED brightness " + std::to_string(message.arg) + "%");
+      hal::set_led_brightness(message.arg);
+      break;
   }
 }
 
@@ -589,7 +582,7 @@ void publishStatus() {
 // Started (not off in the settings): service() has something to do
 bool started = false;
 
-} // namespace
+}  // namespace
 
 void start() {
   if (!Settings::webEnabled()) {
@@ -629,6 +622,5 @@ void service() {
   }
 }
 
-} // namespace Web
-} // namespace SMC
-
+}  // namespace Web
+}  // namespace SMC

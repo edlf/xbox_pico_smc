@@ -6,9 +6,8 @@
 
 namespace utils {
 
-// "0x0C", always two digits
 std::string toHex(const uint8_t value);
 
-} // namespace utils
+}  // namespace utils
 
-#endif // UTILS_HPP
+#endif  // UTILS_HPP

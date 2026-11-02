@@ -25,7 +25,7 @@ void load();
 constexpr size_t max_ssid_length = 32;
 constexpr size_t min_password_length = 8;  // WPA2
 constexpr size_t max_password_length = 63;
-const char* wifiSsid();
+const char*      wifiSsid();
 // Empty: the web interface makes one from the board's unique ID
 const char* wifiPassword();
 // False (and nothing changed) if it doesn't fit: 1-32 printable characters
@@ -48,7 +48,7 @@ bool saveNow();
 // Called once per tick while the Xbox is off
 void update();
 
-} // namespace Settings
-} // namespace SMC
+}  // namespace Settings
+}  // namespace SMC
 
-#endif // SMC_SETTINGS_HPP
+#endif  // SMC_SETTINGS_HPP

@@ -1,13 +1,13 @@
----
-BasedOnStyle: LLVM
-IndentWidth: 2
----
-Language: Cpp
-# Force pointers to the type for C++.
+BasedOnStyle: Google
+ColumnLimit: 160
+
+SortIncludes: false
+IndentPPDirectives: None
+StatementMacros: [MARKUPMAP, ASSERT_TRUE, ASSERT_FALSE, TEST, CHECK]
+
+AlignArrayOfStructures: Left
+AlignConsecutiveDeclarations: true
+AllowShortFunctionsOnASingleLine: Empty
+
 DerivePointerAlignment: false
 PointerAlignment: Left
-ColumnLimit: 160
-AllowShortFunctionsOnASingleLine: None
-AllowShortLoopsOnASingleLine: false
-AllowShortEnumsOnASingleLine: false
----

@@ -14,7 +14,7 @@ void start();
 // publishes the status for the page and prints core 1's log messages
 void service();
 
-} // namespace Web
-} // namespace SMC
+}  // namespace Web
+}  // namespace SMC
 
-#endif // WEB_HPP
+#endif  // WEB_HPP

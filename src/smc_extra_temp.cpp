@@ -10,14 +10,14 @@ namespace ExtraTemp {
 
 sensors_struct sensors;
 
-constexpr uint8_t sample_ticks = 50; // 1 s
-constexpr float adc_vref = 3.3f;
-constexpr float adc_full_scale = 4096.0f;
+constexpr uint8_t sample_ticks = 50;  // 1 s
+constexpr float   adc_vref = 3.3f;
+constexpr float   adc_full_scale = 4096.0f;
 // Readings this close to either end are an open or shorted NTC
 constexpr uint16_t ntc_limit = 16;
 
 static uint8_t tick_counter = 0;
-static int16_t logged_pico = INT16_MIN; // Whole °C last logged
+static int16_t logged_pico = INT16_MIN;  // Whole °C last logged
 static int16_t logged_ntc = INT16_MIN;
 
 // RP2040/RP2350 datasheet: 0.706 V at 27 °C, -1.721 mV per °C
@@ -39,8 +39,9 @@ static void logChange(const char* name, const int16_t tenths, int16_t& logged) {
   if (whole == logged) {
     return;
   }
+
   logged = whole;
-  char msg[48];
+  char      msg[48];
   const int magnitude = std::abs(tenths);
   snprintf(msg, sizeof(msg), "TEMP: %s %s%d.%d C", name, tenths < 0 ? "-" : "", magnitude / 10, magnitude % 10);
   debug::print_debug(msg);
@@ -53,12 +54,14 @@ static void sample() {
   if (!SMC_NTC_SENSOR) {
     return;
   }
+
   const uint16_t raw = hal::read_ntc_adc();
-  const bool connected = raw > ntc_limit && raw < adc_full_scale - ntc_limit;
+  const bool     connected = raw > ntc_limit && raw < adc_full_scale - ntc_limit;
   if (connected != sensors.ntc_connected) {
     debug::print_message(connected ? "TEMP: NTC connected" : "TEMP: NTC open or shorted");
     logged_ntc = INT16_MIN;
   }
+
   sensors.ntc_connected = connected;
   if (connected) {
     sensors.ntc_temperature = ntcTemperature(raw);
@@ -69,16 +72,17 @@ static void sample() {
 void init() {
   sensors = {};
   tick_counter = 0;
-  sample(); // Valid from the start
+  sample();  // Valid from the start
 }
 
 void update() {
   if (++tick_counter < sample_ticks) {
     return;
   }
+
   tick_counter = 0;
   sample();
 }
 
-} // namespace ExtraTemp
-} // namespace SMC
+}  // namespace ExtraTemp
+}  // namespace SMC

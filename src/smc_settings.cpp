@@ -12,29 +12,29 @@
 namespace SMC {
 namespace Settings {
 
-constexpr uint32_t magic = 0x534D4353; // "SCMS"
-constexpr uint16_t version = 0;        // Bump when the layout changes, older records are ignored
+constexpr uint32_t magic = 0x534D4353;  // "SCMS"
+constexpr uint16_t version = 0;         // Bump when the layout changes, older records are ignored
 constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 
 struct Record {
   uint32_t magic;
   uint16_t version;
-  uint16_t size;              // sizeof(Record)
-  char firmware[4];           // SMC_FIRMWARE_NAME: the thresholds differ per firmware
-  uint8_t led_brightness;     // Percent
-  uint8_t threshold_count;
-  uint8_t thresholds[Fan::max_thresholds];
-  char wifi_ssid[max_ssid_length + 1];         // Zero-terminated
-  char wifi_password[max_password_length + 1]; // Zero-terminated, empty: made from the board ID
-  uint8_t web_enabled;        // Start the web interface (ignored without one in the build)
-  uint32_t checksum;          // FNV-1a over everything above
+  uint16_t size;            // sizeof(Record)
+  char     firmware[4];     // SMC_FIRMWARE_NAME: the thresholds differ per firmware
+  uint8_t  led_brightness;  // Percent
+  uint8_t  threshold_count;
+  uint8_t  thresholds[Fan::max_thresholds];
+  char     wifi_ssid[max_ssid_length + 1];          // Zero-terminated
+  char     wifi_password[max_password_length + 1];  // Zero-terminated, empty: made from the board ID
+  uint8_t  web_enabled;                             // Start the web interface (ignored without one in the build)
+  uint32_t checksum;                                // FNV-1a over everything above
 };
 static_assert(sizeof(Record) <= FLASH_PAGE_SIZE, "One flash page");
 
-static Record saved;           // What's in flash (or the defaults)
-static bool saved_valid = false;
-static volatile bool save_requested = false; // requestSave(), done by update()
-static bool usable = false;    // The sector is past the end of the firmware
+static Record        saved;  // What's in flash (or the defaults)
+static bool          saved_valid = false;
+static volatile bool save_requested = false;  // requestSave(), done by update()
+static bool          usable = false;          // The sector is past the end of the firmware
 
 // Wi-Fi access point, SMC_WIFI_SSID / SMC_WIFI_PASSWORD (src/config.hpp) unless saved
 static char wifi_ssid[max_ssid_length + 1] = SMC_WIFI_SSID;
@@ -45,7 +45,7 @@ extern "C" uint8_t __flash_binary_end;
 
 static uint32_t checksum(const Record& r) {
   const uint8_t* p = reinterpret_cast<const uint8_t*>(&r);
-  uint32_t hash = 2166136261u;
+  uint32_t       hash = 2166136261u;
   for (size_t i = 0; i < offsetof(Record, checksum); i++) {
     hash = (hash ^ p[i]) * 16777619u;
   }
@@ -106,8 +106,7 @@ bool setWifiSsid(const char* ssid) {
 
 bool setWifiPassword(const char* password) {
   const size_t length = strlen(password);
-  if ((length != 0 && length < min_password_length) || length > max_password_length ||
-      !printable(password, length)) {
+  if ((length != 0 && length < min_password_length) || length > max_password_length || !printable(password, length)) {
     return false;
   }
   memcpy(wifi_password, password, length + 1);
@@ -140,17 +139,15 @@ void load() {
   }
 
   const Record* stored = reinterpret_cast<const Record*>(XIP_BASE + flash_offset);
-  char firmware[4];
+  char          firmware[4];
   firmwareName(firmware);
-  if (stored->magic != magic || stored->version != version || stored->size != sizeof(Record) ||
-      stored->checksum != checksum(*stored)) {
+  if (stored->magic != magic || stored->version != version || stored->size != sizeof(Record) || stored->checksum != checksum(*stored)) {
     debug::print_message("SETTINGS: None saved, using the defaults");
   } else {
     hal::set_led_brightness(stored->led_brightness);
     std::string msg = "SETTINGS: Loaded, LED brightness " + std::to_string(stored->led_brightness) + "%";
     // Thresholds only from the same firmware, setThreshold() checks each range
-    if (memcmp(stored->firmware, firmware, sizeof(firmware)) == 0 &&
-        stored->threshold_count == Fan::thresholdCount()) {
+    if (memcmp(stored->firmware, firmware, sizeof(firmware)) == 0 && stored->threshold_count == Fan::thresholdCount()) {
       for (uint8_t i = 0; i < stored->threshold_count; i++) {
         Fan::setThreshold(i, stored->thresholds[i]);
       }
@@ -174,13 +171,13 @@ void load() {
     msg += web_enabled ? ", web interface on" : ", web interface off";
     debug::print_message(msg);
   }
-  saved = current(); // What's applied now, so only real changes are written
+  saved = current();  // What's applied now, so only real changes are written
   saved_valid = true;
 }
 
 static void eraseAndProgram(void* param) {
   const Record* r = static_cast<const Record*>(param);
-  uint8_t page[FLASH_PAGE_SIZE];
+  uint8_t       page[FLASH_PAGE_SIZE];
   memset(page, 0xFF, sizeof(page));
   memcpy(page, r, sizeof(Record));
   flash_range_erase(flash_offset, FLASH_SECTOR_SIZE);
@@ -230,5 +227,5 @@ void update() {
   save(now);
 }
 
-} // namespace Settings
-} // namespace SMC
+}  // namespace Settings
+}  // namespace SMC

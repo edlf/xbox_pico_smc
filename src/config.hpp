@@ -3,9 +3,10 @@
 
 // Build options. Most are set by CMake (see CMakeLists.txt for what each one
 // does and the values it accepts); their defaults here are only used when a
-// file is built without CMake's definitions, such as by an editor's code
-// model. The LED brightness and the Wi-Fi access point name and password are
-// only set here: they're the defaults, the saved settings (src/smc_settings.cpp,
+// file is built without CMake's definitions.
+
+// The LED brightness and the Wi-Fi access point name and password are only
+// set here: they're the defaults, the saved settings (src/smc_settings.cpp,
 // set over USB) replace them.
 
 // PICO_BOARD this was built for
@@ -15,24 +16,28 @@
 
 // Debug level, the index into debug::DebugLevel
 #ifndef SMC_DEBUG_LEVEL
-#define SMC_DEBUG_LEVEL 3 // Info
+#define SMC_DEBUG_LEVEL 3  // Info
 #endif
 
 // Firmware to behave like (SMC_FIRMWARE): P01, P11, D01, DXF or P2L
 #ifndef SMC_FIRMWARE_NAME
 #define SMC_FIRMWARE_NAME "P11"
 #endif
+
 #ifndef SMC_FIRMWARE_P11
-#define SMC_FIRMWARE_P11 1 // P11 changes (also on for P2L)
+#define SMC_FIRMWARE_P11 1  // P11 changes (also on for P2L)
 #endif
+
 #ifndef SMC_FIRMWARE_NO_CHALLENGE
-#define SMC_FIRMWARE_NO_CHALLENGE 0 // Debug kits (D01, DXF): no boot challenge
+#define SMC_FIRMWARE_NO_CHALLENGE 0  // Debug kits (D01, DXF): no boot challenge
 #endif
+
 #ifndef SMC_FIRMWARE_DXF
-#define SMC_FIRMWARE_DXF 0 // DXF changes on top of D01
+#define SMC_FIRMWARE_DXF 0  // DXF changes on top of D01
 #endif
+
 #ifndef SMC_FIRMWARE_P2L
-#define SMC_FIRMWARE_P2L 0 // P2L changes on top of P11
+#define SMC_FIRMWARE_P2L 0  // P2L changes on top of P11
 #endif
 
 // Version reported on SMBus 0x01 (SMC_REPORT_VERSION): "P01", "P11", "D01",
@@ -58,8 +63,9 @@
 #ifndef SMC_AV_PACK_OVERRIDE
 #define SMC_AV_PACK_OVERRIDE 0
 #endif
+
 #ifndef SMC_AV_PACK_MODE
-#define SMC_AV_PACK_MODE 1 // High Definition AV Pack
+#define SMC_AV_PACK_MODE 1  // High Definition AV Pack
 #endif
 
 // Front panel LED brightness in percent (1-100) at start-up, the PIC only has
@@ -78,14 +84,17 @@ static_assert(SMC_LED_BRIGHTNESS >= 1 && SMC_LED_BRIGHTNESS <= 100, "SMC_LED_BRI
 #ifndef SMC_NTC_SENSOR
 #define SMC_NTC_SENSOR 0
 #endif
+
 #ifndef SMC_NTC_BETA
 #define SMC_NTC_BETA 3950
 #endif
+
 #ifndef SMC_NTC_R25
-#define SMC_NTC_R25 10000 // Ohms
+#define SMC_NTC_R25 10000  // Ohms
 #endif
+
 #ifndef SMC_NTC_SERIES_R
-#define SMC_NTC_SERIES_R 10000 // Ohms
+#define SMC_NTC_SERIES_R 10000  // Ohms
 #endif
 
 // Listen to the whole SMBus: log the video encoder found (writes at DEBUG)
@@ -112,4 +121,4 @@ static_assert(SMC_LED_BRIGHTNESS >= 1 && SMC_LED_BRIGHTNESS <= 100, "SMC_LED_BRI
 static_assert(sizeof(SMC_WIFI_PASSWORD) == 1 || (sizeof(SMC_WIFI_PASSWORD) >= 9 && sizeof(SMC_WIFI_PASSWORD) <= 64),
               "SMC_WIFI_PASSWORD must be 8-63 characters, or empty for one made from the board's unique ID");
 
-#endif // CONFIG_HPP
+#endif  // CONFIG_HPP

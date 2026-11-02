@@ -10,4 +10,4 @@ std::string toHex(const uint8_t value) {
   return text;
 }
 
-} // namespace utils
+}  // namespace utils

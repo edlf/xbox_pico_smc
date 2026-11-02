@@ -10,8 +10,8 @@ namespace FrontPanelSW {
 // Same as the PIC (0x800 power, 0x828 eject): a press or release only counts
 // once it's read on two ticks in a row
 struct Debouncer {
-  bool pressed = false;  // Debounced level
-  bool last_raw = false; // Previous reading
+  bool pressed = false;   // Debounced level
+  bool last_raw = false;  // Previous reading
 
   // Called once per tick, true on the tick a press is confirmed
   bool update(const bool raw) {
@@ -74,5 +74,5 @@ void printEjectState() {
   debug::print_message(std::string("Eject SW state: ") + eject.stateName());
 }
 
-} // namespace FrontPanelSW
-} // namespace SMC
+}  // namespace FrontPanelSW
+}  // namespace SMC

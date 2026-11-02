@@ -11,9 +11,9 @@ namespace UsbConfig {
 // (tools/og_smc_config.py) until it's reset.
 
 // True to run the shell instead of the SMC. Leaves USB off otherwise.
-bool detect();
+bool              detect();
 [[noreturn]] void run();
 
-} // namespace UsbConfig
+}  // namespace UsbConfig
 
-#endif // USB_CONFIG_HPP
+#endif  // USB_CONFIG_HPP

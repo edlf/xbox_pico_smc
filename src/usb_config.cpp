@@ -47,7 +47,7 @@ static bool standbyPower() {
 
 bool detect() {
   if (standbyPower()) {
-    return false; // In the Xbox
+    return false;  // In the Xbox
   }
 #ifdef PICO_VBUS_PIN
   // Pico / Pico 2: no USB power, no need to wait for a host
@@ -82,13 +82,12 @@ static void printSettings() {
   printf("firmware %s\n", SMC_FIRMWARE_NAME);
   printf("brightness %u\n", hal::get_led_brightness());
   printf("ssid %s\n", SMC::Settings::wifiSsid());
-  printf("password %s\n", SMC::Settings::wifiPassword()); // Empty: made from the board ID
+  printf("password %s\n", SMC::Settings::wifiPassword());  // Empty: made from the board ID
   // The setting is kept on builds without a web interface, it's ignored there
-  printf("web %s%s\n", SMC::Settings::webEnabled() ? "on" : "off",
-         SMC_WEB_INTERFACE ? "" : " (no web interface in this build, ignored)");
+  printf("web %s%s\n", SMC::Settings::webEnabled() ? "on" : "off", SMC_WEB_INTERFACE ? "" : " (no web interface in this build, ignored)");
   for (uint8_t i = 0; i < SMC::Fan::thresholdCount(); i++) {
-    printf("threshold %u %u default %u min %u label %s\n", i, SMC::Fan::getThreshold(i),
-           SMC::Fan::thresholdDefault(i), SMC::Fan::min_threshold, SMC::Fan::thresholdLabel(i));
+    printf("threshold %u %u default %u min %u label %s\n", i, SMC::Fan::getThreshold(i), SMC::Fan::thresholdDefault(i), SMC::Fan::min_threshold,
+           SMC::Fan::thresholdLabel(i));
   }
 }
 
@@ -122,7 +121,7 @@ static void command(char* line) {
     return;
   }
 
-  char* words[4] = {};
+  char*   words[4] = {};
   uint8_t count = 0;
   for (char* word = strtok(line, " \t"); word != nullptr && count < 4; word = strtok(nullptr, " \t")) {
     words[count++] = word;
@@ -133,15 +132,16 @@ static void command(char* line) {
 
   long a, b;
   if (strcmp(words[0], "help") == 0) {
-    printf("get                          settings\n"
-           "set brightness <1-100>       LED brightness, percent\n"
-           "set threshold <index> <C>    fan threshold, min to default\n"
-           "set ssid <name>              Wi-Fi access point name, 1-32 characters\n"
-           "set password [<password>]    Wi-Fi password, 8-63 characters, none: from the board ID\n"
-           "set web <on|off>             start the web interface (W boards)\n"
-           "defaults                     back to the firmware's defaults\n"
-           "save                         write them to flash\n"
-           "reboot                       restart the Pico\n");
+    printf(
+        "get                          settings\n"
+        "set brightness <1-100>       LED brightness, percent\n"
+        "set threshold <index> <C>    fan threshold, min to default\n"
+        "set ssid <name>              Wi-Fi access point name, 1-32 characters\n"
+        "set password [<password>]    Wi-Fi password, 8-63 characters, none: from the board ID\n"
+        "set web <on|off>             start the web interface (W boards)\n"
+        "defaults                     back to the firmware's defaults\n"
+        "save                         write them to flash\n"
+        "reboot                       restart the Pico\n");
     ok();
   } else if (strcmp(words[0], "get") == 0) {
     printSettings();
@@ -161,8 +161,7 @@ static void command(char* line) {
     hal::set_led_brightness(a);
     ok();
   } else if (strcmp(words[0], "set") == 0 && count == 4 && strcmp(words[1], "threshold") == 0) {
-    if (!parseNumber(words[2], a) || !parseNumber(words[3], b) || a < 0 || a > 255 || b < 0 || b > 255 ||
-        !SMC::Fan::setThreshold(a, b)) {
+    if (!parseNumber(words[2], a) || !parseNumber(words[3], b) || a < 0 || a > 255 || b < 0 || b > 255 || !SMC::Fan::setThreshold(a, b)) {
       error("no such threshold, or out of range (min to default)");
       return;
     }
@@ -195,8 +194,8 @@ void run() {
   debug::print_message("USB: Config mode, the SMC is not running");
   SMC::Settings::load();
 
-  char line[80];
-  size_t length = 0;
+  char            line[80];
+  size_t          length = 0;
   absolute_time_t next_check = make_timeout_time_ms(standby_check_ms);
   while (true) {
     const int c = getchar_timeout_us(10000);
@@ -222,4 +221,4 @@ void run() {
   }
 }
 
-} // namespace UsbConfig
+}  // namespace UsbConfig

@@ -34,35 +34,32 @@ namespace I2CSniffer {
 static_assert(pins::I2C_SCL == pins::I2C_SDA + 1, "The PIO reads SDA and SCL as two adjacent pins");
 
 static const uint16_t sniff_instructions[] = {
-  (uint16_t)pio_encode_mov(pio_y, pio_x),
-  (uint16_t)pio_encode_in(pio_y, 2),
-  (uint16_t)pio_encode_mov(pio_osr, pio_pins),
-  (uint16_t)pio_encode_out(pio_x, 2),
-  (uint16_t)pio_encode_jmp_x_ne_y(0),
+    (uint16_t)pio_encode_mov(pio_y, pio_x), (uint16_t)pio_encode_in(pio_y, 2),  (uint16_t)pio_encode_mov(pio_osr, pio_pins),
+    (uint16_t)pio_encode_out(pio_x, 2),     (uint16_t)pio_encode_jmp_x_ne_y(0),
 };
-static pio_program_t sniff_program = {}; // Filled in by init()
-constexpr uint wrap_target = 2;
-constexpr uint wrap = 4;
+static pio_program_t sniff_program = {};  // Filled in by init()
+constexpr uint       wrap_target = 2;
+constexpr uint       wrap = 4;
 
 // ~100 ms of a busy 100 kHz bus (27 changes per byte), decoded every 20 ms
-constexpr uint ring_bits = 13; // 8 KB
+constexpr uint ring_bits = 13;  // 8 KB
 constexpr uint ring_words = (1u << ring_bits) / 4;
 alignas(1u << ring_bits) static uint32_t ring[ring_words];
 
-static PIO pio;
+static PIO  pio;
 static uint sm;
-static int dma_channel = -1;
+static int  dma_channel = -1;
 static uint read_index = 0;
 
 // Video encoders on the SMBus (7-bit addresses)
 struct Encoder {
-  uint8_t address;
+  uint8_t     address;
   const char* name;
 };
 constexpr Encoder encoders[] = {
-  {0x45, "Conexant"}, // 1.0-1.3
-  {0x6A, "Focus"},    // 1.4-1.5
-  {0x70, "Xcalibur"}, // 1.6
+    {0x45, "Conexant"}, // 1.0-1.3
+    {0x6A, "Focus"   }, // 1.4-1.5
+    {0x70, "Xcalibur"}, // 1.6
 };
 
 static int8_t encoderIndex(const uint8_t address) {
@@ -85,31 +82,31 @@ static uint8_t found_mask = 0;
 static uint8_t logged_mask = 0;
 
 // Decoder state
-constexpr uint8_t max_bytes = 6; // Address, register and up to 4 data bytes kept
-static uint8_t prev_state = 0x3;  // Idle: SDA and SCL high
-static bool in_transfer = false;  // Between START and STOP
-static uint8_t bit_count = 0;     // Bits of the current byte, the 9th is the ACK
-static uint8_t current_byte = 0;
-static uint8_t bytes[max_bytes];
-static uint8_t byte_count = 0;    // Bytes in this segment (more than max_bytes are counted, not kept)
-static bool nacked = false;       // A byte of this segment wasn't acknowledged
-static bool restarted = false;    // A repeated START in this transfer: a read, not a write
-static bool ignoring = false;     // During our own master transfer
+constexpr uint8_t max_bytes = 6;        // Address, register and up to 4 data bytes kept
+static uint8_t    prev_state = 0x3;     // Idle: SDA and SCL high
+static bool       in_transfer = false;  // Between START and STOP
+static uint8_t    bit_count = 0;        // Bits of the current byte, the 9th is the ACK
+static uint8_t    current_byte = 0;
+static uint8_t    bytes[max_bytes];
+static uint8_t    byte_count = 0;     // Bytes in this segment (more than max_bytes are counted, not kept)
+static bool       nacked = false;     // A byte of this segment wasn't acknowledged
+static bool       restarted = false;  // A repeated START in this transfer: a read, not a write
+static bool       ignoring = false;   // During our own master transfer
 
 // Writes waiting to be printed. Printing is slow (~4 ms a line at 115200
 // baud), so only a couple per tick: the BIOS writes the encoder in bursts.
 struct LogEntry {
   uint8_t address;
-  uint8_t count;           // Bytes after the address (register and data)
+  uint8_t count;  // Bytes after the address (register and data)
   uint8_t data[max_bytes - 1];
-  bool nacked;
+  bool    nacked;
 };
 constexpr uint8_t log_size = 128;
 constexpr uint8_t prints_per_tick = 2;
-static LogEntry log_entries[log_size];
-static uint8_t log_head = 0;
-static uint8_t log_tail = 0;
-static uint16_t dropped = 0;
+static LogEntry   log_entries[log_size];
+static uint8_t    log_head = 0;
+static uint8_t    log_tail = 0;
+static uint16_t   dropped = 0;
 
 static void segmentStart() {
   bit_count = 0;
@@ -153,11 +150,11 @@ static void decodeSample(const uint8_t state) {
 
   if (prev_scl && scl) {
     // SDA changed with SCL high
-    if (!sda) { // START or repeated START
+    if (!sda) {  // START or repeated START
       restarted = in_transfer;
       in_transfer = true;
       segmentStart();
-    } else if (in_transfer) { // STOP
+    } else if (in_transfer) {  // STOP
       segmentEnd();
       in_transfer = false;
     }
@@ -175,14 +172,13 @@ static void decodeSample(const uint8_t state) {
       }
       // Each data byte the CPU writes to an encoder or an X-HD (0x69, its mode
       // packet), register byte at index 1
-      if (byte_count >= 2 && !ignoring && (bytes[0] & 1) == 0 &&
-          (encoderIndex(bytes[0] >> 1) >= 0 || (bytes[0] >> 1) == 0x69)) {
+      if (byte_count >= 2 && !ignoring && (bytes[0] & 1) == 0 && (encoderIndex(bytes[0] >> 1) >= 0 || (bytes[0] >> 1) == 0x69)) {
         EncoderMode::onWrite(bytes[0] >> 1, bytes[1], byte_count - 2, current_byte);
       }
       if (byte_count < 255) {
         byte_count++;
       }
-      nacked |= sda; // SDA high: not acknowledged
+      nacked |= sda;  // SDA high: not acknowledged
       if (byte_count == 1 && !sda && !ignoring) {
         // An encoder answered its address: it's on this board
         const int8_t i = encoderIndex(current_byte >> 1);
@@ -222,15 +218,14 @@ static void flush() {
   const absolute_time_t deadline = make_timeout_time_us(100);
   while (!pio_sm_is_rx_fifo_empty(pio, sm) && !time_reached(deadline)) {
   }
-  busy_wait_us(1); // Last word on its way to the ring
+  busy_wait_us(1);  // Last word on its way to the ring
 }
 
 static void printFound() {
   const uint8_t new_found = found_mask & ~logged_mask;
   for (uint8_t i = 0; i < std::size(encoders); i++) {
     if (new_found & (1u << i)) {
-      debug::print_message(std::string("ENCODER: Found ") + encoders[i].name + " (" +
-                           utils::toHex(encoders[i].address) + ")");
+      debug::print_message(std::string("ENCODER: Found ") + encoders[i].name + " (" + utils::toHex(encoders[i].address) + ")");
     }
   }
   logged_mask |= new_found;
@@ -241,7 +236,7 @@ static void printWrites() {
     const LogEntry& entry = log_entries[log_tail];
     log_tail = (log_tail + 1) % log_size;
 
-    std::string msg = std::string("ENCODER: ") + encoderName(entry.address) + " [" + utils::toHex(entry.data[0]) + "] =";
+    std::string   msg = std::string("ENCODER: ") + encoderName(entry.address) + " [" + utils::toHex(entry.data[0]) + "] =";
     const uint8_t kept = entry.count < max_bytes - 1 ? entry.count : max_bytes - 1;
     for (uint8_t i = 1; i < kept; i++) {
       msg += " " + utils::toHex(entry.data[i]);
@@ -264,7 +259,7 @@ static void printWrites() {
 void init() {
   sniff_program.instructions = sniff_instructions;
   sniff_program.length = std::size(sniff_instructions);
-  sniff_program.origin = -1; // Anywhere, the jmp is relocated
+  sniff_program.origin = -1;  // Anywhere, the jmp is relocated
 
   uint offset;
   if (!pio_claim_free_sm_and_add_program(&sniff_program, &pio, &sm, &offset)) {
@@ -273,9 +268,9 @@ void init() {
   }
   pio_sm_config c = pio_get_default_sm_config();
   sm_config_set_wrap(&c, offset + wrap_target, offset + wrap);
-  sm_config_set_in_pins(&c, pins::I2C_SDA); // Not pio_gpio_init: the pins stay with the I2C slave
-  sm_config_set_in_shift(&c, true, true, 32);   // Right, autopush every 16 changes
-  sm_config_set_out_shift(&c, true, false, 32); // Right, x takes the 2 low bits
+  sm_config_set_in_pins(&c, pins::I2C_SDA);      // Not pio_gpio_init: the pins stay with the I2C slave
+  sm_config_set_in_shift(&c, true, true, 32);    // Right, autopush every 16 changes
+  sm_config_set_out_shift(&c, true, false, 32);  // Right, x takes the 2 low bits
   sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
   // Sample every ~200 ns (3 instructions at 15 MHz): fine enough for 100 kHz
   // SMBus timing (300 ns data hold), coarse enough to ride out ringing on the
@@ -293,7 +288,7 @@ void init() {
   channel_config_set_transfer_data_size(&d, DMA_SIZE_32);
   channel_config_set_read_increment(&d, false);
   channel_config_set_write_increment(&d, true);
-  channel_config_set_ring(&d, true, ring_bits); // Wrap the writes around the ring
+  channel_config_set_ring(&d, true, ring_bits);  // Wrap the writes around the ring
   channel_config_set_dreq(&d, pio_get_dreq(pio, sm, false));
   // RP2350: endless. RP2040 has no endless mode, this is 4 billion words
   // (60 hours of a constantly busy bus).
@@ -329,7 +324,7 @@ void beginOwnTransfer() {
     return;
   }
   flush();
-  decodeCaptured(); // Up to here it's the CPU's
+  decodeCaptured();  // Up to here it's the CPU's
   ignoring = true;
 }
 
@@ -338,7 +333,7 @@ void endOwnTransfer() {
     return;
   }
   flush();
-  decodeCaptured(); // Ours, not logged
+  decodeCaptured();  // Ours, not logged
   ignoring = false;
 }
 
@@ -350,7 +345,7 @@ void resetFound() {}
 void beginOwnTransfer() {}
 void endOwnTransfer() {}
 
-#endif // SMC_I2C_SNIFFER
+#endif  // SMC_I2C_SNIFFER
 
-} // namespace I2CSniffer
-} // namespace SMC
+}  // namespace I2CSniffer
+}  // namespace SMC

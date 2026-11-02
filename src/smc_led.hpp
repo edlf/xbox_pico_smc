@@ -22,7 +22,7 @@ enum class led_state {
 
 // LED flags, from the PIC's RAM (address.bit)
 struct flags_struct {
-  bool led_override; // 70.2 SMBus 0x07: show the SMBus 0x08 pattern
+  bool led_override;  // 70.2 SMBus 0x07: show the SMBus 0x08 pattern
 };
 extern flags_struct flags;
 
@@ -32,14 +32,14 @@ void resetPhaseCounter();
 // LEDs off until the next pattern is picked
 void clearPhases();
 // Phases shown while LEDs are under manual control (SMBus 0x08, boot error codes)
-void setGreenPhases(const uint8_t);
-void setRedPhases(const uint8_t);
+void    setGreenPhases(const uint8_t);
+void    setRedPhases(const uint8_t);
 uint8_t getGreenPhases();
 uint8_t getRedPhases();
-void setManualControl(const bool);
-void setOverheat(const bool);
-void setAvMissing(const bool);
-void setPowerOff(const bool);
+void    setManualControl(const bool);
+void    setOverheat(const bool);
+void    setAvMissing(const bool);
+void    setPowerOff(const bool);
 // SMC_LED_FADE: the LEDs are still fading out after power down started
 bool isFadingOut();
 void setQuickGreenBlink(const bool);
@@ -48,7 +48,7 @@ void setBootFailure(const bool);
 void setBootFailurePattern(const uint8_t red, const uint8_t green);
 void printState();
 
-} // namespace Led
-} // namespace SMC
+}  // namespace Led
+}  // namespace SMC
 
-#endif // SMC_LED_HPP
+#endif  // SMC_LED_HPP
