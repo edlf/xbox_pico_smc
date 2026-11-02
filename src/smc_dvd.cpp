@@ -19,7 +19,7 @@ update_eject_tray_state     update_eject_tray;
 uint16_t tray_state_timer = 0;
 uint16_t eject_timeout = 0;
 uint16_t dvd_tray_timeout = 0;
-// Where the tray was last sent or seen going (0x4D0 on the PIC: 0 open, 1 closed)
+// Where the tray was last sent or seen going (0 open, 1 closed)
 enum class tray_position : bool { open, closed };
 tray_position    tray_position_state;
 drive_tray_state tray_status_raw = drive_tray_state::closed;
@@ -47,10 +47,10 @@ drive_tray_state readTrayState() {
 }
 
 void updateDvdTray() {
-  // Debounces the tray state and raises tray interrupts (0x9D3)
+  // Debounces the tray state and raises tray interrupts
   switch (dvd_tray) {
     case dvd_tray_state::initial:
-      tray_state_timer = 0x27;  // 39 ticks as P2L (0x109C), the PIC waits 32
+      tray_state_timer = 0x27;  // 39 ticks as P2L, the PIC waits 32
       dvd_tray = dvd_tray_state::startup_delay;
       break;
 
@@ -106,19 +106,19 @@ void updateDvdTray() {
 }
 
 void restartTrayDebounce() {
-  // Same as P11 (0x636): back to the start-up delay without reloading the timer,
+  // Same as P11: back to the start-up delay without reloading the timer,
   // which is already 0, so it counts 256 ticks
   dvd_tray = dvd_tray_state::startup_delay;
 }
 
 void restartTrayTracking() {
-  // Boot challenge start restarts the debounce and tray moving (P2L, 0xD61)
+  // Boot challenge start restarts the debounce and tray moving (P2L)
   dvd_tray = dvd_tray_state::initial;
   dvd_tray_three = update_dvd_tray_three_state::initial;
 }
 
 void updateEjectTray() {
-  // Pulses the drive's eject line for 5 ticks when eject_pulse is set (0xADE)
+  // Pulses the drive's eject line for 5 ticks when eject_pulse is set
   switch (update_eject_tray) {
     case update_eject_tray_state::initial:
       eject_timeout = 5;
@@ -154,7 +154,7 @@ static bool trayCanMove() {
 }
 
 // The tray state that ends an open or closed phase: closing (0x50) or opening
-// (0x30). As P2L (0x1112) it also follows a tray that reports closed (0x00) or
+// (0x30). As P2L it also follows a tray that reports closed (0x00) or
 // open (0x10) while it isn't moving, except right after an eject press or pulse
 // (the PIC only follows 0x50 and 0x30).
 static bool nowClosed() {
@@ -168,20 +168,20 @@ static bool nowOpen() {
 }
 
 void updateDvdTrayEject() {
-  // Decides when to pulse eject (0x4D0). While the tray is open the SMC closes
+  // Decides when to pulse eject. While the tray is open the SMC closes
   // it on its own; while closed, the eject button only raises an SMI (via
   // eject_change_requested) and the OS opens the tray with SMBus 0x0C.
   switch (tray_position_state) {
     case tray_position::open:
       if (nowClosed()) {
-        /* Tray is closing */
+        // Tray is closing
         flags.eject_change_requested = false;
         flags.tray_load_request = false;
         tray_position_state = tray_position::closed;
         return;
       }
 
-      /* Close on eject button, load request (SMBus 0x0C) or shutdown */
+      // Close on eject button, load request (SMBus 0x0C) or shutdown
       if (!flags.eject_change_requested && !flags.tray_load_request && !SMI::flags.prepare_for_shutdown) {
         return;
       }
@@ -190,7 +190,7 @@ void updateDvdTrayEject() {
         return;
       }
       flags.eject_pulse = true;         // Pulse eject
-      flags.eject_button_event = true;  // Track the move, as P2L (0x113D)
+      flags.eject_button_event = true;  // Track the move, as P2L
       flags.eject_change_requested = false;
       flags.tray_load_request = false;
       tray_position_state = tray_position::closed;
@@ -202,7 +202,7 @@ void updateDvdTrayEject() {
       }
 
       if (nowOpen()) {
-        /* Tray is opening */
+        // Tray is opening
         flags.eject_change_requested = false;
         flags.tray_eject_request = false;
         tray_position_state = tray_position::open;
@@ -214,7 +214,7 @@ void updateDvdTrayEject() {
           flags.tray_open_expected = true;
         }
 
-        /* FRAG'd: no OS to ask, open the tray directly */
+        // FRAG'd: no OS to ask, open the tray directly
         if (BootChallenge::flags.frag_eject) {
           PLL_Reset::flags.run_after_reset = true;
           flags.eject_pulse = true;
@@ -222,13 +222,13 @@ void updateDvdTrayEject() {
         }
       }
 
-      /* Eject request from the OS (SMBus 0x0C) */
+      // Eject request from the OS (SMBus 0x0C)
       if (!flags.tray_eject_request || !trayCanMove()) {
         return;
       }
 
       flags.eject_pulse = true;         // Pulse eject
-      flags.eject_button_event = true;  // Track the move, as P2L (0x113D)
+      flags.eject_button_event = true;  // Track the move, as P2L
       flags.eject_change_requested = false;
       flags.tray_eject_request = false;
       tray_position_state = tray_position::open;
@@ -237,7 +237,7 @@ void updateDvdTrayEject() {
 }
 
 void updateDvdTrayThree() {
-  // Tracks whether the tray is moving, reported in SMBus 0x03 bit 0 (0x519)
+  // Tracks whether the tray is moving, reported in SMBus 0x03 bit 0
   switch (dvd_tray_three) {
     case update_dvd_tray_three_state::initial:
       dvd_tray_timeout = 0xFF;
@@ -267,7 +267,7 @@ void updateDvdTrayThree() {
     case update_dvd_tray_three_state::eject:
       flags.tray_moving = true;
 
-      // Closing (0x50) always ends it, as P2L (0x6E1); the PIC ignores it while
+      // Closing (0x50) always ends it, as P2L; the PIC ignores it while
       // the tray is expected to open
       if (sensors.tray_status == drive_tray_state::closing || sensors.tray_status == drive_tray_state::opening ||
           sensors.tray_status == drive_tray_state::unloading || (SMI::flags.os_ready && --dvd_tray_timeout == 0)) {

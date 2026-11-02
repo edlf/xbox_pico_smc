@@ -9,7 +9,7 @@
 namespace SMC {
 namespace Fan {
 
-// Same as the PIC's fan/temperature control (0x36F), used by P01, P11, D01 and
+// Same as the PIC's fan/temperature control, used by P01, P11, D01 and
 // DXF. P2L has its own in smc_fan_p2l.cpp.
 
 // Thresholds in °C, hex as in the PIC. Above ("hot", "warm", "critical",
@@ -98,7 +98,7 @@ static uint8_t board_samples[sample_count];
 static bool bus_recovery_allowed;  // re-armed by every good reading
 
 void init() {
-  // Same as the PIC's RAM_init (0xB58)
+  // Same as the PIC's RAM_init
   initShared(0x33);  // > 50, so SMBus 0x05 can't enable it before 0x06
   state = fan_control_state::initial;
   timeout1 = 0;
@@ -113,7 +113,7 @@ void init() {
 }
 
 static uint8_t median(uint8_t* samples) {
-  // Sort of 3 values, same result as the PIC's bubble sort (0xB05)
+  // Sort of 3 values, same result as the PIC's bubble sort
   for (uint8_t pass = 0; pass < sample_count - 1; pass++) {
     for (uint8_t i = 0; i < sample_count - 1 - pass; i++) {
       if (samples[i + 1] < samples[i]) {
@@ -180,13 +180,13 @@ void update_fan_temp() {
       }
       read_temperatures();
       if (sensors.CPU_temperature > thresholds.shutdown_cpu || sensors.board_temperature > thresholds.shutdown_board) {
-        /* Still far too hot, shut down now */
+        // Still far too hot, shut down now
         flags.overheated = false;
       } else if (sensors.CPU_temperature >= thresholds.cool_predicted || sensors.board_temperature >= thresholds.cool_board) {
-        /* Still warm, keep cooling */
+        // Still warm, keep cooling
         state = fan_control_state::overheated_wait;
       } else {
-        /* Cooled down, shut down */
+        // Cooled down, shut down
         flags.overheated = false;
       }
       break;
@@ -245,13 +245,13 @@ void update_fan_temp() {
           return;
         }
         if (bus_recovery_allowed && bus_recovery) {
-          /* Try once to free the bus, then retry */
+          // Try once to free the bus, then retry
           bus_recovery_allowed = false;
           hal::i2c_bus_recovery();
           retry_timeout = read_retries;
           return;
         }
-        /* Sensor is gone: treat it as an overheat */
+        // Sensor is gone: treat it as an overheat
         debug::print_warn("FAN: Temperature sensor not responding, forcing overheat");
         sensors.CPU_temperature = failed_read_cpu_temp;
         sensors.board_temperature = failed_read_board_temp;

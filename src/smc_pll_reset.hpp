@@ -4,7 +4,7 @@
 namespace SMC {
 namespace PLL_Reset {
 
-// PLL and SYSRESET sequencing (0x5AF)
+// PLL and SYSRESET sequencing
 enum class pll_sysreset_state {
   initial,                 // Assert SYSRESET, re-arm the per-boot flags
   held_in_reset,           // PLL off, wait for run_after_reset and POWOK
@@ -17,12 +17,12 @@ enum class pll_sysreset_state {
   running                  // Wait for power loss, cold_reset_request or warm_reset_request
 };
 
-// Reset flags, from the PIC's RAM (address.bit)
+// Reset flags
 struct flags_struct {
-  bool cold_reset_request;     // 70.0 Restart the PLL/SYSRESET sequence (shutdown, overheat, boot failure)
-  bool run_after_reset;        // 70.1 Come out of reset after a cold reset (clear: stay in reset)
-  bool warm_reset_request;     // 73.0 Reset the Xbox (SMBus 0x02 bit 0, or the OS didn't answer)
-  bool system_reset_released;  // 73.3 SYSRESET released (never read)
+  bool cold_reset_request;     // Restart the PLL/SYSRESET sequence (shutdown, overheat, boot failure)
+  bool run_after_reset;        // Come out of reset after a cold reset (clear: stay in reset)
+  bool warm_reset_request;     // Reset the Xbox (SMBus 0x02 bit 0, or the OS didn't answer)
+  bool system_reset_released;  // SYSRESET released (never read)
 };
 extern flags_struct flags;
 

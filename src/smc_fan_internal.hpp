@@ -29,7 +29,7 @@ extern uint8_t custom_fan_speed;
 extern uint8_t cpu_temperature_increase;   // Since the previous decision
 extern uint8_t cpu_temperature_predicted;  // CPU temperature plus a margin for the increase
 
-// Resets the shared values (RAM_init, 0xB58), custom_speed for SMBus 0x06
+// Resets the shared values (RAM_init), custom_speed for SMBus 0x06
 void initShared(const uint8_t custom_speed);
 // Sets the fan speed, limited to 10-50
 void setSpeed(const uint8_t speed);

@@ -22,23 +22,26 @@ enum class boot_challenge_state {
 };
 
 typedef struct {
-  uint8_t input_byte0; /* Challenge seed, read by the host via SMBus 0x1C-0x1F */
+  // Challenge seed, read by the host via SMBus 0x1C-0x1F
+  uint8_t input_byte0;
   uint8_t input_byte1;
   uint8_t input_byte2;
   uint8_t input_byte3;
-  uint8_t expected0; /* Expected challenge response, computed from the seed */
+  // Expected challenge response, computed from the seed
+  uint8_t expected0;
   uint8_t expected1;
-  uint8_t response0; /* Response written by the host via SMBus 0x20/0x21 */
+  // Response written by the host via SMBus 0x20/0x21
+  uint8_t response0;
   uint8_t response1;
 } challenge_struct;
 
-// Boot flags, from the PIC's RAM (address.bit)
+// Boot flags
 struct flags_struct {
-  bool ram_test_submitted;           // 71.4 SMBus 0x12 written
-  bool ram_test_passed;              // 71.5
-  bool frag_power_off;               // 72.5 FRAG: the power button turns off right away
-  bool frag_eject;                   // 73.2 FRAG: the eject button opens the tray directly
-  bool challenge_response_received;  // 73.4 SMBus 0x21 written
+  bool ram_test_submitted;           // SMBus 0x12 written
+  bool ram_test_passed;
+  bool frag_power_off;               // FRAG: the power button turns off right away
+  bool frag_eject;                   // FRAG: the eject button opens the tray directly
+  bool challenge_response_received;  // SMBus 0x21 written
 };
 extern flags_struct flags;
 

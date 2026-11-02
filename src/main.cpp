@@ -19,7 +19,7 @@ int main() {
     debug::print_critical("Rebooted by watchdog");
   }
 
-  // Out of the Xbox, powered from USB: configuration instead of the SMC
+  // Out of the Xbox, powered from USB: config mode
   if (UsbConfig::detect()) {
     UsbConfig::run();
   }

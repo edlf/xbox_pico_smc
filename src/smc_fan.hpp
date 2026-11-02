@@ -30,11 +30,11 @@ enum class fan_control_state {
   start_sampling
 };
 
-// Fan and temperature flags, from the PIC's RAM (address.bit)
+// Fan and temperature flags
 struct flags_struct {
-  bool overheated;               // 6E.4
-  bool fan_override;             // 6F.2 SMBus 0x05: use the speed from 0x06
-  bool temperature_read_failed;  // 74.0 (never read)
+  bool overheated;
+  bool fan_override;             // SMBus 0x05: use the speed from 0x06
+  bool temperature_read_failed;  // Never read
 };
 extern flags_struct flags;
 

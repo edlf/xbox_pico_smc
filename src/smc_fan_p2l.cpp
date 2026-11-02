@@ -9,7 +9,7 @@
 namespace SMC {
 namespace Fan {
 
-// P2L (v1.6 Xyclops) fan/temperature control (0xECD). Same states as the PIC's
+// P2L (v1.6 Xyclops) fan/temperature control. Same states as the PIC's
 // (smc_fan_pic.cpp), but it only uses the CPU temperature, averages 128
 // readings, has no I2C bus recovery and cools down for the full time after an
 // overheat.
@@ -50,7 +50,7 @@ const threshold_entry* thresholdEntries(uint8_t& count) {
   return threshold_entries;
 }
 
-constexpr uint8_t sample_count = 128;  // Average of 128 readings, one per tick (0x170E)
+constexpr uint8_t sample_count = 128;  // Average of 128 readings, one per tick
 // Next decision 4 x 250 ticks (20 s) after the last one, sampling included
 constexpr uint8_t wait_round_ticks = 0xFA;
 constexpr uint8_t wait_rounds = 4;
@@ -65,7 +65,7 @@ static uint16_t cpu_sum;
 static uint16_t board_sum;
 
 void init() {
-  initShared(0x32);  // 50, so SMBus 0x05 works on its own (0x3FE)
+  initShared(0x32);  // 50, so SMBus 0x05 works on its own
   state = fan_control_state::initial;
   timeout1 = 0;
   timeout2 = 0;
@@ -118,7 +118,7 @@ void update_fan_temp() {
       PLL_Reset::flags.cold_reset_request = true;
       PLL_Reset::flags.run_after_reset = false;
       flags.overheated = true;                       // SMI shuts the Xbox down once this clears
-      AudioClamp::flags.audio_clamp_request = true;  // Also mutes the audio (0xF4A)
+      AudioClamp::flags.audio_clamp_request = true;  // Also mutes the audio
       timeout1 = 0xFA;
       timeout2 = 0xB3;
       state = fan_control_state::overheated_cooldown;
@@ -129,7 +129,7 @@ void update_fan_temp() {
         return;
       }
 
-      // Only stops early on a sensor error or at 98 °C (0xF59): it checks for
+      // Only stops early on a sensor error or at 98 °C: it checks for
       // "cooled down" but ignores the result, so it cools for the full time
       if (!read_temperatures() || sensors.CPU_temperature >= p2l_thresholds.shutdown_cpu) {
         flags.overheated = false;
@@ -191,7 +191,7 @@ void update_fan_temp() {
         if (--retry_timeout != 0) {
           return;
         }
-        /* Sensor is gone (no bus recovery): treat it as an overheat */
+        // Sensor is gone (no bus recovery): treat it as an overheat
         debug::print_warn("FAN: Temperature sensor not responding, forcing overheat");
         sensors.CPU_temperature = failed_read_cpu_temp;
         sensors.board_temperature = failed_read_board_temp;

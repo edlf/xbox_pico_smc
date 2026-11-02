@@ -23,9 +23,7 @@
 
 namespace SMC {
 
-// Boot results the BIOS writes over SMBus (0x0E, 0x12, 0x13). The PIC's flags
-// (0x6C-0x74) and sensor readings are split per state machine, e.g.
-// SMI::flags, Dvd::flags, Fan::sensors.
+// Boot results the BIOS writes over SMBus (0x0E, 0x12, 0x13)
 extern volatile uint8_t ram_test_response0;
 extern volatile uint8_t ram_test_response1;
 extern volatile uint8_t bios_response_byte0;

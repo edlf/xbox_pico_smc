@@ -7,7 +7,7 @@
 namespace SMC {
 namespace FrontPanelSW {
 
-// Same as the PIC (0x800 power, 0x828 eject): a press or release only counts
+// Same as the PIC: a press or release only counts
 // once it's read on two ticks in a row
 struct Debouncer {
   bool pressed = false;   // Debounced level
@@ -52,14 +52,14 @@ void update() {
 }
 
 void updatePower() {
-  // Only counts while the eject button is idle (as P2L, 0x8C3)
+  // Only counts while the eject button is idle (as P2L)
   if (power.update(hal::power_button_pressed()) && eject.idle()) {
     SMI::flags.power_change_requested = true;
   }
 }
 
 void updateEject() {
-  // Only counts while the power button is idle (as P2L, 0x782)
+  // Only counts while the power button is idle (as P2L)
   if (eject.update(hal::eject_button_pressed()) && power.idle()) {
     Dvd::flags.eject_change_requested = true;
     Dvd::flags.eject_button_event = true;

@@ -26,9 +26,9 @@ struct sensors_struct {
 };
 extern sensors_struct sensors;
 
-// AV flags, from the PIC's RAM (address.bit)
+// AV flags
 struct flags_struct {
-  bool av_cable_missing;  // 71.6 LEDs and audio clamp
+  bool av_cable_missing;  // LEDs and audio clamp
 };
 extern flags_struct flags;
 

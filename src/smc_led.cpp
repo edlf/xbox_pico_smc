@@ -239,7 +239,7 @@ void update() {
 
       // A missing AV cable wins over the SMBus LED override on every firmware, so
       // a dashboard that sets its own LEDs can't hide it (P11 checks the override
-      // first, 0xA3F)
+      // first)
       if (av_missing) {
         state = led_state::quick_green_orange;
         return;

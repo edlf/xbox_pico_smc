@@ -27,14 +27,14 @@ uint8_t              failure_count;      // Failed boots since the last power cy
 uint8_t              failure_countdown;  // Power cycles left before locking up (FRAG)
 uint8_t              rtc_dump_time;
 
-// As P2L (bit 26.3): the answer is only checked after a passed RAM test
+// As P2L: the answer is only checked after a passed RAM test
 static bool    challenge_check_pending;
 static bool    ram_test_failed_shown = false;  // Blinking red LEDs
 static uint8_t failed_ram_banks = 0;           // Bits 0-3 of the failed result (SMBus 0x12)
 static bool    challenge_passed = false;
 
 void init() {
-  // Same as the PIC's RAM_init (0xB58)
+  // Same as the PIC's RAM_init
   challenge = {0};
   state = boot_challenge_state::initial;
   boot_response_timeout = 0;
@@ -69,7 +69,7 @@ static uint8_t slowTimerByte() {
   return (uint8_t)(time_us_32() >> 3);
 }
 
-// Called on every standby loop iteration (0x23B). D01/DXF have no challenge
+// Called on every standby loop iteration. D01/DXF have no challenge
 // and leave the bytes alone, also in seedPowerUp().
 void seedStandby() {
 #if SMC_FIRMWARE_NO_CHALLENGE
@@ -82,7 +82,7 @@ void seedStandby() {
   }
 }
 
-// Called when the Xbox has powered up (0x250), and to reseed after a reset
+// Called when the Xbox has powered up, and to reseed after a reset
 void seedPowerUp() {
 #if SMC_FIRMWARE_NO_CHALLENGE
   return;
@@ -92,7 +92,7 @@ void seedPowerUp() {
 }
 
 void compute() {
-  // Same as the PIC (0xBF6)
+  // Same as the PIC
   challenge.expected0 = 0x33;
   challenge.expected1 = 0xED;
 
@@ -115,7 +115,7 @@ static void clearRamTestResult() {
   flags.ram_test_passed = false;
 }
 
-// As P2L (0xDA2): new challenge on every reset, and the power cycle count
+// As P2L: new challenge on every reset, and the power cycle count
 // starts again. D01/DXF have no challenge and leave the bytes alone.
 static void newChallengeAfterReset() {
   clearRamTestResult();
@@ -136,7 +136,7 @@ static void lockUp() {
 
 #if !SMC_FIRMWARE_DXF  // DXF only pulses RTC dump, without a power cycle
 // Power cycles the Xbox while dumping the RTC, as the PIC does after repeated
-// boot failures (0x987). Blocks the main loop like the original.
+// boot failures. Blocks the main loop like the original.
 static bool powerCycleWithRtcDump() {
   auto tick = [] {
     hal::timer1_wait();
@@ -194,14 +194,14 @@ void update() {
       PLL_Reset::flags.run_after_reset = true;
       Dvd::restartTrayTracking();
 #if !SMC_FIRMWARE_NO_CHALLENGE
-      compute();  // D01/DXF (0x8DA) skip it
+      compute();  // D01/DXF skip it
 #endif
       state = boot_challenge_state::wait_for_ram_test_result;
       break;
 
     case boot_challenge_state::wait_for_ram_test_result:
       if (flags.ram_test_submitted) {
-        /* RAM test results submitted */
+        // RAM test results submitted
         if (flags.ram_test_passed) {
           state = boot_challenge_state::ram_test_ok;
         } else {
@@ -261,7 +261,7 @@ void update() {
       break;
 
     case boot_challenge_state::challenge_wait_for_reply:
-      // As P2L (0xD96): check the answer once after a passed RAM test, otherwise
+      // As P2L: check the answer once after a passed RAM test, otherwise
       // wait for a reset and start a new challenge
       if (PLL_Reset::flags.warm_reset_request) {
         newChallengeAfterReset();
@@ -276,7 +276,7 @@ void update() {
       break;
 
     case boot_challenge_state::boot_failed:
-      AudioClamp::flags.audio_clamp_request = true;  // Also mutes the audio, as P2L (0xDCA)
+      AudioClamp::flags.audio_clamp_request = true;  // Also mutes the audio, as P2L
       failure_count++;
       if (failure_count <= 3) {
         state = boot_challenge_state::retry_boot;
@@ -285,7 +285,7 @@ void update() {
         PLL_Reset::flags.cold_reset_request = true;
         PLL_Reset::flags.run_after_reset = false;
 #if SMC_FIRMWARE_DXF
-        rtc_dump_time = 100;  // DXF (0x94D): RTC dump while held in reset
+        rtc_dump_time = 100;  // DXF: RTC dump while held in reset
         state = boot_challenge_state::rtc_dump_start;
 #else
         rtc_dump_time = 4;
@@ -297,15 +297,15 @@ void update() {
       break;
 
     case boot_challenge_state::lock_up:
-      /* FRAG: error code LEDs (top priority, see Led::setBootFailure), stays
-       * here until power off */
+      // FRAG: error code LEDs (top priority, see Led::setBootFailure), stays
+      // here until power off
       Led::flags.led_override = true;
       flags.frag_power_off = true;
-      flags.frag_eject = !Fan::flags.overheated;  // Not when overheated, as P2L (0xE15)
+      flags.frag_eject = !Fan::flags.overheated;  // Not when overheated, as P2L
       break;
 
     case boot_challenge_state::retry_boot:
-      /* Reset the Xbox and try again */
+      // Reset the Xbox and try again
       PLL_Reset::flags.cold_reset_request = true;
       PLL_Reset::flags.run_after_reset = true;
       Led::flags.led_override = false;
@@ -321,7 +321,7 @@ void update() {
         if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
           debug::print_message("BOOT: Challenge passed");
           challenge_passed = true;
-          challenge_check_pending = false;  // As P2L (0xE49): back to waiting for a reset
+          challenge_check_pending = false;  // As P2L: back to waiting for a reset
           state = boot_challenge_state::challenge_wait_for_reply;
           break;
         }
@@ -334,7 +334,7 @@ void update() {
       }
 
 #if SMC_BOOT_CHALLENGE
-      /* Wrong answer or timeout: go straight to a power cycle */
+      // Wrong answer or timeout: go straight to a power cycle
       failure_count = 4;
       state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
 #else
@@ -345,7 +345,7 @@ void update() {
 
     case boot_challenge_state::reboot:
 #if SMC_FIRMWARE_DXF
-      // DXF (0x955): no power cycle, RTC dump high for 100 ticks (2 s) while the
+      // DXF: no power cycle, RTC dump high for 100 ticks (2 s) while the
       // system is held in reset, then try again
       hal::rtc_dump_on();
       if (--rtc_dump_time != 0) {
@@ -366,7 +366,7 @@ void update() {
       break;
 
     case boot_challenge_state::rtc_dump_start:
-      // DXF (0x965): one tick before the RTC dump
+      // DXF: one tick before the RTC dump
       state = boot_challenge_state::reboot;
       break;
 

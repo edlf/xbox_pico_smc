@@ -16,22 +16,24 @@ volatile uint8_t ram_test_response0;
 volatile uint8_t ram_test_response1;
 volatile uint8_t bios_response_byte0;
 
-// P01 (0x5FB): the PIC's only encoder write, register 0xBA = 0x3F
+// P01: the PIC's only encoder write, register 0xBA = 0x3F
 void configureConexantEncoder() {
   debug::print_message("SMC: Configure Conexant Encoder");
 
   constexpr size_t len = 2;
   uint8_t          config[len] = {0xBA, 0x3F};
+
   if (!smbusMasterWrite(I2C_CONEXANT_ADDRESS, config, len)) {
     debug::print_warn("Conexant encoder write failed");
   }
 }
 
-// P11 (0x60C): ADM1032 configuration register = 0x00, running (not standby)
+// P11: ADM1032 configuration register = 0x00, running (not standby)
 // with the ALERT output enabled
 void configureTemperatureSensor() {
   constexpr size_t len = 2;
   uint8_t          config[len] = {0x09, 0x00};
+
   if (!smbusMasterWrite(I2C_TEMP_SENSOR_ADDRESS, config, len)) {
     debug::print_warn("Temperature sensor write failed");
   }
@@ -49,7 +51,7 @@ void smc_gpio_callback(unsigned int gpio, uint32_t events) {
 
   // ISR got called, but somehow power good didnt stay enabled
   if (!hal::get_power_ok()) {
-    // Power supply failure - shutdown sequence
+    // Power supply failure
     shutdown_xbox();
 
     // Enter infinite loop waiting for watchdog timer to reset the system
@@ -167,7 +169,7 @@ void main_loop() {
 
       globals_init();
 
-      // As P2L (0x2D5): no wait when powering back on after a power cycle,
+      // As P2L: no wait when powering back on after a power cycle,
       // 25 ticks otherwise (P11 waits 24, P01 always waits 25)
       const bool wait_after_power_off = !SMI::powerOnRequested();
       uint8_t    wait_ticks = 25;
@@ -203,13 +205,13 @@ void globals_init() {
 
   resetSMBusRegisters();
 
-  // Same as the PIC's RAM_init (0xB58): all flags clear (above) except
-  Dvd::flags.tray_events_enabled = true;  // First tray state change raises an interrupt
+  // First tray state change raises an interrupt
+  Dvd::flags.tray_events_enabled = true;
 
   Fan::sensors.CPU_temperature = 0x17;
   Fan::sensors.board_temperature = 0x17;
   Dvd::sensors.tray_status = Dvd::drive_tray_state::closed;
-  Video::sensors.vmode = Video::av_pack::scart;  // 0, as the PIC's RAM_init
+  Video::sensors.vmode = Video::av_pack::scart;
 }
 
 void shutdown_xbox() {
@@ -231,7 +233,7 @@ void panic(const std::string message) {
 
   while (true) {
     hal::pico_led_on();
-    busy_wait_ms(500);  // Interrupts are off, sleep_ms needs them
+    busy_wait_ms(500);
     hal::pico_led_off();
     busy_wait_ms(500);
   }

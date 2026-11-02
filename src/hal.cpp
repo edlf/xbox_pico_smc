@@ -303,7 +303,7 @@ bool eject_button_pressed() {
   return !readWeakInput(pins::SW_EJECT);
 }
 
-// Fan PWM, same output as the PIC's CCP1 (0xE85): ~9.8 kHz, 10-bit, and
+// Fan PWM, same output as the PIC's CCP1: ~9.8 kHz, 10-bit, and
 // inverted: 50 holds the pin low, and lower speeds keep it high for
 // (50 - speed)% of each period. The PIC also has speed 0 (pin held high, fan
 // stopped); here the speed never goes below FAN_MIN_SPEED.
@@ -333,8 +333,8 @@ void fan_pin_low() {
   fan_speed_set = 0xFF;
 }
 
-// SMBus master on the slave's own pins, bit-banged like the PIC does
-// (0xC33, 0xC91). Switching the I2C block between slave and master doesn't
+// SMBus master on the slave's own pins, bit-banged like the PIC does.
+// Switching the I2C block between slave and master doesn't
 // work reliably once the host has used the slave, so the block stays a slave
 // and only loses its pins for the duration of a transfer.
 namespace {
@@ -556,7 +556,7 @@ I2CMasterResult i2c_master_transfer(uint8_t address, const uint8_t* tx, size_t t
 }
 
 // Frees a device stuck holding SDA low: 9 clocks on SCL, then a STOP. The PIC
-// does the same when the temperature sensor stops answering (0x49E).
+// does the same when the temperature sensor stops answering.
 void i2c_bus_recovery() {
   debug::print_message("I2C: Bus recovery");
 

@@ -24,7 +24,7 @@ struct sensors_struct {
 };
 extern sensors_struct sensors;
 
-// Tray state debounce (0x9D3)
+// Tray state debounce
 enum class dvd_tray_state {
   initial,        // Start the start-up delay
   startup_delay,  // Ignore the tray for 32 ticks (640 ms) after power on
@@ -37,16 +37,16 @@ enum class update_eject_tray_state { initial, tick_timer, release_eject };
 
 enum class update_dvd_tray_three_state { initial, wait, eject };
 
-// Tray flags, from the PIC's RAM (address.bit)
+// Tray flags
 struct flags_struct {
-  bool eject_change_requested;  // 6E.1 Eject button
-  bool tray_eject_request;      // 6F.3 SMBus 0x0C = 0
-  bool tray_load_request;       // 6F.4 SMBus 0x0C = 1
-  bool tray_moving;             // 6F.5 Reported in SMBus 0x03 bit 0
-  bool eject_pulse;             // 72.3 Pulse the drive's eject line
-  bool tray_events_enabled;     // 72.4 Tray changes raise SMIs (after the first unknown state)
-  bool eject_button_event;      // 72.7 Eject button pressed, tracked until the tray moves
-  bool tray_open_expected;      // 73.1 Eject from a closed tray, a closing state doesn't end the move
+  bool eject_change_requested;  // Eject button
+  bool tray_eject_request;      // SMBus 0x0C = 0
+  bool tray_load_request;       // SMBus 0x0C = 1
+  bool tray_moving;             // Reported in SMBus 0x03 bit 0
+  bool eject_pulse;             // Pulse the drive's eject line
+  bool tray_events_enabled;     // Tray changes raise SMIs (after the first unknown state)
+  bool eject_button_event;      // Eject button pressed, tracked until the tray moves
+  bool tray_open_expected;      // Eject from a closed tray, a closing state doesn't end the move
 };
 extern flags_struct flags;
 

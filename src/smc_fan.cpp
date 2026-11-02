@@ -34,7 +34,7 @@ void initShared(const uint8_t custom_speed) {
 void setSpeed(const uint8_t speed) {
   const uint8_t previous = fan_speed;  // 0: just powered on
 
-  // Like the PIC's set_fan_speed (0xE85) anything above 50 becomes 50, and
+  // Like the PIC's set_fan_speed anything above 50 becomes 50, and
   // unlike it the fan is never stopped: anything below 10 becomes 10. This
   // covers the custom speed from SMBus 0x06 and the web interface too.
   if (speed < min_fan_speed) {
@@ -70,7 +70,7 @@ void applyRaisedSpeed() {
 }
 
 void predictCpuTemperature() {
-  // Same as the PIC (0xE33): add a margin based on how fast the CPU heats up
+  // Same as the PIC: add a margin based on how fast the CPU heats up
   if (sensors.CPU_temperature >= previous_cpu_temperature) {
     cpu_temperature_increase = sensors.CPU_temperature - previous_cpu_temperature;
   } else {
@@ -106,7 +106,7 @@ void printReadings() {
                        std::to_string(cpu_temperature_predicted) + " speed " + std::to_string(fan_speed));
 }
 
-// Called by the main loop once the Xbox is off (0x279)
+// Called by the main loop once the Xbox is off
 void powerOff() {
   fan_speed = 0;  // No power to the fan
   hal::fan_pin_low();

@@ -38,14 +38,14 @@ void printState() {
   debug::print_message(msg);
 }
 
-// Same order as the PIC (0x601): release SYSRESET, give the encoder ~0.9 ms
-// to come out of reset, then configure it. P11 (0x60C) waits ~3 ms and
+// Same order as the PIC: release SYSRESET, give the encoder ~0.9 ms
+// to come out of reset, then configure it. P11 waits ~3 ms and
 // configures the temperature sensor instead, leaving the encoder alone.
 static void releaseResetAndConfigureEncoder() {
   hal::liftSystemReset();
   flags.system_reset_released = true;
 #if SMC_FIRMWARE_P2L
-  // P2L (0x94B) only releases SYSRESET, nothing is written
+  // P2L only releases SYSRESET, nothing is written
 #elif SMC_FIRMWARE_P11
   busy_wait_us(3000);
   configureTemperatureSensor();
@@ -74,14 +74,14 @@ void update() {
       if (flags.cold_reset_request) {
         state = pll_sysreset_state::initial;
       } else if (flags.run_after_reset && hal::get_power_ok()) {
-        /* Powered up: enable the PLL, release reset 2 ticks later */
+        // Powered up: enable the PLL, release reset 2 ticks later
         timeout = 2;
         state = pll_sysreset_state::start_pll;
       }
       break;
 
     case pll_sysreset_state::start_delay_unused:
-      /* Never entered, the PIC has it too (0x5E8) */
+      // Never entered, the PIC has it too
       if (!hal::get_power_ok() || flags.cold_reset_request) {
         state = pll_sysreset_state::initial;
       } else if (--timeout == 0) {
@@ -109,7 +109,7 @@ void update() {
       SMI::flags.reset_on_eject_writable = true;
       SMI::flags.reset_on_eject_disabled = true;
       Led::flags.led_override = false;
-      // Ignore tray changes for a while after a warm reset (P11/P2L, 0x636)
+      // Ignore tray changes for a while after a warm reset (P11/P2L)
       if (!Dvd::flags.tray_moving) {
         Dvd::restartTrayDebounce();
       }
@@ -117,7 +117,7 @@ void update() {
       break;
 
     case pll_sysreset_state::restart_pll_off_unused:
-      // Never entered: nothing sets it, also on the PIC (0x62C)
+      // Never entered: nothing sets it, also on the PIC
       if (--timeout != 0) {
         return;
       }
@@ -136,7 +136,7 @@ void update() {
       break;
 
     case pll_sysreset_state::running:
-      /* Wait for power loss or a reset request */
+      // Wait for power loss or a reset request
       if (!hal::get_power_ok() || flags.cold_reset_request) {
         state = pll_sysreset_state::initial;
       } else if (flags.warm_reset_request) {
