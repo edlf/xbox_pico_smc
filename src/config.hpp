@@ -85,6 +85,11 @@
 #define SMC_NTC_SERIES_R 10000 // Ohms
 #endif
 
+// Listen to the whole SMBus: log the video encoder found (writes at DEBUG)
+#ifndef SMC_I2C_SNIFFER
+#define SMC_I2C_SNIFFER 1
+#endif
+
 // Wi-Fi access point with a status and control page, served from core 1
 // (W boards only)
 #ifndef SMC_WEB_INTERFACE

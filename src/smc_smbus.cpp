@@ -443,7 +443,9 @@ void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
 // Like the PIC, we master the bus we're a slave on (video encoder,
 // temperature sensor), see hal::i2c_master_transfer
 static bool masterTransfer(uint8_t address, const uint8_t* tx, size_t tx_len, uint8_t* rx, size_t rx_len) {
+  I2CSniffer::beginOwnTransfer();
   const hal::I2CMasterResult result = hal::i2c_master_transfer(address, tx, tx_len, rx, rx_len);
+  I2CSniffer::endOwnTransfer();
   if (result == hal::I2CMasterResult::ok) {
     return true;
   }

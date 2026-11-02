@@ -44,6 +44,38 @@ commands and reads of write-only ones. Times are in SMC ticks of 20 ms.
 | 0x20-0x21 | Challenge response   |  W  | Answer to the boot challenge |
 | 0x22      | Power cycle delay    |  W  | Off time of the next power cycle |
 
+## Video encoder writes (sniffer)
+
+With `SMC_I2C_SNIFFER` (on by default) the Pico also listens to the rest of
+the bus for the video encoder (Conexant 0x45, Focus 0x6A, Xcalibur 0x70).
+The BIOS probes each address after power on and only the board's own encoder
+acknowledges, so the first time one does it's logged at INFO level (once per
+power on):
+
+```
+ENCODER: Found Conexant (0x45)
+```
+
+At DEBUG level every write the CPU makes to it is logged too:
+
+```
+ENCODER: Conexant [0xBA] = 0x3F
+```
+
+The register comes first, then the data byte(s); `(NACK)` means the encoder
+didn't acknowledge a byte. Reads (a register write followed by a repeated
+START) aren't logged. The SMC's own transfers (P01's 0xBA write) are left out
+of both.
+
+- A PIO state machine reads SDA and SCL (GP12/GP13) without taking them from
+  the I2C slave, and records each change. DMA copies the changes into an 8 KB
+  ring buffer, decoded once per tick from the main loop.
+- Printing takes ~4 ms a line, so at most 2 writes are printed per tick (DEBUG
+  level), from a queue of 128. The BIOS writes the encoder in bursts, so the log lags behind
+  and a long burst can overflow the queue (`writes not logged` warning).
+- Changes are only recorded in batches of 16; the last few of a transfer are
+  pushed out once the bus is idle, so a write shows up within a tick or two.
+
 ## Commands
 
 ### 0x01 Firmware version (read/write)

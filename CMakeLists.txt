@@ -87,6 +87,12 @@ foreach(value SMC_NTC_BETA SMC_NTC_R25 SMC_NTC_SERIES_R)
   endif()
 endforeach()
 
+# Listen to the whole SMBus (a PIO state machine and a DMA channel) for the
+# video encoder: logs which one the CPU finds after power on, and at DEBUG
+# level every write it makes to it ("ENCODER:" lines). -DSMC_I2C_SNIFFER=OFF
+# to leave it out
+option(SMC_I2C_SNIFFER "Log the video encoder found and the CPU's writes to it" ON)
+
 # Behavior of which original firmware to follow: -DSMC_FIRMWARE=P11, P01, D01,
 # DXF or P2L.
 # - P11 (1.2/1.3) has lower fan thresholds and configures the temperature
@@ -236,7 +242,8 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/smc_SMI.cpp
                       ${SMC_SRC_DIR}/smc_power_standby.cpp
                       ${SMC_SRC_DIR}/smc_video.cpp
-                      ${SMC_SRC_DIR}/smc_extra_temp.cpp)
+                      ${SMC_SRC_DIR}/smc_extra_temp.cpp
+                      ${SMC_SRC_DIR}/smc_i2c_sniffer.cpp)
 
 target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
                                           SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
@@ -244,6 +251,7 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
                                           SMC_LED_BRIGHTNESS=${SMC_LED_BRIGHTNESS}
                                           SMC_LED_FADE=$<BOOL:${SMC_LED_FADE}>
+                                          SMC_I2C_SNIFFER=$<BOOL:${SMC_I2C_SNIFFER}>
                                           SMC_NTC_SENSOR=$<BOOL:${SMC_NTC_SENSOR}>
                                           SMC_NTC_BETA=${SMC_NTC_BETA}
                                           SMC_NTC_R25=${SMC_NTC_R25}
@@ -269,7 +277,9 @@ pico_enable_stdio_usb(OG_SMC 0)
 target_link_libraries(OG_SMC
         pico_stdlib
         hardware_pwm
-        hardware_adc)
+        hardware_adc
+        hardware_pio
+        hardware_dma)
 
 # Project headers, and lwipopts.h for the web interface
 target_include_directories(OG_SMC PRIVATE
