@@ -323,7 +323,7 @@ void set_fan_speed(uint8_t speed) {
   pwm_set_chan_level(pwm_slice, pwm_channel, level);
 
   if (speed != fan_speed_set) {
-    debug::print_message("GPIO: Fan speed " + std::to_string(speed));
+    debug::print_debug("GPIO: Fan speed " + std::to_string(speed)); // Fan::setSpeed() logs the change (INFO)
     fan_speed_set = speed;
   }
 }

@@ -32,6 +32,8 @@ void initShared(const uint8_t custom_speed) {
 }
 
 void setSpeed(const uint8_t speed) {
+  const uint8_t previous = fan_speed;  // 0: just powered on
+
   // Like the PIC's set_fan_speed (0xE85) anything above 50 becomes 50, and
   // unlike it the fan is never stopped: anything below 10 becomes 10. This
   // covers the custom speed from SMBus 0x06 and the web interface too.
@@ -43,6 +45,18 @@ void setSpeed(const uint8_t speed) {
     fan_speed = speed;
   }
 
+  if (fan_speed != previous) {
+    std::string msg = "FAN: Speed ";
+    if (previous != 0) {
+      msg += std::to_string(previous) + " -> ";
+    }
+    msg += std::to_string(fan_speed) + " (CPU " + std::to_string(sensors.CPU_temperature) + " C";
+    if (!SMC_FIRMWARE_P2L) {  // P2L has no board sensor
+      msg += ", board " + std::to_string(sensors.board_temperature) + " C";
+    }
+    msg += flags.fan_override ? ", manual)" : ")";
+    debug::print_message(msg);
+  }
   hal::set_fan_speed(fan_speed);
 }
 
@@ -88,7 +102,7 @@ void predictCpuTemperature() {
 }
 
 void printReadings() {
-  debug::print_message("FAN: CPU " + std::to_string(sensors.CPU_temperature) + " board " + std::to_string(sensors.board_temperature) + " predicted " +
+  debug::print_debug("FAN: CPU " + std::to_string(sensors.CPU_temperature) + " board " + std::to_string(sensors.board_temperature) + " predicted " +
                        std::to_string(cpu_temperature_predicted) + " speed " + std::to_string(fan_speed));
 }
 
