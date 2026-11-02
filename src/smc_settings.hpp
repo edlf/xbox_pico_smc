@@ -34,6 +34,12 @@ bool setWifiSsid(const char* ssid);
 bool setWifiPassword(const char* password);
 // Back to SMC_WIFI_SSID / SMC_WIFI_PASSWORD
 void resetWifi();
+
+// Start the web interface at power-up (default on). Kept and saved on builds
+// without one too, it's only ignored there. A change takes effect after a
+// save and a restart.
+bool webEnabled();
+void setWebEnabled(bool enabled);
 // Save the current settings, the next time update() runs (Xbox off)
 void requestSave();
 // Save them now, only where nothing else is running (USB config mode). False

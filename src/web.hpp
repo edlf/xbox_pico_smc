@@ -6,7 +6,8 @@
 namespace SMC {
 namespace Web {
 
-// Starts the access point and the web server on core 1
+// Starts the access point and the web server on core 1, unless it's off in the
+// settings (Settings::webEnabled()): then nothing runs and service() does nothing
 void start();
 
 // Called from the main loop on core 0 every tick: runs the page's commands,

@@ -83,6 +83,9 @@ static void printSettings() {
   printf("brightness %u\n", hal::get_led_brightness());
   printf("ssid %s\n", SMC::Settings::wifiSsid());
   printf("password %s\n", SMC::Settings::wifiPassword()); // Empty: made from the board ID
+  // The setting is kept on builds without a web interface, it's ignored there
+  printf("web %s%s\n", SMC::Settings::webEnabled() ? "on" : "off",
+         SMC_WEB_INTERFACE ? "" : " (no web interface in this build, ignored)");
   for (uint8_t i = 0; i < SMC::Fan::thresholdCount(); i++) {
     printf("threshold %u %u default %u min %u label %s\n", i, SMC::Fan::getThreshold(i),
            SMC::Fan::thresholdDefault(i), SMC::Fan::min_threshold, SMC::Fan::thresholdLabel(i));
@@ -135,12 +138,20 @@ static void command(char* line) {
            "set threshold <index> <C>    fan threshold, min to default\n"
            "set ssid <name>              Wi-Fi access point name, 1-32 characters\n"
            "set password [<password>]    Wi-Fi password, 8-63 characters, none: from the board ID\n"
+           "set web <on|off>             start the web interface (W boards)\n"
            "defaults                     back to the firmware's defaults\n"
            "save                         write them to flash\n"
            "reboot                       restart the Pico\n");
     ok();
   } else if (strcmp(words[0], "get") == 0) {
     printSettings();
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "web") == 0) {
+    if (strcmp(words[2], "on") != 0 && strcmp(words[2], "off") != 0) {
+      error("web must be on or off");
+      return;
+    }
+    SMC::Settings::setWebEnabled(strcmp(words[2], "on") == 0);
     ok();
   } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "brightness") == 0) {
     if (!parseNumber(words[2], a) || a < 1 || a > 100) {
@@ -160,6 +171,7 @@ static void command(char* line) {
     hal::set_led_brightness(SMC_LED_BRIGHTNESS);
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
+    SMC::Settings::setWebEnabled(true);
     ok();
   } else if (strcmp(words[0], "save") == 0) {
     if (!SMC::Settings::saveNow()) {

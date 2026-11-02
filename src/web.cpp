@@ -586,9 +586,17 @@ void publishStatus() {
   critical_section_exit(&status_lock);
 }
 
+// Started (not off in the settings): service() has something to do
+bool started = false;
+
 } // namespace
 
 void start() {
+  if (!Settings::webEnabled()) {
+    debug::print_message("WEB: Off in the settings, not started (USB config: set web on)");
+    return;
+  }
+  started = true;
   critical_section_init(&status_lock);
   queue_init(&commands, sizeof(CommandMessage), 8);
   queue_init(&log_messages, sizeof(LogMessage), 8);
@@ -605,6 +613,9 @@ void start() {
 }
 
 void service() {
+  if (!started) {
+    return;
+  }
   CommandMessage command;
   while (queue_try_remove(&commands, &command)) {
     runCommand(command);

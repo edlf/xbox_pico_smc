@@ -10,6 +10,7 @@ starts in config mode instead of running the SMC (see src/usb_config.hpp).
     python tools/og_smc_config.py set-threshold 2 65
     python tools/og_smc_config.py set-ssid "My Xbox" set-password secret123 save
     python tools/og_smc_config.py set-password "" save   (back to the board ID one)
+    python tools/og_smc_config.py set-web off save
     python tools/og_smc_config.py defaults
     python tools/og_smc_config.py save
     python tools/og_smc_config.py reboot
@@ -78,6 +79,8 @@ def print_settings(lines):
         elif words[0] == "password":
             password = line[9:]
             print(f"Wi-Fi password:  {password or '(made from the board ID, shown in the boot log)'}")
+        elif words[0] == "web":
+            print(f"Web interface:   {line[4:]}")
         elif words[0] == "threshold":
             # threshold <index> <value> default <d> min <m> label <text>
             label = line.split(" label ", 1)[1]
@@ -89,7 +92,7 @@ def print_settings(lines):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", help="serial port (default: the one Pico found)")
-    parser.add_argument("commands", nargs="+", help="get | set-brightness N | set-threshold I C | set-ssid NAME | set-password PW | defaults | save | reboot")
+    parser.add_argument("commands", nargs="+", help="get | set-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | defaults | save | reboot")
     args = parser.parse_args()
 
     smc = Smc(args.port or find_port())
@@ -114,6 +117,10 @@ def main():
                 password = words.pop(0)
                 smc.command(f"set password {password}" if password else "set password")
                 print("Wi-Fi password set")
+            elif name == "set-web":
+                state = words.pop(0)
+                smc.command(f"set web {state}")
+                print(f"Web interface {state}")
             elif name == "defaults":
                 smc.command("defaults")
                 print("Back to the defaults (not saved yet)")

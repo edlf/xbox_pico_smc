@@ -13,7 +13,7 @@ namespace SMC {
 namespace Settings {
 
 constexpr uint32_t magic = 0x534D4353; // "SCMS"
-constexpr uint16_t version = 2;        // Bump when the layout changes, older records are ignored
+constexpr uint16_t version = 0;        // Bump when the layout changes, older records are ignored
 constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 
 struct Record {
@@ -26,6 +26,7 @@ struct Record {
   uint8_t thresholds[Fan::max_thresholds];
   char wifi_ssid[max_ssid_length + 1];         // Zero-terminated
   char wifi_password[max_password_length + 1]; // Zero-terminated, empty: made from the board ID
+  uint8_t web_enabled;        // Start the web interface (ignored without one in the build)
   uint32_t checksum;          // FNV-1a over everything above
 };
 static_assert(sizeof(Record) <= FLASH_PAGE_SIZE, "One flash page");
@@ -38,6 +39,7 @@ static bool usable = false;    // The sector is past the end of the firmware
 // Wi-Fi access point, SMC_WIFI_SSID / SMC_WIFI_PASSWORD (src/config.hpp) unless saved
 static char wifi_ssid[max_ssid_length + 1] = SMC_WIFI_SSID;
 static char wifi_password[max_password_length + 1] = SMC_WIFI_PASSWORD;
+static bool web_enabled = true;
 
 extern "C" uint8_t __flash_binary_end;
 
@@ -70,6 +72,7 @@ static Record current() {
   }
   strncpy(r.wifi_ssid, wifi_ssid, max_ssid_length);
   strncpy(r.wifi_password, wifi_password, max_password_length);
+  r.web_enabled = web_enabled;
   r.checksum = checksum(r);
   return r;
 }
@@ -116,6 +119,14 @@ void resetWifi() {
   setWifiPassword(SMC_WIFI_PASSWORD);
 }
 
+bool webEnabled() {
+  return web_enabled;
+}
+
+void setWebEnabled(const bool enabled) {
+  web_enabled = enabled;
+}
+
 static bool sameSettings(const Record& a, const Record& b) {
   return memcmp(&a, &b, offsetof(Record, checksum)) == 0;
 }
@@ -159,6 +170,8 @@ void load() {
     if (setWifiPassword(text)) {
       msg += ", Wi-Fi password";
     }
+    web_enabled = stored->web_enabled != 0;
+    msg += web_enabled ? ", web interface on" : ", web interface off";
     debug::print_message(msg);
   }
   saved = current(); // What's applied now, so only real changes are written

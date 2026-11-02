@@ -1,7 +1,7 @@
 # USB configuration
 
 The saved settings (LED brightness, fan thresholds, Wi-Fi access point name
-and password) can be changed over USB
+and password, web interface on or off) can be changed over USB
 serial, with `tools/og_smc_config.py`. This only works with the Pico **out of
 the Xbox**, powered from USB alone.
 
@@ -54,11 +54,12 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | Command | Reply |
 |---------|-------|
 | `help` | The commands |
-| `get` | `firmware <name>`, `brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
+| `get` | `firmware <name>`, `brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `web on` or `web off` (with a note on builds without a web interface), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
 | `set brightness <1-100>` | LED brightness in percent |
 | `set threshold <index> <value>` | A fan threshold, between the minimum and the firmware's default |
 | `set ssid <name>` | Wi-Fi access point name, 1-32 printable characters (spaces allowed) |
 | `set password [<password>]` | Wi-Fi password, 8-63 printable characters. Without one: made from the board's unique ID |
-| `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD` |
+| `set web on`, `set web off` | Start the web interface at power-up (default on). Kept on builds without one, but ignored there |
+| `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD`, web interface on |
 | `save` | Writes the settings to flash (`SETTINGS: Saved`) |
 | `reboot` | Restarts the Pico |
