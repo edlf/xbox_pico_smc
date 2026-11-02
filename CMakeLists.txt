@@ -244,6 +244,10 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/smc_rgb_led.cpp)
 pico_generate_pio_header(OG_SMC ${SMC_SRC_DIR}/ws2812.pio)
 
+# Core 0 stack: 4 KB (the SDK default is 2 KB), all of SCRATCH_Y.
+# Core 1 runs on its own 8 KB stack, see web.cpp.
+target_compile_definitions(OG_SMC PRIVATE PICO_STACK_SIZE=0x1000)
+
 target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
                                           SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
                                           SMC_AV_PACK_OVERRIDE=$<BOOL:${SMC_AV_PACK_OVERRIDE}>
