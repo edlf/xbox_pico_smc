@@ -67,6 +67,6 @@ would feed it through its pins.
 
 - An SWD debug probe masks if the pico browns out, which happens if you use
   the 3.3v standby rail form the xbox for WiFi.
-- On the RP2350 (Pico 2 / 2 W) the button inputs only have their input buffers
-  on while being read, to work around erratum E9 (`readButton()` in
+- On the RP2350 (Pico 2 / 2 W) the button and AV mode inputs only have their input
+  buffers on while being read, to work around erratum E9 (`readWeakInput()` in
   `src/hal.cpp`).
