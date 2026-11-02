@@ -46,7 +46,7 @@ void setQuickGreenBlink(const bool);
 // Boot failure (FRAG) error code, shown above every other pattern
 void setBootFailure(const bool);
 void setBootFailurePattern(const uint8_t red, const uint8_t green);
-// LED brightness (percent) from the SMBus interrupt (0x33): applied on the
+// LED brightness (percent) from the SMBus interrupt (0x34): applied on the
 // next update(), in the main loop
 void requestBrightness(const uint8_t percent);
 void printState();

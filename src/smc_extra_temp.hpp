@@ -8,7 +8,7 @@ namespace ExtraTemp {
 
 // Temperatures the PIC doesn't have: the Pico's own chip and an optional NTC
 // thermistor (SMC_NTC_SENSOR). Read once a second, in standby and while the
-// Xbox runs. Reported on SMBus 0x30 and 0x31.
+// Xbox runs. Reported on SMBus 0x31 and 0x32.
 struct sensors_struct {
   int16_t pico_temperature;  // Tenths of °C
   int16_t ntc_temperature;   // Tenths of °C, valid when ntc_connected

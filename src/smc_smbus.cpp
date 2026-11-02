@@ -42,10 +42,11 @@ constexpr uint8_t CHALLENGE_RESPONSE1 = 0x21;
 constexpr uint8_t POWER_CYCLE_DELAY = 0x22;  // P11/P2L, all firmwares here
 
 // New commands, not stock
-constexpr uint8_t PICO_TEMPERATURE = 0x30;
-constexpr uint8_t NTC_TEMPERATURE = 0x31;
-constexpr uint8_t READ_LED_BRIGHTNESS = 0x32;
-constexpr uint8_t WRITE_LED_BRIGHTNESS = 0x33;
+constexpr uint8_t CUSTOM_VERSION = 0x30;
+constexpr uint8_t PICO_TEMPERATURE = 0x31;
+constexpr uint8_t NTC_TEMPERATURE = 0x32;
+constexpr uint8_t READ_LED_BRIGHTNESS = 0x33;
+constexpr uint8_t WRITE_LED_BRIGHTNESS = 0x34;
 };  // namespace Command
 
 // ExtraTemp's tenths of °C as a byte of whole °C, like 0x09/0x0A. 0xFF means
@@ -68,6 +69,9 @@ static uint8_t last_write_data = 0;     // SMBus 0x17, only updated by writes
 // SMBus 0x01, SMC_VERSION_STRING (CMake SMC_REPORT_VERSION)
 const char version_string[] = SMC_VERSION_STRING;
 static_assert(sizeof(version_string) == 4, "The version is 3 characters");
+// SMBus 0x30: version of this SMC firmware (the commands it adds), separate
+// from the PIC version above. Bump it when the custom commands change.
+constexpr uint8_t custom_version = 0x01;
 static uint8_t smbus_version_counter = 1;  // 1-3, the character read next
 static uint8_t scratch_register = 0;       // SMBus 0x1B, kernel boot flags kept across reboots
 
@@ -148,16 +152,20 @@ uint8_t smbus_read_handler(uint8_t command) {
       response = SMC_FIRMWARE_P2L ? Fan::sensors.CPU_temperature : Fan::sensors.board_temperature;
       break;
 
-    case Command::PICO_TEMPERATURE:  // 0x30
+    case Command::CUSTOM_VERSION:  // 0x30
+      response = custom_version;
+      break;
+
+    case Command::PICO_TEMPERATURE:  // 0x31
       response = temperatureByte(ExtraTemp::sensors.pico_temperature);
       break;
 
-    case Command::NTC_TEMPERATURE:  // 0x31
+    case Command::NTC_TEMPERATURE:  // 0x32
       // 0xFF without an NTC (SMC_NTC_SENSOR off), or when it reads open or shorted
       response = ExtraTemp::sensors.ntc_connected ? temperatureByte(ExtraTemp::sensors.ntc_temperature) : 0xFF;
       break;
 
-    case Command::READ_LED_BRIGHTNESS:  // 0x32
+    case Command::READ_LED_BRIGHTNESS:  // 0x33
       response = hal::get_led_brightness();
       break;
 
@@ -227,7 +235,7 @@ uint8_t smbus_read_handler(uint8_t command) {
     case Command::SOFTWARE_INTERRUPT:           // 0x18
     case Command::OVERRIDE_RESET_ON_TRAY_OPEN:  // 0x19
     case Command::OS_READY:                     // 0x1A
-    case Command::WRITE_LED_BRIGHTNESS:         // 0x33
+    case Command::WRITE_LED_BRIGHTNESS:         // 0x34
                                                 // Unsupported/write-only commands - return 0
     default:
       break;
@@ -299,7 +307,7 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
       Led::setRedPhases((data >> 4) & 0x0F);
       break;
 
-    case Command::WRITE_LED_BRIGHTNESS:  // 0x33
+    case Command::WRITE_LED_BRIGHTNESS:  // 0x34
       // Percent, 1-100, anything else is ignored. Applied by Led::update(),
       // not saved (Settings)
       if (data >= 1 && data <= 100) {
@@ -423,8 +431,9 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     case Command::CPU_TEMPERATURE:        // 0x09 (read-only, ignore writes)
     case Command::AIR_TEMPERATURE:        // 0x0A (read-only, ignore writes)
     case Command::READ_FAN_SPEED:         // 0x10 (read-only, ignore writes)
-    case Command::PICO_TEMPERATURE:       // 0x30 (read-only, ignore writes)
-    case Command::NTC_TEMPERATURE:        // 0x31 (read-only, ignore writes)
+    case Command::CUSTOM_VERSION:         // 0x30 (read-only, ignore writes)
+    case Command::PICO_TEMPERATURE:       // 0x31 (read-only, ignore writes)
+    case Command::NTC_TEMPERATURE:        // 0x32 (read-only, ignore writes)
     case Command::INTERRUPT_REASON:       // 0x11 (read-only, ignore writes)
     case Command::READ_RAM_TEST_RESULTS:  // 0x14 (read-only, ignore writes)
     case Command::READ_RAM_TYPE:          // 0x15 (read-only, ignore writes)

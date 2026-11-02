@@ -209,7 +209,7 @@ void update() {
   if (brightness != 0) {
     if (brightness != hal::get_led_brightness()) {
       hal::set_led_brightness(brightness);
-      debug::print_message("LED: Brightness " + std::to_string(brightness) + "% (SMBus 0x33)");
+      debug::print_message("LED: Brightness " + std::to_string(brightness) + "% (SMBus 0x34)");
     }
   }
 
