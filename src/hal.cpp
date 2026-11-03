@@ -757,7 +757,8 @@ void petWatchdog() {
 
 // Main loop tick, same as the PIC's Timer1: timer1_init() starts a period,
 // timer1_wait() blocks until it has elapsed (returns at once if it already
-// has) and starts the next one.
+// has) and starts the next one. It sleeps (WFE on a timer alarm) rather than
+// spinning; interrupts (SMBus, POWER_OK, USB) still run while it waits.
 static uint32_t        timer1_period_us = TICK_US;
 static absolute_time_t timer1_deadline;
 
@@ -767,7 +768,7 @@ void timer1_init(uint32_t delay_us) {
 }
 
 void timer1_wait() {
-  busy_wait_until(timer1_deadline);
+  sleep_until(timer1_deadline);
   timer1_init(timer1_period_us);
 }
 
