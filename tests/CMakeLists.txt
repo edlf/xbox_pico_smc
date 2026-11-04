@@ -23,10 +23,16 @@ add_executable(og_smc_tests
   test_encoder_mode.cpp
   test_smbus.cpp
   test_front_panel.cpp
+  test_dvd.cpp
+  test_led.cpp
+  test_ring_buffer.cpp
+  test_settings.cpp
+  test_i2c_decoder.cpp
   # Fakes
   fake_hal.cpp
   fake_debug.cpp
   fake_sdk.cpp
+  fake_flash.cpp
   # The firmware's own modules
   ${SMC_SRC_DIR}/smc.cpp
   ${SMC_SRC_DIR}/smc_SMI.cpp
@@ -42,6 +48,8 @@ add_executable(og_smc_tests
   ${SMC_SRC_DIR}/smc_pll_reset.cpp
   ${SMC_SRC_DIR}/smc_power_standby.cpp
   ${SMC_SRC_DIR}/smc_rgb_led.cpp
+  ${SMC_SRC_DIR}/smc_settings.cpp
+  ${SMC_SRC_DIR}/smc_i2c_decoder.cpp
   ${SMC_SRC_DIR}/smc_smbus.cpp
   ${SMC_SRC_DIR}/smc_video.cpp
   ${SMC_SRC_DIR}/utils.cpp

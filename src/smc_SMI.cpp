@@ -270,7 +270,7 @@ uint8_t update() {
         // Power cycle requested (SMBus 0x02 bit 6): power back on after the
         // SMBus 0x22 delay minus 2 ticks, as P11/P2L (P01 waits 50).
         // Like the PIC's DECFSZ, a result of 0 counts 256 ticks
-        power_timeout = (uint8_t)(power_cycle_delay - 2);
+        power_timeout = static_cast<uint8_t>(power_cycle_delay - 2);
         if (power_timeout == 0) {
           power_timeout = 256;
         }

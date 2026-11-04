@@ -316,7 +316,7 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
 
     case Command::DVD_TRAY_OPERATION:  // 0x0C
       // Same as the PIC: bit 0 = 1 load, 0 eject, carried
-      // out by Dvd::updateDvdTrayEject
+      // out by Dvd::updateEjectRequests
       if (data & 0x01) {
         Dvd::flags.tray_load_request = true;
       } else {

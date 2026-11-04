@@ -223,6 +223,9 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/debug.cpp
                       ${SMC_SRC_DIR}/main.cpp
                       ${SMC_SRC_DIR}/hal.cpp
+                      ${SMC_SRC_DIR}/hal_leds.cpp
+                      ${SMC_SRC_DIR}/hal_adc.cpp
+                      ${SMC_SRC_DIR}/hal_i2c_master.cpp
                       ${SMC_SRC_DIR}/smc.cpp
                       ${SMC_SRC_DIR}/smc_led.cpp
                       ${SMC_SRC_DIR}/smc_boot_challenge.cpp
@@ -238,6 +241,7 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
                       ${SMC_SRC_DIR}/smc_video.cpp
                       ${SMC_SRC_DIR}/smc_extra_temp.cpp
                       ${SMC_SRC_DIR}/smc_i2c_sniffer.cpp
+                      ${SMC_SRC_DIR}/smc_i2c_decoder.cpp
                       ${SMC_SRC_DIR}/smc_encoder_mode.cpp
                       ${SMC_SRC_DIR}/smc_settings.cpp
                       ${SMC_SRC_DIR}/usb_config.cpp

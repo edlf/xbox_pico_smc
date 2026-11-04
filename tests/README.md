@@ -34,6 +34,20 @@ They build with the default settings from `src/config.hpp` (P11).
   as the I2C slave does: version string, reset/power requests, fan override,
   temperatures, OS answers (0x0D), interrupt reason, RAM test rule,
   reset-on-eject, scratch, and the extra commands 0x30-0x34.
+- `test_dvd.cpp`: the tray state debounce (start-up delay, two matching
+  reads, which states raise SMIs), the eject pulse, the open/close decision
+  (OS request, eject button, shutdown, the P2L "follow a tray pushed closed")
+  and the tray moving bit.
+- `test_led.cpp`: which LED pattern wins (boot failure, overheat, AV missing,
+  SMBus override, power off, tray moving) and the power down fade.
+- `test_settings.cpp`: settings saved to and loaded from a fake flash
+  (`fake_flash.cpp`): round trip, nothing written when unchanged, corrupt
+  records, thresholds from another firmware, invalid Wi-Fi values.
+- `test_i2c_decoder.cpp`: the sniffer's SMBus decoder fed SDA/SCL levels:
+  encoders found, writes logged (long, NACKed, two per tick), reads, other
+  devices and our own transfers not logged, and a video mode decoded from bus
+  writes.
+- `test_ring_buffer.cpp`: the log buffer's order, wrap-around and drops.
 
 ## Adding tests
 
@@ -62,5 +76,5 @@ Each `update()` call is one 20 ms tick. Inputs and outputs are in
 `fake::hal` (`fakes.hpp`), log lines in `fake::log` (`fake::logged(text)`).
 New test files go in `add_executable()` in `CMakeLists.txt`.
 
-Not covered: anything that only runs on the Pico itself (`hal.cpp`, the web
-interface, USB config, the sniffer's PIO/DMA capture, flash), and real timing.
+Not covered: anything that only runs on the Pico itself (`hal*.cpp`, the web
+interface, USB config, the sniffer's PIO/DMA capture, real flash), and real timing.

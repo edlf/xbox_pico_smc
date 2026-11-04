@@ -7,7 +7,7 @@
 Tray states (SMBus 0x03): 0x00 closed, 0x10 open, 0x20 unloading, 0x30 opening,
 0x40 no disc, 0x50 closing, 0x60 disc detected, 0x70 drive off.
 
-## Tray state debounce (`dvd_tray_state`, PIC 0x9D3)
+## Tray state debounce (`tray_debounce_state`, PIC 0x9D3)
 
 Reads the drive's tray state pins and reports a new state after two equal
 readings. Raises the tray SMIs.
@@ -31,7 +31,7 @@ stateDiagram-v2
 | `confirm` | Reads again |
 | `apply` | Reports the state and, once tray events are enabled, raises an SMI: 0x30 opening, 0x00 closed, 0x40/0x60 media. Any other state enables tray events |
 
-## Eject pulse (`update_eject_tray_state`, PIC 0xADE)
+## Eject pulse (`eject_pulse_state`, PIC 0xADE)
 
 ```mermaid
 stateDiagram-v2
@@ -41,7 +41,7 @@ stateDiagram-v2
     release_eject --> initial: release the line, clear eject_pulse
 ```
 
-## Open / close decision (`updateDvdTrayEject`, PIC 0x4D0)
+## Open / close decision (`updateEjectRequests`, PIC 0x4D0)
 
 Two states, tracking whether the tray was last sent open or closed. It starts as
 closed.
@@ -70,7 +70,7 @@ The DVD handling follows P2L (v1.6) for every firmware. Compared with the PIC:
   start restarts the debounce and the tray moving tracking.
 - The DXF stop at 0x00 in the tray moving tracking is gone.
 
-## Tray moving (`update_dvd_tray_three_state`, PIC 0x519)
+## Tray moving (`tray_moving_state`, PIC 0x519)
 
 Sets `tray_moving`, reported in SMBus 0x03 bit 0 and shown as a quick green blink.
 

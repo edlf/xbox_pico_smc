@@ -10,26 +10,26 @@ sensors_struct sensors;
 
 #if SMC_DVD_SUPPORT
 
-// updateDvdTray(): debounces the drive's tray state
+// updateTrayDebounce(): debounces the drive's tray state
 struct Debounce {
-  dvd_tray_state   state;
-  uint16_t         timer = 0;  // Start-up delay
-  drive_tray_state first_read;
-  drive_tray_state raw = drive_tray_state::closed;
+  tray_debounce_state state;
+  uint16_t            timer = 0;  // Start-up delay
+  drive_tray_state    first_read;
+  drive_tray_state    raw = drive_tray_state::closed;
 };
 static Debounce debounce;
 
-// updateEjectTray(): the eject line pulse
+// updateEjectPulse(): the eject line pulse
 struct EjectPulse {
-  update_eject_tray_state state;
-  uint16_t                timeout = 0;
+  eject_pulse_state state;
+  uint16_t          timeout = 0;
 };
 static EjectPulse eject;
 
-// updateDvdTrayThree(): whether the tray is moving
+// updateTrayMoving(): whether the tray is moving
 struct TrayMoving {
-  update_dvd_tray_three_state state;
-  uint16_t                    timeout = 0;
+  tray_moving_state state;
+  uint16_t          timeout = 0;
 };
 static TrayMoving moving;
 
@@ -40,13 +40,13 @@ static tray_position tray_position_state;
 void init() {
   eject = {};
   moving = {};
-  debounce.state = dvd_tray_state::initial;
+  debounce.state = tray_debounce_state::initial;
   debounce.raw = drive_tray_state::closed;
   tray_position_state = tray_position::closed;  // Assume closed, same as the PIC
 }
 
-void initDvdTray() {
-  debounce.state = dvd_tray_state::initial;
+void initTrayDebounce() {
+  debounce.state = tray_debounce_state::initial;
 }
 
 bool isTrayClosing() {
@@ -57,39 +57,39 @@ drive_tray_state readTrayState() {
   return static_cast<drive_tray_state>(hal::get_tray_state() & 0x70);
 }
 
-void updateDvdTray() {
+void updateTrayDebounce() {
   // Debounces the tray state and raises tray interrupts
   switch (debounce.state) {
-    case dvd_tray_state::initial:
+    case tray_debounce_state::initial:
       debounce.timer = 0x27;  // 39 ticks as P2L, the PIC waits 32
-      debounce.state = dvd_tray_state::startup_delay;
+      debounce.state = tray_debounce_state::startup_delay;
       break;
 
-    case dvd_tray_state::startup_delay:
+    case tray_debounce_state::startup_delay:
       debounce.timer--;
       if (debounce.timer == 0) {
-        debounce.state = dvd_tray_state::watch;
+        debounce.state = tray_debounce_state::watch;
       }
       break;
 
-    case dvd_tray_state::watch:
+    case tray_debounce_state::watch:
       debounce.raw = readTrayState();
       debounce.first_read = debounce.raw;
       if (sensors.tray_status != debounce.raw) {
-        debounce.state = dvd_tray_state::confirm;
+        debounce.state = tray_debounce_state::confirm;
       }
       break;
 
-    case dvd_tray_state::confirm:
+    case tray_debounce_state::confirm:
       debounce.raw = readTrayState();
       if (debounce.raw != debounce.first_read) {
-        debounce.state = dvd_tray_state::watch;
+        debounce.state = tray_debounce_state::watch;
       } else {
-        debounce.state = dvd_tray_state::apply;
+        debounce.state = tray_debounce_state::apply;
       }
       break;
 
-    case dvd_tray_state::apply:
+    case tray_debounce_state::apply:
       debug::print_debug("DVD: Tray state " + std::to_string(static_cast<uint8_t>(debounce.raw) >> 4));
       sensors.tray_status = debounce.raw;
       if (debounce.raw == drive_tray_state::opening) {
@@ -107,11 +107,11 @@ void updateDvdTray() {
       } else {
         flags.tray_events_enabled = true;
       }
-      debounce.state = dvd_tray_state::watch;
+      debounce.state = tray_debounce_state::watch;
       break;
 
     default:
-      debounce.state = dvd_tray_state::initial;
+      debounce.state = tray_debounce_state::initial;
       break;
   }
 }
@@ -119,41 +119,41 @@ void updateDvdTray() {
 void restartTrayDebounce() {
   // Same as P11: back to the start-up delay without reloading the timer,
   // which is already 0, so it counts 256 ticks
-  debounce.state = dvd_tray_state::startup_delay;
+  debounce.state = tray_debounce_state::startup_delay;
 }
 
 void restartTrayTracking() {
   // Boot challenge start restarts the debounce and tray moving (P2L)
-  debounce.state = dvd_tray_state::initial;
-  moving.state = update_dvd_tray_three_state::initial;
+  debounce.state = tray_debounce_state::initial;
+  moving.state = tray_moving_state::initial;
 }
 
-void updateEjectTray() {
+void updateEjectPulse() {
   // Pulses the drive's eject line for 5 ticks when eject_pulse is set
   switch (eject.state) {
-    case update_eject_tray_state::initial:
+    case eject_pulse_state::initial:
       eject.timeout = 5;
       if (flags.eject_pulse) {
         debug::print_message(std::string("DVD: Eject pulse to ") + (tray_position_state == tray_position::closed ? "close" : "open"));
-        eject.state = update_eject_tray_state::tick_timer;
+        eject.state = eject_pulse_state::tick_timer;
       }
       break;
 
-    case update_eject_tray_state::tick_timer:
+    case eject_pulse_state::tick_timer:
       hal::dvd_eject_assert();
       if (--eject.timeout == 0) {
-        eject.state = update_eject_tray_state::release_eject;
+        eject.state = eject_pulse_state::release_eject;
       }
       break;
 
-    case update_eject_tray_state::release_eject:
+    case eject_pulse_state::release_eject:
       flags.eject_pulse = false;
       hal::dvd_eject_release();
-      eject.state = update_eject_tray_state::initial;
+      eject.state = eject_pulse_state::initial;
       break;
 
     default:
-      eject.state = update_eject_tray_state::initial;
+      eject.state = eject_pulse_state::initial;
       break;
   }
 }
@@ -178,7 +178,7 @@ static bool nowOpen() {
          (sensors.tray_status == drive_tray_state::opening || (!flags.tray_moving && sensors.tray_status == drive_tray_state::open));
 }
 
-void updateDvdTrayEject() {
+void updateEjectRequests() {
   // Decides when to pulse eject. While the tray is open the SMC closes
   // it on its own; while closed, the eject button only raises an SMI (via
   // eject_change_requested) and the OS opens the tray with SMBus 0x0C.
@@ -247,35 +247,35 @@ void updateDvdTrayEject() {
   }
 }
 
-void updateDvdTrayThree() {
+void updateTrayMoving() {
   // Tracks whether the tray is moving, reported in SMBus 0x03 bit 0
   switch (moving.state) {
-    case update_dvd_tray_three_state::initial:
+    case tray_moving_state::initial:
       moving.timeout = 0xFF;
       flags.tray_moving = false;
 
       if (flags.eject_button_event) {
-        moving.state = update_dvd_tray_three_state::eject;
+        moving.state = tray_moving_state::eject;
       } else {
         if (!(sensors.tray_status == drive_tray_state::drive_off || sensors.tray_status == drive_tray_state::open ||
               sensors.tray_status == drive_tray_state::closed || sensors.tray_status == drive_tray_state::no_disc ||
               sensors.tray_status == drive_tray_state::disc_detected)) {
-          moving.state = update_dvd_tray_three_state::wait;
+          moving.state = tray_moving_state::wait;
         }
       }
       break;
 
-    case update_dvd_tray_three_state::wait:
+    case tray_moving_state::wait:
       flags.tray_moving = true;
       flags.eject_button_event = false;
 
       if (sensors.tray_status == drive_tray_state::open || sensors.tray_status == drive_tray_state::no_disc ||
           sensors.tray_status == drive_tray_state::disc_detected) {
-        moving.state = update_dvd_tray_three_state::initial;
+        moving.state = tray_moving_state::initial;
       }
       break;
 
-    case update_dvd_tray_three_state::eject:
+    case tray_moving_state::eject:
       flags.tray_moving = true;
 
       // Closing (0x50) always ends it, as P2L; the PIC ignores it while
@@ -283,12 +283,12 @@ void updateDvdTrayThree() {
       if (sensors.tray_status == drive_tray_state::closing || sensors.tray_status == drive_tray_state::opening ||
           sensors.tray_status == drive_tray_state::unloading || (SMI::flags.os_ready && --moving.timeout == 0)) {
         flags.tray_open_expected = false;
-        moving.state = update_dvd_tray_three_state::wait;
+        moving.state = tray_moving_state::wait;
       }
       break;
 
     default:
-      moving.state = update_dvd_tray_three_state::initial;
+      moving.state = tray_moving_state::initial;
       break;
   }
 }
@@ -302,7 +302,7 @@ constexpr drive_tray_state no_drive_tray_state = drive_tray_state::no_disc;
 
 void init() {}
 
-void initDvdTray() {}
+void initTrayDebounce() {}
 
 bool isTrayClosing() {
   return true;
@@ -312,18 +312,18 @@ drive_tray_state readTrayState() {
   return no_drive_tray_state;
 }
 
-void updateDvdTray() {
+void updateTrayDebounce() {
   sensors.tray_status = no_drive_tray_state;
 }
 
 void restartTrayDebounce() {}
 void restartTrayTracking() {}
 
-void updateEjectTray() {}
+void updateEjectPulse() {}
 
-void updateDvdTrayEject() {}
+void updateEjectRequests() {}
 
-void updateDvdTrayThree() {}
+void updateTrayMoving() {}
 
 #endif  // SMC_DVD_SUPPORT
 

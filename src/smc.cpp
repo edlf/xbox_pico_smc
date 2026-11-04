@@ -124,12 +124,12 @@ void main_loop() {
 #endif
         PLL_Reset::update();
         BootChallenge::update();
-        Dvd::updateDvdTray();
-        Dvd::updateEjectTray();
+        Dvd::updateTrayDebounce();
+        Dvd::updateEjectPulse();
         Video::update();
         FrontPanelSW::update();
-        Dvd::updateDvdTrayEject();
-        Dvd::updateDvdTrayThree();
+        Dvd::updateEjectRequests();
+        Dvd::updateTrayMoving();
         AudioClamp::update();
         update_LEDs();
         Fan::update_fan_temp();

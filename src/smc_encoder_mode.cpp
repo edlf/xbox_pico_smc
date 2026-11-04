@@ -305,7 +305,7 @@ static void xcaliburWrite(const uint8_t reg, const uint8_t index, const uint8_t 
     xcalibur.value = 0;
   }
 
-  xcalibur.value |= (uint32_t)value << (8 * (index - 1));
+  xcalibur.value |= static_cast<uint32_t>(value) << (8 * (index - 1));
   if (index < 4) {
     return;
   }
@@ -366,7 +366,8 @@ static XhdPacket xhd_packet;
 
 static void xhdPacketApplied() {
   const uint8_t  encoder_address = xhd_packet.bytes[0];
-  const uint32_t mode_dword = xhd_packet.bytes[2] | (xhd_packet.bytes[3] << 8) | (xhd_packet.bytes[4] << 16) | ((uint32_t)xhd_packet.bytes[5] << 24);
+  const uint32_t mode_dword =
+      xhd_packet.bytes[2] | (xhd_packet.bytes[3] << 8) | (xhd_packet.bytes[4] << 16) | (static_cast<uint32_t>(xhd_packet.bytes[5]) << 24);
 
   if (mode_dword == xhd_packet.logged_mode) {
     return;  // The dashboard repeats it
@@ -377,7 +378,7 @@ static void xhdPacketApplied() {
   const uint8_t mode_index = (mode_dword >> 16) & 0xFF;
   const bool    is_xcalibur = encoder_address == (address_xcalibur << 1);
   char          dword[12];
-  snprintf(dword, sizeof(dword), "0x%08lX", (unsigned long)mode_dword);
+  snprintf(dword, sizeof(dword), "0x%08lX", static_cast<unsigned long>(mode_dword));
 
   Mode mode;
   mode.source = "X-HD mode packet, mode " + utils::toHex(mode_index) + ", encoder " + utils::toHex(encoder_address) + ", mode dword " + dword;

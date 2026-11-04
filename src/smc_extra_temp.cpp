@@ -23,15 +23,15 @@ static int16_t logged_ntc = INT16_MIN;
 // RP2040/RP2350 datasheet: 0.706 V at 27 °C, -1.721 mV per °C
 static int16_t picoTemperature(const uint16_t raw) {
   const float volts = raw * adc_vref / adc_full_scale;
-  return (int16_t)lroundf((27.0f - (volts - 0.706f) / 0.001721f) * 10.0f);
+  return static_cast<int16_t>(lroundf((27.0f - (volts - 0.706f) / 0.001721f) * 10.0f));
 }
 
 // NTC from the pin to ground, SMC_NTC_SERIES_R from 3.3 V to the pin. Beta
 // equation from the resistance at 25 °C.
 static int16_t ntcTemperature(const uint16_t raw) {
-  const float resistance = (float)SMC_NTC_SERIES_R * raw / (adc_full_scale - raw);
+  const float resistance = static_cast<float>(SMC_NTC_SERIES_R) * raw / (adc_full_scale - raw);
   const float kelvin = 1.0f / (1.0f / 298.15f + logf(resistance / SMC_NTC_R25) / SMC_NTC_BETA);
-  return (int16_t)lroundf((kelvin - 273.15f) * 10.0f);
+  return static_cast<int16_t>(lroundf((kelvin - 273.15f) * 10.0f));
 }
 
 static void logChange(const char* name, const int16_t tenths, int16_t& logged) {

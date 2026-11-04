@@ -186,7 +186,7 @@ static void eraseAndProgram(void* param) {
   flash_range_program(flash_offset, page, sizeof(page));
 }
 
-static bool save(const Record& r) {
+static bool write(const Record& r) {
   hal::petWatchdog();
   // Stops core 1 (web interface) and the interrupts while the flash is busy
   const int result = flash_safe_execute(eraseAndProgram, const_cast<Record*>(&r), 500);
@@ -209,7 +209,7 @@ bool saveNow() {
     debug::print_message("SETTINGS: Nothing changed, not saved");
     return true;
   }
-  return save(now);
+  return write(now);
 }
 
 void requestSave() {
@@ -217,16 +217,11 @@ void requestSave() {
 }
 
 void update() {
-  if (!save_requested || !usable || !saved_valid) {
+  if (!save_requested) {
     return;
   }
   save_requested = false;
-  const Record now = current();
-  if (sameSettings(now, saved)) {
-    debug::print_message("SETTINGS: Nothing changed, not saved");
-    return;
-  }
-  save(now);
+  saveNow();
 }
 
 }  // namespace Settings

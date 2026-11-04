@@ -25,7 +25,7 @@ struct sensors_struct {
 extern sensors_struct sensors;
 
 // Tray state debounce
-enum class dvd_tray_state {
+enum class tray_debounce_state {
   initial,        // Start the start-up delay
   startup_delay,  // Ignore the tray for 32 ticks (640 ms) after power on
   watch,          // Wait for the pins to differ from the reported state
@@ -33,9 +33,9 @@ enum class dvd_tray_state {
   apply           // Report the new state and raise its SMI
 };
 
-enum class update_eject_tray_state { initial, tick_timer, release_eject };
+enum class eject_pulse_state { initial, tick_timer, release_eject };
 
-enum class update_dvd_tray_three_state { initial, wait, eject };
+enum class tray_moving_state { initial, wait, eject };
 
 // Tray flags
 struct flags_struct {
@@ -51,11 +51,11 @@ struct flags_struct {
 extern flags_struct flags;
 
 void init();
-void initDvdTray();
-void updateDvdTrayEject();
-void updateEjectTray();
-void updateDvdTrayThree();
-void updateDvdTray();
+void initTrayDebounce();
+void updateEjectRequests();
+void updateEjectPulse();
+void updateTrayMoving();
+void updateTrayDebounce();
 bool isTrayClosing();
 
 // Warm reset: restart the tray debounce, ignoring tray changes for ~5 s

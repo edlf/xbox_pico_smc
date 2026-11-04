@@ -51,6 +51,11 @@ bool                            logged(const std::string& text);  // A line cont
 
 void reset();
 
+// Fake flash (fake_flash.cpp), PICO_FLASH_SIZE_BYTES of it
+uint8_t*   flash();
+void       eraseFlash();  // All 0xFF, writes counted from 0
+extern int flash_writes;  // flash_safe_execute() calls
+
 }  // namespace fake
 
 #endif  // FAKES_HPP

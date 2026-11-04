@@ -156,7 +156,8 @@ void receive(void*, udp_pcb*, pbuf* p, const ip_addr_t*, u16_t) {
   out = putOption(out, OPT_MSG_TYPE, &reply_type, 1);
   out = putOption(out, OPT_SERVER_ID, server_ip, 4);
   if (reply_type != NAK) {
-    const uint8_t lease_time[4] = {(uint8_t)(lease_time_s >> 24), (uint8_t)(lease_time_s >> 16), (uint8_t)(lease_time_s >> 8), (uint8_t)lease_time_s};
+    const uint8_t lease_time[4] = {static_cast<uint8_t>(lease_time_s >> 24), static_cast<uint8_t>(lease_time_s >> 16), static_cast<uint8_t>(lease_time_s >> 8),
+                                   static_cast<uint8_t>(lease_time_s)};
     out = putOption(out, OPT_LEASE_TIME, lease_time, 4);
     out = putOption(out, OPT_SUBNET_MASK, netif_ip4_netmask(server_netif), 4);
     out = putOption(out, OPT_ROUTER, server_ip, 4);

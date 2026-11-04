@@ -201,7 +201,7 @@ int statusJson(char* out, size_t size) {
                   "\"fan\":%u,\"fanOverride\":%s,"
                   "\"dvd\":%s,\"tray\":%u,\"trayClosed\":%s,\"av\":%u,\"avMissing\":%s,\"overheated\":%s,"
                   "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,\"irq\":%u}",
-                  (unsigned long)s.uptime_s, s.powered ? "true" : "false", s.cpu_temperature, s.board_temperature, s.pico_temperature, ntc,
+                  static_cast<unsigned long>(s.uptime_s), s.powered ? "true" : "false", s.cpu_temperature, s.board_temperature, s.pico_temperature, ntc,
                   SMC_NTC_SENSOR ? "true" : "false", s.fan_speed, s.fan_override ? "true" : "false", SMC_DVD_SUPPORT ? "true" : "false", s.tray_state,
                   s.tray_closed ? "true" : "false", s.av_pack, s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
                   s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness, s.interrupt_reason);
@@ -216,14 +216,14 @@ int thresholdsJson(char* out, size_t size) {
 
   int           len = snprintf(out, size, "{\"min\":%u,\"items\":[", Fan::min_threshold);
   const uint8_t count = Fan::thresholdCount();
-  for (uint8_t i = 0; i < count && len < (int)size; i++) {
+  for (uint8_t i = 0; i < count && len < static_cast<int>(size); i++) {
     len += snprintf(out + len, size - len, "%s{\"label\":\"%s\",\"def\":%u,\"value\":%u}", i != 0 ? "," : "", Fan::thresholdLabel(i), Fan::thresholdDefault(i),
                     values[i]);
   }
-  if (len < (int)size) {
+  if (len < static_cast<int>(size)) {
     len += snprintf(out + len, size - len, "]}");
   }
-  return len < (int)size ? len : (int)size - 1;
+  return len < static_cast<int>(size) ? len : static_cast<int>(size) - 1;
 }
 
 // Value of key in "a=1&b=2" (the query ends at a space or the end), or -1
@@ -275,7 +275,7 @@ const char* queueCommand(const char* query) {
     if (speed < hal::FAN_MIN_SPEED || speed > hal::FAN_MAX_SPEED) {
       return "speed must be 10-50";
     }
-    message = {Command::fan_speed, (uint8_t)speed};
+    message = {Command::fan_speed, static_cast<uint8_t>(speed)};
   } else if (queryIs(query, "cmd", "fan_auto")) {
     message.command = Command::fan_auto;
   } else if (queryIs(query, "cmd", "led")) {
@@ -284,7 +284,7 @@ const char* queueCommand(const char* query) {
     if (red < 0 || red > 15 || green < 0 || green > 15) {
       return "red and green must be 0-15";
     }
-    message = {Command::led_pattern, (uint8_t)((red << 4) | green)};
+    message = {Command::led_pattern, static_cast<uint8_t>((red << 4) | green)};
   } else if (queryIs(query, "cmd", "led_auto")) {
     message.command = Command::led_auto;
   } else if (queryIs(query, "cmd", "threshold")) {
@@ -299,7 +299,7 @@ const char* queueCommand(const char* query) {
       snprintf(error, sizeof(error), "value must be %u-%u", Fan::min_threshold, Fan::thresholdDefault(static_cast<uint8_t>(index)));
       return error;
     }
-    message = {Command::threshold, (uint8_t)value, (uint8_t)index};
+    message = {Command::threshold, static_cast<uint8_t>(value), static_cast<uint8_t>(index)};
   } else if (queryIs(query, "cmd", "thresholds_default")) {
     message.command = Command::thresholds_default;
   } else if (queryIs(query, "cmd", "led_brightness")) {
@@ -307,7 +307,7 @@ const char* queueCommand(const char* query) {
     if (percent < 1 || percent > 100) {
       return "percent must be 1-100";
     }
-    message = {Command::led_brightness, (uint8_t)percent};
+    message = {Command::led_brightness, static_cast<uint8_t>(percent)};
   } else {
     return "unknown command";
   }
@@ -319,7 +319,7 @@ void respond(tcp_pcb* pcb, const char* status_line, const char* type, const char
   const int header_len = snprintf(header, sizeof(header),
                                   "HTTP/1.1 %s\r\nContent-Type: %s\r\nContent-Length: %u\r\nCache-Control: no-store\r\n"
                                   "Connection: close\r\n\r\n",
-                                  status_line, type, (unsigned)len);
+                                  status_line, type, static_cast<unsigned>(len));
   tcp_write(pcb, header, static_cast<u16_t>(header_len), TCP_WRITE_FLAG_COPY | (len != 0 ? TCP_WRITE_FLAG_MORE : 0));
   if (len != 0) {
     tcp_write(pcb, body, static_cast<u16_t>(len), body_is_static ? 0 : TCP_WRITE_FLAG_COPY);

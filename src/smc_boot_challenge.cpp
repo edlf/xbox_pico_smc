@@ -62,11 +62,11 @@ bool challengePassed() {
 // The PIC uses its free running timers as entropy: TMR0 runs at the
 // instruction clock, TMR1L at 1/8 of it
 static uint8_t fastTimerByte() {
-  return (uint8_t)time_us_32();
+  return static_cast<uint8_t>(time_us_32());
 }
 
 static uint8_t slowTimerByte() {
-  return (uint8_t)(time_us_32() >> 3);
+  return static_cast<uint8_t>(time_us_32() >> 3);
 }
 
 // Called on every standby loop iteration. D01/DXF have no challenge
@@ -97,12 +97,12 @@ void compute() {
   challenge.expected1 = 0xED;
 
   for (uint8_t i = 0; i < 4; i++) {
-    challenge.expected0 = ((uint8_t)(challenge.input_byte0 << 2) ^ (uint8_t)(challenge.input_byte1 + 0x39) ^ (uint8_t)(challenge.input_byte2 >> 2) ^
-                           (uint8_t)(challenge.input_byte3 + 0x63) ^ challenge.expected1) +
+    challenge.expected0 = (static_cast<uint8_t>(challenge.input_byte0 << 2) ^ static_cast<uint8_t>(challenge.input_byte1 + 0x39) ^
+                           static_cast<uint8_t>(challenge.input_byte2 >> 2) ^ static_cast<uint8_t>(challenge.input_byte3 + 0x63) ^ challenge.expected1) +
                           challenge.expected0;
-    challenge.expected1 =
-        ((uint8_t)(challenge.input_byte0 + 0x0B) ^ (uint8_t)(challenge.input_byte1 >> 2) ^ (uint8_t)(challenge.input_byte2 + 0x1B) ^ challenge.expected0) +
-        challenge.expected1;
+    challenge.expected1 = (static_cast<uint8_t>(challenge.input_byte0 + 0x0B) ^ static_cast<uint8_t>(challenge.input_byte1 >> 2) ^
+                           static_cast<uint8_t>(challenge.input_byte2 + 0x1B) ^ challenge.expected0) +
+                          challenge.expected1;
   }
 }
 

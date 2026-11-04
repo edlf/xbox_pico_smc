@@ -141,7 +141,7 @@ uint8_t update() {
       AudioClamp::flags.audio_unclamp_request = false;
       AudioClamp::flags.audio_clamp_timer = true;
       Video::init();
-      Dvd::initDvdTray();
+      Dvd::initTrayDebounce();
       ram_test_response0 = 0;
       ram_test_response1 = 0;
       hal::timer1_init(hal::TICK_US);
