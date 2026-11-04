@@ -1,9 +1,9 @@
 #include "smc_encoder_mode.hpp"
 #include "smc.hpp"
-#include "utils.hpp"
+#include "text.hpp"
 
 #include <cstdio>
-#include <string>
+#include <initializer_list>
 
 namespace SMC {
 namespace EncoderMode {
@@ -50,10 +50,13 @@ constexpr uint8_t out_raster = 0x54;  // As 0x50
 constexpr uint8_t mode_sel = 0x56;    // Low byte 0x8A on PAL 720-wide 0x04/0x06. Written last in a mode set
 }  // namespace xc
 
-static uint8_t     encoder = 0;      // Address of the encoder written to
-static bool        changed = false;  // A mode register was written since the last log
-static uint8_t     quiet_ticks = 0;  // Ticks since the last encoder write
-static std::string last_logged;
+// A mode as logged, e.g. "1280x720p, 16:9, YCrCb (Conexant, 0x2E = 0xAA)"
+using ModeText = Text<160>;
+
+static uint8_t  encoder = 0;      // Address of the encoder written to
+static bool     changed = false;  // A mode register was written since the last log
+static uint8_t  quiet_ticks = 0;  // Ticks since the last encoder write
+static ModeText last_logged;
 
 // What the CPU last wrote to each encoder's mode registers
 struct ConexantRegs {
@@ -185,21 +188,21 @@ static const ModeInfo* modeInfo(const uint8_t index, const bool is_xcalibur) {
 
 // The parts of a mode, joined into the log line. Empty parts are left out.
 struct Mode {
-  std::string resolution;  // e.g. 720x480i
-  std::string standard;    // NTSC or PAL
-  std::string aspect;      // 4:3 or 16:9
-  std::string colour;      // RGB or YCrCb
-  std::string source;      // Encoder and raw values, to check the decode
+  Text<40>    resolution;          // e.g. 720x480i
+  const char* standard = nullptr;  // NTSC or PAL
+  const char* aspect = nullptr;    // 4:3 or 16:9
+  const char* colour = nullptr;    // RGB or YCrCb
+  Text<96>    source;              // Encoder and raw values, to check the decode
 
-  std::string text() const {
-    std::string s = resolution.empty() ? "unknown resolution" : resolution;
-    for (const std::string* part : {&standard, &aspect, &colour}) {
-      if (!part->empty()) {
-        s += ", " + *part;
+  ModeText text() const {
+    ModeText s(resolution.empty() ? "unknown resolution" : resolution.c_str());
+    for (const char* part : {standard, aspect, colour}) {
+      if (part != nullptr) {
+        s.append(", %s", part);
       }
     }
-
-    return s + " (" + source + ")";
+    s.append(" (%s)", source.c_str());
+    return s;
   }
 };
 
@@ -377,15 +380,13 @@ static void xhdPacketApplied() {
 
   const uint8_t mode_index = (mode_dword >> 16) & 0xFF;
   const bool    is_xcalibur = encoder_address == (address_xcalibur << 1);
-  char          dword[12];
-  snprintf(dword, sizeof(dword), "0x%08lX", static_cast<unsigned long>(mode_dword));
 
   Mode mode;
-  mode.source = "X-HD mode packet, mode " + utils::toHex(mode_index) + ", encoder " + utils::toHex(encoder_address) + ", mode dword " + dword;
+  mode.source.append("X-HD mode packet, mode 0x%02X, encoder 0x%02X, mode dword 0x%08lX", mode_index, encoder_address, static_cast<unsigned long>(mode_dword));
   const ModeInfo* info = modeInfo(mode_index, is_xcalibur);
 
   if (info != nullptr) {
-    mode.resolution = info->resolution;
+    mode.resolution += info->resolution;
     if (info->standard != nullptr) {
       mode.standard = info->standard;
     }
@@ -402,7 +403,7 @@ static void xhdPacketApplied() {
     mode.colour = "SCART RGB";
   }
 
-  debug::print_message("ENCODER: Video mode " + mode.text());
+  debug::print(debug::Level::Info, "ENCODER: Video mode %s", mode.text().c_str());
 }
 
 static void resetXhd() {
@@ -470,15 +471,15 @@ void onWrite(const uint8_t address, const uint8_t reg, const uint8_t index, cons
 // RASTER_SEL order, not confirmed on an Xbox yet.
 // SD width from H_ACTIVE (active width + 8): 728 = 720, 648 = 640, 704 = 640
 // with 1.1:1 pixels.
-static std::string conexantMode() {
+static ModeText conexantMode() {
   Mode mode;
-  mode.source = "Conexant";
+  mode.source += "Conexant";
   if (conexant.raster_valid) {
-    mode.source += ", 0x2E = " + utils::toHex(conexant.raster);
+    mode.source.append(", 0x2E = 0x%02X", conexant.raster);
   }
 
   if (conexant.hactive_valid) {
-    mode.source += ", H_ACTIVE " + std::to_string(conexant.hactive);
+    mode.source.append(", H_ACTIVE %u", conexant.hactive);
   }
 
   const bool    hdtv = (conexant.raster & 0x80) != 0;
@@ -486,8 +487,8 @@ static std::string conexantMode() {
   if (!conexant.raster_valid) {
     // Nothing yet
   } else if (!hdtv && raster == 0) {
-    std::string width = "?";
-    std::string par;
+    const char* width = "?";
+    const char* par = "";
 
     if (conexant.hactive_valid) {
       if (conexant.hactive == 728) {
@@ -500,7 +501,7 @@ static std::string conexantMode() {
       }
     }
 
-    std::string lines = "480/576";
+    const char* lines = "480/576";
 
     if (conexant.wss_valid) {
       switch (conexant.wss & 0x0F) {
@@ -528,14 +529,14 @@ static std::string conexantMode() {
           break;
       }
     }
-    mode.resolution = width + "x" + lines + "i" + par;
+    mode.resolution.append("%sx%si%s", width, lines, par);
   } else if (hdtv && raster == 1) {
-    mode.resolution = "720x480p";  // Also the 640-wide 480p mode, in a 720-wide raster
+    mode.resolution += "720x480p";  // Also the 640-wide 480p mode, in a 720-wide raster
   } else if (hdtv && raster == 2) {
-    mode.resolution = "1280x720p";
+    mode.resolution += "1280x720p";
     mode.aspect = "16:9";
   } else if (hdtv && raster == 3) {
-    mode.resolution = "1080i";
+    mode.resolution += "1080i";
     mode.aspect = "16:9";
   }
 
@@ -551,26 +552,26 @@ static std::string conexantMode() {
 // 1.1:1 pixels, other values 640), or from IHW (670 or more = 720) before
 // IHO is seen. The Focus doesn't say which progressive mode (480p or 720p),
 // X-HD measures that from the video signal.
-static std::string focusMode() {
+static ModeText focusMode() {
   Mode mode;
-  mode.source = "Focus";
+  mode.source += "Focus";
   if (focus.cntl_valid) {
-    mode.source += ", 0x92 = " + utils::toHex(focus.cntl);
+    mode.source.append(", 0x92 = 0x%02X", focus.cntl);
   }
 
   if (focus.ihw_valid) {
-    mode.source += ", IHW " + std::to_string(focus.ihw);
+    mode.source.append(", IHW %u", focus.ihw);
   }
 
   if (focus.iho_valid) {
-    mode.source += ", IHO " + std::to_string(focus.iho);
+    mode.source.append(", IHO %u", focus.iho);
   }
 
   if (!focus.cntl_valid) {
     // Nothing yet
   } else if (focus.cntl & 0x80) {
-    std::string width = "?";
-    std::string par;
+    const char* width = "?";
+    const char* par = "";
 
     if (focus.iho_valid) {
       width = (focus.iho == 103 || focus.iho == 143) ? "720" : "640";
@@ -582,7 +583,7 @@ static std::string focusMode() {
       width = focus.ihw >= 670 ? "720" : "640";
     }
 
-    std::string lines = "480/576";
+    const char* lines = "480/576";
 
     if (focus.wss_valid) {
       if (focus.wss_b0 == 0x18 || focus.wss_b0 == 0x60) {
@@ -594,9 +595,9 @@ static std::string focusMode() {
       }
     }
 
-    mode.resolution = width + "x" + lines + "i" + par;
+    mode.resolution.append("%sx%si%s", width, lines, par);
   } else {
-    mode.resolution = "progressive (480p or 720p)";
+    mode.resolution += "progressive (480p or 720p)";
   }
 
   if (focus.cntl_valid) {
@@ -608,17 +609,17 @@ static std::string focusMode() {
 
 // Xcalibur: the whole mode, from its raster registers. The SD aspect is
 // 0x07: 0x02/0x0E 16:9, 0x00/0x10 4:3 (0 is also written on 480p and HD).
-static std::string xcaliburMode() {
+static ModeText xcaliburMode() {
   Mode mode;
-  mode.source = "Xcalibur";
+  mode.source += "Xcalibur";
   const ModeInfo* info = modeInfo(xcalibur.mode_index, true);
   if (info == nullptr) {
-    mode.source += ", input raster " + std::to_string(xcalibur.in_raster & 0x7FFF) + " lines";
+    mode.source.append(", input raster %lu lines", static_cast<unsigned long>(xcalibur.in_raster & 0x7FFF));
     return mode.text();
   }
 
-  mode.source += ", mode " + utils::toHex(xcalibur.mode_index);
-  mode.resolution = info->resolution;
+  mode.source.append(", mode 0x%02X", xcalibur.mode_index);
+  mode.resolution += info->resolution;
 
   if (info->standard != nullptr) {
     mode.standard = info->standard;
@@ -649,7 +650,7 @@ void update() {
 
   changed = false;
 
-  std::string mode;
+  ModeText mode;
   if (encoder == address_conexant) {
     mode = conexantMode();
   } else if (encoder == address_focus) {
@@ -667,7 +668,7 @@ void update() {
   }
 
   last_logged = mode;
-  debug::print_message("ENCODER: Video mode " + mode);
+  debug::print(debug::Level::Info, "ENCODER: Video mode %s", mode.c_str());
 }
 
 }  // namespace EncoderMode

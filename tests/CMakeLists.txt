@@ -52,7 +52,6 @@ add_executable(og_smc_tests
   ${SMC_SRC_DIR}/smc_i2c_decoder.cpp
   ${SMC_SRC_DIR}/smc_smbus.cpp
   ${SMC_SRC_DIR}/smc_video.cpp
-  ${SMC_SRC_DIR}/utils.cpp
 )
 
 # The fake SDK headers come first, so <pico/...> and <hardware/...> resolve to them

@@ -161,7 +161,8 @@ static void command(char* line) {
     hal::set_led_brightness(static_cast<uint8_t>(a));
     ok();
   } else if (strcmp(words[0], "set") == 0 && count == 4 && strcmp(words[1], "threshold") == 0) {
-    if (!parseNumber(words[2], a) || !parseNumber(words[3], b) || a < 0 || a > 255 || b < 0 || b > 255 || !SMC::Fan::setThreshold(static_cast<uint8_t>(a), static_cast<uint8_t>(b))) {
+    if (!parseNumber(words[2], a) || !parseNumber(words[3], b) || a < 0 || a > 255 || b < 0 || b > 255 ||
+        !SMC::Fan::setThreshold(static_cast<uint8_t>(a), static_cast<uint8_t>(b))) {
       error("no such threshold, or out of range (min to default)");
       return;
     }
@@ -191,7 +192,7 @@ static void command(char* line) {
 }
 
 void run() {
-  debug::print_message("USB: Config mode, the SMC is not running");
+  debug::print(debug::Level::Info, "USB: Config mode, the SMC is not running");
   SMC::Settings::load();
 
   char            line[80];
@@ -211,7 +212,7 @@ void run() {
     if (time_reached(next_check)) {
       next_check = make_timeout_time_ms(standby_check_ms);
       if (standbyPower()) {
-        debug::print_warn("USB: Xbox standby power seen, restarting as the SMC");
+        debug::print(debug::Level::Warnings, "USB: Xbox standby power seen, restarting as the SMC");
         stdio_flush();
         watchdog_reboot(0, 0, 0);
         while (true) {

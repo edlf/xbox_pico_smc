@@ -153,7 +153,7 @@ void rgb_led_init() {
   uint offset;
 
   if (!pio_claim_free_sm_and_add_program_for_gpio_range(&ws2812_program, &rgb.pio, &rgb.sm, &offset, pins::RGB_LED, 1, true)) {
-    debug::print_warn("GPIO: No free PIO state machine for the RGB LED");
+    debug::print(debug::Level::Warnings, "GPIO: No free PIO state machine for the RGB LED");
     return;
   }
 

@@ -4,8 +4,6 @@
 #include "hal.hpp"
 #include "smc_smbus.hpp"
 
-#include <string>
-
 namespace SMC {
 namespace Fan {
 
@@ -164,7 +162,7 @@ void update_fan_temp() {
       break;
 
     case fan_control_state::overheated:
-      debug::print_warn("FAN: Overheated, CPU " + std::to_string(sensors.CPU_temperature) + " board " + std::to_string(sensors.board_temperature));
+      debug::print(debug::Level::Warnings, "FAN: Overheated, CPU %u board %u", sensors.CPU_temperature, sensors.board_temperature);
       setSpeed(max_fan_speed);
       PLL_Reset::flags.cold_reset_request = true;
       PLL_Reset::flags.run_after_reset = false;
@@ -252,7 +250,7 @@ void update_fan_temp() {
           return;
         }
         // Sensor is gone: treat it as an overheat
-        debug::print_warn("FAN: Temperature sensor not responding, forcing overheat");
+        debug::print(debug::Level::Warnings, "FAN: Temperature sensor not responding, forcing overheat");
         sensors.CPU_temperature = failed_read_cpu_temp;
         sensors.board_temperature = failed_read_board_temp;
         state = fan_control_state::overheated;

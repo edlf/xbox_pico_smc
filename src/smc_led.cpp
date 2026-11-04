@@ -3,7 +3,6 @@
 #include "debug.hpp"
 
 #include <iterator>
-#include <string>
 
 namespace SMC {
 
@@ -194,13 +193,7 @@ void setBootFailurePattern(const uint8_t red, const uint8_t green) {
 
 void printState() {
   const size_t led_state = static_cast<size_t>(state);
-  std::string  msg = "LED state [" + std::to_string(led_state) + "]";
-
-  if (led_state < std::size(state_names)) {
-    msg += std::string(" ") + state_names[led_state];
-  }
-
-  debug::print_message(msg);
+  debug::print(debug::Level::Info, "LED state [%u] %s", static_cast<unsigned>(led_state), led_state < std::size(state_names) ? state_names[led_state] : "");
 }
 
 void update() {

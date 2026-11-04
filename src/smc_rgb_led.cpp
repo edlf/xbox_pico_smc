@@ -69,7 +69,7 @@ static void setPhase(const rgb_phase next) {
   if (phase == rgb_phase::done) {
     done_timer = done_ticks;
   }
-  debug::print_debug(std::string("RGB: ") + phase_names[static_cast<uint8_t>(phase)]);
+  debug::print(debug::Level::Debug, "RGB: %s", phase_names[static_cast<uint8_t>(phase)]);
 }
 
 static void nextPhase() {

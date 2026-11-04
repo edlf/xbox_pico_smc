@@ -1,37 +1,16 @@
 #ifndef DEBUG_HPP
 #define DEBUG_HPP
 
-#include <string>
-
 namespace debug {
 
 // Ordered by verbosity: a level prints its own messages and everything above it
-enum class DebugLevel { Silent, Critical, Warnings, Info, Debug };
+enum class Level { Silent, Critical, Warnings, Info, Debug };
 
-bool enabled(DebugLevel level);
+bool enabled(Level level);
 
-// Timestamp, level tag and the message, if the level is enabled
-void print(DebugLevel level, const std::string& msg);
-
-inline void print_critical(const std::string& msg) {
-  print(DebugLevel::Critical, msg);
-}
-
-inline void print_warn(const std::string& msg) {
-  print(DebugLevel::Warnings, msg);
-}
-
-inline void print_message(const std::string& msg) {
-  print(DebugLevel::Info, msg);
-}
-
-inline void print_debug(const std::string& msg) {
-  print(DebugLevel::Debug, msg);
-}
-
-inline bool debug_enabled() {
-  return enabled(DebugLevel::Debug);
-}
+// Timestamp, level tag and the message (printf format), if the level is
+// enabled. Formatted into a fixed buffer, no heap: longer lines end in "...".
+__attribute__((format(printf, 2, 3))) void print(Level level, const char* format, ...);
 
 const char* level_name();
 void        print_welcome();

@@ -50,10 +50,8 @@ static av_pack readMode() {
   static uint8_t last_logged = 0xFF;
   const uint8_t  pins = static_cast<uint8_t>(mode);
 
-  if (pins != last_logged && debug::debug_enabled()) {
-    char msg[48];
-    snprintf(msg, sizeof(msg), "VIDEO: Pins 0x%02X (state %u)", pins, static_cast<unsigned>(state));
-    debug::print_debug(msg);
+  if (pins != last_logged && debug::enabled(debug::Level::Debug)) {
+    debug::print(debug::Level::Debug, "VIDEO: Pins 0x%02X (state %u)", pins, static_cast<unsigned>(state));
   }
 
   last_logged = pins;
@@ -126,7 +124,7 @@ void update() {
       flags.av_cable_missing = true;         // No AV cable (LEDs, audio clamp)
       SMI::flags.av_unplugged_event = true;  // SMI to the OS
       setMode(vmode_raw);
-      debug::print_message("VIDEO: Unplugged, SMI queued, audio clamped, LEDs orange/green");
+      debug::print(debug::Level::Info, "VIDEO: Unplugged, SMI queued, audio clamped, LEDs orange/green");
       state = video_state::no_cable;
       break;
 
@@ -135,7 +133,7 @@ void update() {
       if (vmode_raw == av_pack::special) {
         state = video_state::special_debounce;
       } else if (vmode_raw != av_pack::none) {
-        debug::print_message("VIDEO: Cable back, audio unclamped");
+        debug::print(debug::Level::Info, "VIDEO: Cable back, audio unclamped");
         flags.av_cable_missing = false;
         AudioClamp::flags.audio_unclamp_request = true;
         state = video_state::monitor;
@@ -160,56 +158,54 @@ void update() {
 }
 
 void printMode(const av_pack vm) {
-  std::string message = "VIDEO: AV Cable [";
+  const char* name;
   bool        recognized_cable = true;
 
   switch (vm) {
     case av_pack::scart:
-      message += "Advanced SCART Cable";
+      name = "Advanced SCART Cable";
       break;
 
     case av_pack::hdtv:
-      message += "High Definition AV Pack";
+      name = "High Definition AV Pack";
       break;
 
     case av_pack::vga:
-      message += "VGA / progressive RGB";
+      name = "VGA / progressive RGB";
       break;
 
     case av_pack::rf:
-      message += "RF Adapter";
+      name = "RF Adapter";
       break;
 
     case av_pack::advanced:
-      message += "Advanced AV Pack";
+      name = "Advanced AV Pack";
       break;
 
     case av_pack::special:
-      message += "Unknown mode 5";
+      name = "Unknown mode 5";
       recognized_cable = false;
       break;
 
     case av_pack::standard:
-      message += "Standard AV Cable";
+      name = "Standard AV Cable";
       break;
 
     case av_pack::none:
-      message += "No cable connected";
+      name = "No cable connected";
       recognized_cable = false;
       break;
 
     default:
-      message += "Invalid video mode";
+      name = "Invalid video mode";
       recognized_cable = false;
       break;
   }
 
-  message += "]";
-
   if (recognized_cable) {
-    debug::print_message(message);
+    debug::print(debug::Level::Info, "VIDEO: AV Cable [%s]", name);
   } else {
-    debug::print_warn(message);
+    debug::print(debug::Level::Warnings, "VIDEO: AV Cable [%s]", name);
   }
 }
 

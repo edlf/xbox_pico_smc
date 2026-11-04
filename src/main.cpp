@@ -16,7 +16,7 @@ int main() {
   debug::print_build_flags();
 
   if (watchdog_caused_reboot()) {
-    debug::print_critical("Rebooted by watchdog");
+    debug::print(debug::Level::Critical, "Rebooted by watchdog");
   }
 
   // Out of the Xbox, powered from USB: config mode

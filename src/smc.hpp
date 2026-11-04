@@ -40,7 +40,7 @@ void setPowerOkIrq(bool enabled);
 void update_LEDs();
 
 void shutdown_xbox();
-void panic(const std::string& message);
+void panic(const char* message);
 }  // namespace SMC
 
 #endif  // SMC_HPP

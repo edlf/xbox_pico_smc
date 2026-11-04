@@ -23,7 +23,7 @@ void PLL_on() {
   gpio_put(pins::PLL_ENABLE, 1);
 
   if (!state_pll) {
-    debug::print_message("GPIO: Assert PLL");
+    debug::print(debug::Level::Info, "GPIO: Assert PLL");
     state_pll = true;
   }
 }
@@ -32,7 +32,7 @@ void PLL_off() {
   gpio_put(pins::PLL_ENABLE, 0);
 
   if (state_pll) {
-    debug::print_message("GPIO: Deassert PLL");
+    debug::print(debug::Level::Info, "GPIO: Deassert PLL");
     state_pll = false;
   }
 }
@@ -59,7 +59,7 @@ void turn_on_psu() {
   gpio_put(pins::POWER_ON, 1);
 
   if (!state_psu) {
-    debug::print_message("GPIO: Turn on xbox PSU");
+    debug::print(debug::Level::Info, "GPIO: Turn on xbox PSU");
     state_psu = true;
   }
 }
@@ -68,7 +68,7 @@ void turn_off_psu() {
   gpio_put(pins::POWER_ON, 0);
 
   if (state_psu) {
-    debug::print_message("GPIO: Turn off xbox PSU");
+    debug::print(debug::Level::Info, "GPIO: Turn off xbox PSU");
     state_psu = false;
   }
 }
@@ -176,7 +176,7 @@ void set_fan_speed(uint8_t speed) {
   pwm_set_chan_level(pwm_slice, pwm_channel, level);
 
   if (speed != fan_speed_set) {
-    debug::print_debug("GPIO: Fan speed " + std::to_string(speed));  // Fan::setSpeed() logs the change (INFO)
+    debug::print(debug::Level::Debug, "GPIO: Fan speed %u", speed);  // Fan::setSpeed() logs the change (INFO)
     fan_speed_set = speed;
   }
 }
@@ -187,7 +187,7 @@ void fan_pin_low() {
 }
 
 void init() {
-  debug::print_message("GPIO: Init");
+  debug::print(debug::Level::Info, "GPIO: Init");
 
   init_leds();
   init_adc();
@@ -280,7 +280,7 @@ void init() {
   gpio_pull_up(pins::I2C_SDA);
   gpio_pull_up(pins::I2C_SCL);
 
-  debug::print_message("GPIO: PWM Init");
+  debug::print(debug::Level::Info, "GPIO: PWM Init");
   pwm_slice = pwm_gpio_to_slice_num(pins::FAN_PWM1);
   pwm_channel = pwm_gpio_to_channel(pins::FAN_PWM1);
   pwm_config pwm_cfg = pwm_get_default_config();
@@ -290,17 +290,17 @@ void init() {
   fan_pin_low();
   pwm_set_enabled(pwm_slice, true);
 
-  debug::print_message("GPIO: I2C Init");
+  debug::print(debug::Level::Info, "GPIO: I2C Init");
   i2c_init(I2C_PORT, I2C_BAUDRATE);
 }
 
 void assertSystemReset() {
-  debug::print_message("GPIO: Assert reset");
+  debug::print(debug::Level::Info, "GPIO: Assert reset");
   gpio_put(pins::SYSTEM_RESET, 0);
 }
 
 void liftSystemReset() {
-  debug::print_message("GPIO: Lift reset");
+  debug::print(debug::Level::Info, "GPIO: Lift reset");
   gpio_put(pins::SYSTEM_RESET, 1);
 }
 
@@ -309,7 +309,7 @@ bool system_reset_asserted() {
 }
 
 void enableWatchdog() {
-  debug::print_message("PICO: Watchdog enabled");
+  debug::print(debug::Level::Info, "PICO: Watchdog enabled");
   watchdog_enable(1000, 1);
 }
 

@@ -4,29 +4,38 @@
 #include "debug.hpp"
 #include "fakes.hpp"
 
+#include <cstdarg>
+#include <cstdio>
+#include <string>
+
 namespace debug {
 
-static const char* tag(DebugLevel level) {
+static const char* tag(Level level) {
   switch (level) {
-    case DebugLevel::Critical:
+    case Level::Critical:
       return "(CRIT ) ";
-    case DebugLevel::Warnings:
+    case Level::Warnings:
       return "(WARN ) ";
-    case DebugLevel::Info:
+    case Level::Info:
       return "(INFO ) ";
-    case DebugLevel::Debug:
+    case Level::Debug:
       return "(DEBUG) ";
     default:
       return "";
   }
 }
 
-bool enabled(DebugLevel level) {
-  return level != DebugLevel::Silent;
+bool enabled(Level level) {
+  return level != Level::Silent;
 }
 
-void print(DebugLevel level, const std::string& msg) {
-  fake::log.push_back(tag(level) + msg);
+void print(Level level, const char* format, ...) {
+  char    line[512];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(line, sizeof(line), format, args);
+  va_end(args);
+  fake::log.push_back(std::string(tag(level)) + line);
 }
 
 const char* level_name() {

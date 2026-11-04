@@ -41,10 +41,8 @@ static void logChange(const char* name, const int16_t tenths, int16_t& logged) {
   }
 
   logged = whole;
-  char      msg[48];
   const int magnitude = std::abs(tenths);
-  snprintf(msg, sizeof(msg), "TEMP: %s %s%d.%d C", name, tenths < 0 ? "-" : "", magnitude / 10, magnitude % 10);
-  debug::print_debug(msg);
+  debug::print(debug::Level::Debug, "TEMP: %s %s%d.%d C", name, tenths < 0 ? "-" : "", magnitude / 10, magnitude % 10);
 }
 
 static void sample() {
@@ -58,7 +56,7 @@ static void sample() {
   const uint16_t raw = hal::read_ntc_adc();
   const bool     connected = raw > ntc_limit && raw < adc_full_scale - ntc_limit;
   if (connected != sensors.ntc_connected) {
-    debug::print_message(connected ? "TEMP: NTC connected" : "TEMP: NTC open or shorted");
+    debug::print(debug::Level::Info, connected ? "TEMP: NTC connected" : "TEMP: NTC open or shorted");
     logged_ntc = INT16_MIN;
   }
 

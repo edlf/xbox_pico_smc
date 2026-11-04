@@ -489,61 +489,61 @@ void core1Main() {
 void runCommand(const CommandMessage& message) {
   switch (message.command) {
     case Command::power:
-      debug::print_message("WEB: Power button");
+      debug::print(debug::Level::Info, "WEB: Power button");
       SMI::flags.power_change_requested = true;
       break;
 
     case Command::eject:
-      debug::print_message("WEB: Eject button");
+      debug::print(debug::Level::Info, "WEB: Eject button");
       Dvd::flags.eject_change_requested = true;
       Dvd::flags.eject_button_event = true;
       break;
 
     case Command::reset:
       if (hal::get_power_ok()) {
-        debug::print_message("WEB: Reset");
+        debug::print(debug::Level::Info, "WEB: Reset");
         PLL_Reset::flags.warm_reset_request = true;
         SMI::flags.os_reset_request = true;
       }
       break;
 
     case Command::fan_speed:
-      debug::print_message("WEB: Fan speed " + std::to_string(message.arg));
+      debug::print(debug::Level::Info, "WEB: Fan speed %u", message.arg);
       Fan::setCustomSpeed(message.arg);
       Fan::flags.fan_override = true;
       break;
 
     case Command::fan_auto:
-      debug::print_message("WEB: Fan automatic");
+      debug::print(debug::Level::Info, "WEB: Fan automatic");
       Fan::flags.fan_override = false;
       break;
 
     case Command::led_pattern:
-      debug::print_message("WEB: LED pattern red " + std::to_string(message.arg >> 4) + " green " + std::to_string(message.arg & 0x0F));
+      debug::print(debug::Level::Info, "WEB: LED pattern red %u green %u", message.arg >> 4, message.arg & 0x0F);
       Led::setRedPhases(message.arg >> 4);
       Led::setGreenPhases(message.arg & 0x0F);
       Led::flags.led_override = true;
       break;
 
     case Command::led_auto:
-      debug::print_message("WEB: LEDs automatic");
+      debug::print(debug::Level::Info, "WEB: LEDs automatic");
       Led::flags.led_override = false;
       break;
 
     case Command::threshold:
       if (Fan::setThreshold(message.index, message.arg)) {
-        debug::print_message(std::string("WEB: Fan threshold \"") + Fan::thresholdLabel(message.index) + "\" " + std::to_string(message.arg) + " (default " +
-                             std::to_string(Fan::thresholdDefault(message.index)) + ")");
+        debug::print(debug::Level::Info, "WEB: Fan threshold \"%s\" %u (default %u)", Fan::thresholdLabel(message.index), message.arg,
+                     Fan::thresholdDefault(message.index));
       }
       break;
 
     case Command::thresholds_default:
-      debug::print_message("WEB: Fan thresholds back to the defaults");
+      debug::print(debug::Level::Info, "WEB: Fan thresholds back to the defaults");
       Fan::resetThresholds();
       break;
 
     case Command::led_brightness:
-      debug::print_message("WEB: LED brightness " + std::to_string(message.arg) + "%");
+      debug::print(debug::Level::Info, "WEB: LED brightness %u%%", message.arg);
       hal::set_led_brightness(message.arg);
       break;
   }
@@ -586,7 +586,7 @@ bool started = false;
 
 void start() {
   if (!Settings::webEnabled()) {
-    debug::print_message("WEB: Off in the settings, not started (USB config: set web on)");
+    debug::print(debug::Level::Info, "WEB: Off in the settings, not started (USB config: set web on)");
     return;
   }
   started = true;
@@ -597,11 +597,11 @@ void start() {
   // Printed here, before the Wi-Fi is started, so it shows even if that fails
   char password[64];
   if (wifiPassword(password, sizeof(password))) {
-    debug::print_message(std::string("WEB: Access point \"") + Settings::wifiSsid() + "\", password " + password);
+    debug::print(debug::Level::Info, "WEB: Access point \"%s\", password %s", Settings::wifiSsid(), password);
   } else {
-    debug::print_message(std::string("WEB: Access point \"") + Settings::wifiSsid() + "\", saved password");
+    debug::print(debug::Level::Info, "WEB: Access point \"%s\", saved password", Settings::wifiSsid());
   }
-  debug::print_message("WEB: Starting core 1");
+  debug::print(debug::Level::Info, "WEB: Starting core 1");
   multicore_launch_core1_with_stack(core1Main, core1_stack, sizeof(core1_stack));
 }
 
@@ -618,7 +618,7 @@ void service() {
 
   LogMessage message;
   while (queue_try_remove(&log_messages, &message)) {
-    debug::print_message(message.text);
+    debug::print(debug::Level::Info, "%s", message.text);
   }
 }
 

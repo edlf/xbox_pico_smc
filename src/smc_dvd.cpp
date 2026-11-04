@@ -90,7 +90,7 @@ void updateTrayDebounce() {
       break;
 
     case tray_debounce_state::apply:
-      debug::print_debug("DVD: Tray state " + std::to_string(static_cast<uint8_t>(debounce.raw) >> 4));
+      debug::print(debug::Level::Debug, "DVD: Tray state %u", static_cast<unsigned>(debounce.raw) >> 4);
       sensors.tray_status = debounce.raw;
       if (debounce.raw == drive_tray_state::opening) {
         if (flags.tray_events_enabled) {
@@ -134,7 +134,7 @@ void updateEjectPulse() {
     case eject_pulse_state::initial:
       eject.timeout = 5;
       if (flags.eject_pulse) {
-        debug::print_message(std::string("DVD: Eject pulse to ") + (tray_position_state == tray_position::closed ? "close" : "open"));
+        debug::print(debug::Level::Info, "DVD: Eject pulse to %s", tray_position_state == tray_position::closed ? "close" : "open");
         eject.state = eject_pulse_state::tick_timer;
       }
       break;

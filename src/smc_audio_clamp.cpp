@@ -3,7 +3,6 @@
 #include "hal.hpp"
 
 #include <iterator>
-#include <string>
 
 namespace SMC {
 namespace AudioClamp {
@@ -74,13 +73,8 @@ bool isClamped() {
 
 void printState() {
   const size_t audio_state = static_cast<size_t>(state);
-  std::string  msg = "Audio clamp state [" + std::to_string(audio_state) + "]";
-
-  if (audio_state < std::size(state_names)) {
-    msg += std::string(" ") + state_names[audio_state];
-  }
-
-  debug::print_message(msg);
+  debug::print(debug::Level::Info, "Audio clamp state [%u] %s", static_cast<unsigned>(audio_state),
+               audio_state < std::size(state_names) ? state_names[audio_state] : "");
 }
 
 }  // namespace AudioClamp

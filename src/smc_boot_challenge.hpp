@@ -37,7 +37,7 @@ typedef struct {
 
 // Boot flags
 struct flags_struct {
-  bool ram_test_submitted;           // SMBus 0x12 written
+  bool ram_test_submitted;  // SMBus 0x12 written
   bool ram_test_passed;
   bool frag_power_off;               // FRAG: the power button turns off right away
   bool frag_eject;                   // FRAG: the eject button opens the tray directly

@@ -219,8 +219,7 @@ else()
   set(SMC_FAN_SRC ${SMC_SRC_DIR}/smc_fan_pic.cpp)
 endif()
 
-add_executable(OG_SMC ${SMC_SRC_DIR}/utils.cpp
-                      ${SMC_SRC_DIR}/debug.cpp
+add_executable(OG_SMC ${SMC_SRC_DIR}/debug.cpp
                       ${SMC_SRC_DIR}/main.cpp
                       ${SMC_SRC_DIR}/hal.cpp
                       ${SMC_SRC_DIR}/hal_leds.cpp

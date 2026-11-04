@@ -9,7 +9,6 @@
 
 #include <cstdio>
 #include <iterator>
-#include <string>
 
 namespace SMC {
 namespace SMI {
@@ -64,13 +63,8 @@ void setPowerCycleDelay(uint8_t ticks) {
 
 void printState() {
   const size_t smi_state = static_cast<size_t>(state);
-  std::string  msg = "SMI state [" + std::to_string(smi_state) + "]";
-
-  if (smi_state < std::size(smi_state_names)) {
-    msg += std::string(" ") + smi_state_names[smi_state];
-  }
-
-  debug::print_message(msg);
+  debug::print(debug::Level::Info, "SMI state [%u] %s", static_cast<unsigned>(smi_state),
+               smi_state < std::size(smi_state_names) ? smi_state_names[smi_state] : "");
 }
 
 void resetInterruptReason() {
@@ -97,9 +91,7 @@ static void fireSystemInterrupt() {
 // pending copy that event_interrupt_handled uses to clear the source, then
 // pulses SMI
 void raiseInterrupt(uint8_t reason) {
-  char msg[32];
-  snprintf(msg, sizeof(msg), "SMI: Interrupt reason 0x%02X", reason);
-  debug::print_message(msg);
+  debug::print(debug::Level::Info, "SMI: Interrupt reason 0x%02X", reason);
   setInterruptReason(reason);
   flags.pending_interrupt_reason |= reason;
   fireSystemInterrupt();
@@ -298,7 +290,7 @@ uint8_t update() {
         // reset-on-eject enabled: that one still resets after the timeout
         if (flags.tray_opening_event && !flags.reset_on_eject_disabled) {
           if (--power_timeout == 0) {
-            debug::print_message("SMI: Tray opened with reset on eject on (SMBus 0x19), resetting");
+            debug::print(debug::Level::Info, "SMI: Tray opened with reset on eject on (SMBus 0x19), resetting");
             state = smi_power_state::going_to_reset;
           }
         } else {
@@ -309,13 +301,11 @@ uint8_t update() {
       } else if (flags.power_off_request) {
         state = smi_power_state::request_tray_close;
       } else if (flags.os_reset_request) {
-        debug::print_message("SMI: OS asked for a reset (SMBus 0x0D bit 3)");
+        debug::print(debug::Level::Info, "SMI: OS asked for a reset (SMBus 0x0D bit 3)");
         state = smi_power_state::going_to_reset;
       } else {
         if (--power_timeout == 0) {
-          char msg[64];
-          snprintf(msg, sizeof(msg), "SMI: No OS answer (SMBus 0x0D) to interrupt 0x%02X, resetting", flags.pending_interrupt_reason);
-          debug::print_warn(msg);
+          debug::print(debug::Level::Warnings, "SMI: No OS answer (SMBus 0x0D) to interrupt 0x%02X, resetting", flags.pending_interrupt_reason);
           state = smi_power_state::going_to_reset;
         }
       }

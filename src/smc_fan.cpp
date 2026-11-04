@@ -3,7 +3,7 @@
 #include "smc.hpp"
 #include "hal.hpp"
 
-#include <string>
+#include "text.hpp"
 
 namespace SMC {
 namespace Fan {
@@ -46,16 +46,16 @@ void setSpeed(const uint8_t speed) {
   }
 
   if (fan_speed != previous) {
-    std::string msg = "FAN: Speed ";
+    Text<64> msg("FAN: Speed ");
     if (previous != 0) {
-      msg += std::to_string(previous) + " -> ";
+      msg.append("%u -> ", previous);
     }
-    msg += std::to_string(fan_speed) + " (CPU " + std::to_string(sensors.CPU_temperature) + " C";
+    msg.append("%u (CPU %u C", fan_speed, sensors.CPU_temperature);
     if (!SMC_FIRMWARE_P2L) {  // P2L has no board sensor
-      msg += ", board " + std::to_string(sensors.board_temperature) + " C";
+      msg.append(", board %u C", sensors.board_temperature);
     }
     msg += flags.fan_override ? ", manual)" : ")";
-    debug::print_message(msg);
+    debug::print(debug::Level::Info, "%s", msg.c_str());
   }
   hal::set_fan_speed(fan_speed);
 }
@@ -102,8 +102,8 @@ void predictCpuTemperature() {
 }
 
 void printReadings() {
-  debug::print_debug("FAN: CPU " + std::to_string(sensors.CPU_temperature) + " board " + std::to_string(sensors.board_temperature) + " predicted " +
-                     std::to_string(cpu_temperature_predicted) + " speed " + std::to_string(fan_speed));
+  debug::print(debug::Level::Debug, "FAN: CPU %u board %u predicted %u speed %u", sensors.CPU_temperature, sensors.board_temperature, cpu_temperature_predicted,
+               fan_speed);
 }
 
 // Called by the main loop once the Xbox is off

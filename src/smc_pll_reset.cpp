@@ -4,7 +4,6 @@
 #include "pico/stdlib.h"
 
 #include <iterator>
-#include <string>
 
 namespace SMC {
 namespace PLL_Reset {
@@ -29,13 +28,7 @@ bool isHeldInReset() {
 
 void printState() {
   const size_t bc_state = static_cast<size_t>(state);
-  std::string  msg = "PLL Reset state [" + std::to_string(bc_state) + "]";
-
-  if (bc_state < std::size(state_names)) {
-    msg += std::string(" ") + state_names[bc_state];
-  }
-
-  debug::print_message(msg);
+  debug::print(debug::Level::Info, "PLL Reset state [%u] %s", static_cast<unsigned>(bc_state), bc_state < std::size(state_names) ? state_names[bc_state] : "");
 }
 
 // Same order as the PIC: release SYSRESET, give the encoder ~0.9 ms

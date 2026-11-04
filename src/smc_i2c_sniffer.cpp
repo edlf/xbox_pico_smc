@@ -86,7 +86,7 @@ void init() {
 
   uint offset;
   if (!pio_claim_free_sm_and_add_program(&sniff_program, &pio, &sm, &offset)) {
-    debug::print_warn("ENCODER: No free PIO state machine, sniffer off");
+    debug::print(debug::Level::Warnings, "ENCODER: No free PIO state machine, sniffer off");
     return;
   }
   pio_sm_config c = pio_get_default_sm_config();
@@ -103,7 +103,7 @@ void init() {
 
   dma_channel = dma_claim_unused_channel(false);
   if (dma_channel < 0) {
-    debug::print_warn("ENCODER: No free DMA channel, sniffer off");
+    debug::print(debug::Level::Warnings, "ENCODER: No free DMA channel, sniffer off");
     pio_remove_program_and_unclaim_sm(&sniff_program, pio, sm, offset);
     return;
   }
@@ -119,7 +119,7 @@ void init() {
 
   read_index = 0;
   pio_sm_set_enabled(pio, sm, true);
-  debug::print_message("ENCODER: Watching the SMBus for the video encoder");
+  debug::print(debug::Level::Info, "ENCODER: Watching the SMBus for the video encoder");
 }
 
 void update() {

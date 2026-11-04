@@ -14,7 +14,7 @@
 #define SMC_BOARD "unknown"
 #endif
 
-// Debug level, the index into debug::DebugLevel
+// Debug level, the index into debug::Level
 #ifndef SMC_DEBUG_LEVEL
 #define SMC_DEBUG_LEVEL 3  // Info
 #endif

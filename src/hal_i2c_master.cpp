@@ -231,7 +231,7 @@ I2CMasterResult i2c_master_transfer(uint8_t address, const uint8_t* tx, size_t t
 // Frees a device stuck holding SDA low: 9 clocks on SCL, then a STOP. The PIC
 // does the same when the temperature sensor stops answering.
 void i2c_bus_recovery() {
-  debug::print_message("I2C: Bus recovery");
+  debug::print(debug::Level::Info, "I2C: Bus recovery");
 
   takePins();
 

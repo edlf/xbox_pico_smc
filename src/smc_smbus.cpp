@@ -1,6 +1,5 @@
 #include "smc.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 #include "ring_buffer.hpp"
 #include "pin_assignments.hpp"
 
@@ -116,9 +115,8 @@ void resetSMBusRegisters() {
 void printSMBusLog() {
   SMBusLogEntry entry;
   while (smbus_log.pop(entry)) {
-    if (debug::debug_enabled()) {  // Debug level only, they're too frequent for Info
-      debug::print_debug(std::string("SMBUS: ") + (entry.write ? "Write" : "Read ") + " cmd [" + utils::toHex(entry.command) + "] data [" +
-                         utils::toHex(entry.data) + "]");
+    if (debug::enabled(debug::Level::Debug)) {  // Debug level only, they're too frequent for Info
+      debug::print(debug::Level::Debug, "SMBUS: %s cmd [0x%02X] data [0x%02X]", entry.write ? "Write" : "Read ", entry.command, entry.data);
     }
   }
 }
@@ -366,7 +364,7 @@ static void applyWrite(uint8_t command, uint8_t data) {
       // Percent, 1-100, anything else is ignored. Not saved (Settings).
       if (data >= 1 && data <= 100 && data != hal::get_led_brightness()) {
         hal::set_led_brightness(data);
-        debug::print_message("LED: Brightness " + std::to_string(data) + "% (SMBus 0x34)");
+        debug::print(debug::Level::Info, "LED: Brightness %u%% (SMBus 0x34)", data);
       }
       break;
 
@@ -467,7 +465,7 @@ void applySMBusWrites() {
     applyWrite(write.command, write.data);
   }
   if (const uint16_t dropped = pending_writes.takeDropped(); dropped != 0) {
-    debug::print_warn("SMBUS: " + std::to_string(dropped) + " writes lost (queue full)");
+    debug::print(debug::Level::Warnings, "SMBUS: %u writes lost (queue full)", dropped);
   }
 }
 
@@ -521,7 +519,7 @@ static bool masterTransfer(uint8_t address, const uint8_t* tx, size_t tx_len, ui
   }
 
   static const char* const reasons[] = {"ok", "bus busy", "nack", "arbitration lost", "timeout"};
-  debug::print_warn("I2C: Transfer to address " + utils::toHex(address) + " failed: " + reasons[static_cast<int>(result)]);
+  debug::print(debug::Level::Warnings, "I2C: Transfer to address 0x%02X failed: %s", address, reasons[static_cast<int>(result)]);
   return false;
 }
 

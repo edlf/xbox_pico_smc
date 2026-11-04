@@ -7,7 +7,7 @@
 #include "pico/flash.h"
 
 #include <cstring>
-#include <string>
+#include "text.hpp"
 
 namespace SMC {
 namespace Settings {
@@ -136,7 +136,7 @@ void load() {
   const uintptr_t binary_end = reinterpret_cast<uintptr_t>(&__flash_binary_end) - XIP_BASE;
   usable = binary_end <= flash_offset;
   if (!usable) {
-    debug::print_warn("SETTINGS: Firmware reaches the settings sector, not saved");
+    debug::print(debug::Level::Warnings, "SETTINGS: Firmware reaches the settings sector, not saved");
     return;
   }
 
@@ -144,10 +144,11 @@ void load() {
   char          firmware[4];
   firmwareName(firmware);
   if (stored->magic != magic || stored->version != version || stored->size != sizeof(Record) || stored->checksum != checksum(*stored)) {
-    debug::print_message("SETTINGS: None saved, using the defaults");
+    debug::print(debug::Level::Info, "SETTINGS: None saved, using the defaults");
   } else {
     hal::set_led_brightness(stored->led_brightness);
-    std::string msg = "SETTINGS: Loaded, LED brightness " + std::to_string(stored->led_brightness) + "%";
+    Text<128> msg;
+    msg.append("SETTINGS: Loaded, LED brightness %u%%", stored->led_brightness);
     // Thresholds only from the same firmware, setThreshold() checks each range
     if (memcmp(stored->firmware, firmware, sizeof(firmware)) == 0 && stored->threshold_count == Fan::thresholdCount()) {
       for (uint8_t i = 0; i < stored->threshold_count; i++) {
@@ -171,7 +172,7 @@ void load() {
     }
     setWebEnabled(stored->values.web_enabled != 0);
     msg += webEnabled() ? ", web interface on" : ", web interface off";
-    debug::print_message(msg);
+    debug::print(debug::Level::Info, "%s", msg.c_str());
   }
   saved = current();  // What's applied now, so only real changes are written
   saved_valid = true;
@@ -192,11 +193,11 @@ static bool write(const Record& r) {
   const int result = flash_safe_execute(eraseAndProgram, const_cast<Record*>(&r), 500);
   hal::petWatchdog();
   if (result != PICO_OK) {
-    debug::print_warn("SETTINGS: Save failed (" + std::to_string(result) + ")");
+    debug::print(debug::Level::Warnings, "SETTINGS: Save failed (%d)", result);
     return false;
   }
   saved = r;
-  debug::print_message("SETTINGS: Saved");
+  debug::print(debug::Level::Info, "SETTINGS: Saved");
   return true;
 }
 
@@ -206,7 +207,7 @@ bool saveNow() {
   }
   const Record now = current();
   if (sameSettings(now, saved)) {
-    debug::print_message("SETTINGS: Nothing changed, not saved");
+    debug::print(debug::Level::Info, "SETTINGS: Nothing changed, not saved");
     return true;
   }
   return write(now);

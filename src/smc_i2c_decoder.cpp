@@ -1,11 +1,10 @@
 #include "smc_i2c_decoder.hpp"
 #include "smc_encoder_mode.hpp"
 #include "smc.hpp"
-#include "utils.hpp"
 #include "ring_buffer.hpp"
 
 #include <iterator>
-#include <string>
+#include "text.hpp"
 
 namespace SMC {
 namespace I2CDecoder {
@@ -78,7 +77,7 @@ static void segmentStart() {
 
 // A write ended by STOP, to an encoder, with a register and at least one byte
 static void segmentEnd() {
-  if (!debug::debug_enabled() || ignoring || decoder.restarted || decoder.byte_count < 3 || (decoder.bytes[0] & 1) != 0) {
+  if (!debug::enabled(debug::Level::Debug) || ignoring || decoder.restarted || decoder.byte_count < 3 || (decoder.bytes[0] & 1) != 0) {
     return;
   }
   const uint8_t address = decoder.bytes[0] >> 1;
@@ -153,7 +152,7 @@ static void printFound() {
   const uint8_t new_found = found_mask & ~logged_mask;
   for (uint8_t i = 0; i < std::size(encoders); i++) {
     if (new_found & (1u << i)) {
-      debug::print_message(std::string("ENCODER: Found ") + encoders[i].name + " (" + utils::toHex(encoders[i].address) + ")");
+      debug::print(debug::Level::Info, "ENCODER: Found %s (0x%02X)", encoders[i].name, encoders[i].address);
     }
   }
   logged_mask |= new_found;
@@ -162,23 +161,24 @@ static void printFound() {
 static void printWrites() {
   LogEntry entry;
   for (uint8_t n = 0; n < prints_per_tick && writes.pop(entry); n++) {
-    std::string   msg = std::string("ENCODER: ") + encoderName(entry.address) + " [" + utils::toHex(entry.data[0]) + "] =";
+    Text<64> msg;
+    msg.append("ENCODER: %s [0x%02X] =", encoderName(entry.address), entry.data[0]);
     const uint8_t kept = entry.count < max_bytes - 1 ? entry.count : max_bytes - 1;
     for (uint8_t i = 1; i < kept; i++) {
-      msg += " " + utils::toHex(entry.data[i]);
+      msg.append(" 0x%02X", entry.data[i]);
     }
     if (entry.count > kept) {
-      msg += " (+" + std::to_string(entry.count - kept) + " bytes)";
+      msg.append(" (+%u bytes)", entry.count - kept);
     }
     if (entry.nacked) {
       msg += " (NACK)";
     }
-    debug::print_debug(msg);
+    debug::print(debug::Level::Debug, "%s", msg.c_str());
   }
 
   if (writes.empty()) {
     if (const uint16_t dropped = writes.takeDropped(); dropped != 0) {
-      debug::print_warn("ENCODER: " + std::to_string(dropped) + " writes not logged (log full)");
+      debug::print(debug::Level::Warnings, "ENCODER: %u writes not logged (log full)", dropped);
     }
   }
 }

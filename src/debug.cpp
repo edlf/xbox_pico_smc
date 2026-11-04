@@ -1,19 +1,21 @@
 #include "debug.hpp"
 #include "config.hpp"
-#include <iostream>
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
 #include <iterator>
 #include "pico/time.h"
 
 namespace debug {
 
-static DebugLevel debugLevel = static_cast<DebugLevel>(SMC_DEBUG_LEVEL);
+static Level debugLevel = static_cast<Level>(SMC_DEBUG_LEVEL);
 
 struct LevelInfo {
   const char* name;  // SMC_DEBUG_LEVEL value
   const char* tag;   // Shown in front of each message
 };
 
-// Indexed by DebugLevel
+// Indexed by Level
 constexpr LevelInfo levels[] = {
     {"SILENT",   ""       },
     {"CRITICAL", "(CRIT )"},
@@ -21,27 +23,34 @@ constexpr LevelInfo levels[] = {
     {"INFO",     "(INFO )"},
     {"DEBUG",    "(DEBUG)"},
 };
-static_assert(std::size(levels) == static_cast<size_t>(DebugLevel::Debug) + 1, "One entry per DebugLevel");
+static_assert(std::size(levels) == static_cast<size_t>(Level::Debug) + 1, "One entry per Level");
 
-const LevelInfo& info(DebugLevel level) {
+static const LevelInfo& info(Level level) {
   return levels[static_cast<size_t>(level)];
 }
 
-bool enabled(DebugLevel level) {
-  return level != DebugLevel::Silent && debugLevel >= level;
+bool enabled(Level level) {
+  return level != Level::Silent && debugLevel >= level;
 }
 
-void print(DebugLevel level, const std::string& msg) {
+void print(Level level, const char* format, ...) {
   if (!enabled(level)) {
     return;
   }
 
+  char    line[192];
+  va_list args;
+  va_start(args, format);
+  const int length = vsnprintf(line, sizeof(line), format, args);
+  va_end(args);
+  if (length >= static_cast<int>(sizeof(line))) {
+    memcpy(line + sizeof(line) - 4, "...", 4);  // Cut off
+  }
+
   // 12 digits, wrapping around after ~11.6 days
   constexpr uint64_t timestamp_wrap_us = 1000000000000ULL;
-  char               timestamp[sizeof("[000000000000] ")];
-  snprintf(timestamp, sizeof(timestamp), "[%012llu] ", to_us_since_boot(get_absolute_time()) % timestamp_wrap_us);
-
-  std::cout << timestamp << info(level).tag << " " << msg << std::endl;
+  printf("[%012llu] %s %s\n", to_us_since_boot(get_absolute_time()) % timestamp_wrap_us, info(level).tag, line);
+  fflush(stdout);
 }
 
 const char* level_name() {
@@ -49,25 +58,39 @@ const char* level_name() {
 }
 
 void print_welcome() {
-  std::cout << std::endl
-            << "*-----------------------------------------------------------------------------*\n"
-            << "*                                  SMC Boot                                   *\n"
-            << "*-----------------------------------------------------------------------------*" << std::endl;
+  printf(
+      "\n"
+      "*-----------------------------------------------------------------------------*\n"
+      "*                                  SMC Boot                                   *\n"
+      "*-----------------------------------------------------------------------------*\n");
+  fflush(stdout);
+}
+
+static const char* onOff(const bool on) {
+  return on ? "ON" : "OFF";
 }
 
 void print_build_flags() {
   // Build options from CMake, see CMakeLists.txt
-  std::cout << std::string("Build flags:") + "\n  > PICO_BOARD=" + SMC_BOARD + "\n  > SMC_DVD_SUPPORT=" + (SMC_DVD_SUPPORT ? "ON" : "OFF") +
-                   "\n  > SMC_BOOT_CHALLENGE=" + (SMC_BOOT_CHALLENGE ? "ON" : "OFF") + "\n  > SMC_AV_PACK_OVERRIDE=" + (SMC_AV_PACK_OVERRIDE ? "ON" : "OFF") +
-                   "\n  > SMC_AV_PACK_MODE=" + std::to_string(SMC_AV_PACK_MODE) + "\n  > SMC_LED_FADE=" + (SMC_LED_FADE ? "ON" : "OFF") +
-                   "\n  > SMC_NTC_SENSOR=" +
-                   (SMC_NTC_SENSOR ? "ON (beta " + std::to_string(SMC_NTC_BETA) + ", R25 " + std::to_string(SMC_NTC_R25) + ", series " +
-                                         std::to_string(SMC_NTC_SERIES_R) + ")"
-                                   : "OFF") +
-                   "\n  > SMC_I2C_SNIFFER=" + (SMC_I2C_SNIFFER ? "ON" : "OFF") + "\n  > SMC_RGB_LED=" + (SMC_RGB_LED ? "ON" : "OFF") +
-                   "\n  > SMC_FIRMWARE=" + SMC_FIRMWARE_NAME + "\n  > SMC_REPORT_VERSION=" + SMC_VERSION_STRING +
-                   "\n  > SMC_DEBUG_LEVEL=" + debug::level_name() + "\n  > SMC_WEB_INTERFACE=" + (SMC_WEB_INTERFACE ? "ON" : "OFF")
-            << std::endl;
+  printf("Build flags:\n");
+  printf("  > PICO_BOARD=%s\n", SMC_BOARD);
+  printf("  > SMC_DVD_SUPPORT=%s\n", onOff(SMC_DVD_SUPPORT));
+  printf("  > SMC_BOOT_CHALLENGE=%s\n", onOff(SMC_BOOT_CHALLENGE));
+  printf("  > SMC_AV_PACK_OVERRIDE=%s\n", onOff(SMC_AV_PACK_OVERRIDE));
+  printf("  > SMC_AV_PACK_MODE=%d\n", SMC_AV_PACK_MODE);
+  printf("  > SMC_LED_FADE=%s\n", onOff(SMC_LED_FADE));
+  if (SMC_NTC_SENSOR) {
+    printf("  > SMC_NTC_SENSOR=ON (beta %d, R25 %d, series %d)\n", SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R);
+  } else {
+    printf("  > SMC_NTC_SENSOR=OFF\n");
+  }
+  printf("  > SMC_I2C_SNIFFER=%s\n", onOff(SMC_I2C_SNIFFER));
+  printf("  > SMC_RGB_LED=%s\n", onOff(SMC_RGB_LED));
+  printf("  > SMC_FIRMWARE=%s\n", SMC_FIRMWARE_NAME);
+  printf("  > SMC_REPORT_VERSION=%s\n", SMC_VERSION_STRING);
+  printf("  > SMC_DEBUG_LEVEL=%s\n", level_name());
+  printf("  > SMC_WEB_INTERFACE=%s\n", onOff(SMC_WEB_INTERFACE));
+  fflush(stdout);
 }
 
 }  // namespace debug

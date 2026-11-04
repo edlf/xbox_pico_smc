@@ -2,7 +2,6 @@
 #include "hal.hpp"
 
 #include <iterator>
-#include <string>
 
 namespace SMC {
 namespace FrontPanelSW {
@@ -67,11 +66,11 @@ void updateEject() {
 }
 
 void printPowerState() {
-  debug::print_message(std::string("Power SW state: ") + power.stateName());
+  debug::print(debug::Level::Info, "Power SW state: %s", power.stateName());
 }
 
 void printEjectState() {
-  debug::print_message(std::string("Eject SW state: ") + eject.stateName());
+  debug::print(debug::Level::Info, "Eject SW state: %s", eject.stateName());
 }
 
 }  // namespace FrontPanelSW

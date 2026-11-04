@@ -17,13 +17,13 @@ volatile uint8_t bios_response_byte0;
 
 // P01: the PIC's only encoder write, register 0xBA = 0x3F
 void configureConexantEncoder() {
-  debug::print_message("SMC: Configure Conexant Encoder");
+  debug::print(debug::Level::Info, "SMC: Configure Conexant Encoder");
 
   constexpr size_t  len = 2;
   constexpr uint8_t config[len] = {0xBA, 0x3F};
 
   if (!smbusMasterWrite(I2C_CONEXANT_ADDRESS, config, len)) {
-    debug::print_warn("Conexant encoder write failed");
+    debug::print(debug::Level::Warnings, "Conexant encoder write failed");
   }
 }
 
@@ -34,7 +34,7 @@ void configureTemperatureSensor() {
   constexpr uint8_t config[len] = {0x09, 0x00};
 
   if (!smbusMasterWrite(I2C_TEMP_SENSOR_ADDRESS, config, len)) {
-    debug::print_warn("Temperature sensor write failed");
+    debug::print(debug::Level::Warnings, "Temperature sensor write failed");
   }
 }
 
@@ -94,7 +94,7 @@ void main_loop() {
   RgbLed::init();
   Settings::load();  // After the modules it sets
 
-  debug::print_message("MAIN: Set I2C interrupt");
+  debug::print(debug::Level::Info, "MAIN: Set I2C interrupt");
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
 
   hal::enableWatchdog();
@@ -217,12 +217,12 @@ void shutdown_xbox() {
   hal::turn_off_psu();
 }
 
-void panic(const std::string& message) {
+void panic(const char* message) {
   hal::disable_and_discard_interrupts();
 
   shutdown_xbox();
 
-  debug::print_critical(message + " Waiting for watchdog to reboot");
+  debug::print(debug::Level::Critical, "%s Waiting for watchdog to reboot", message);
 
   while (true) {
     hal::pico_led_on();

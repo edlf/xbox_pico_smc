@@ -1,11 +1,10 @@
 #include "smc_boot_challenge.hpp"
 #include "smc.hpp"
 #include "hal.hpp"
-#include "utils.hpp"
 #include "pico/stdlib.h"
 
 #include <iterator>
-#include <string>
+#include "text.hpp"
 
 namespace SMC {
 namespace BootChallenge {
@@ -106,10 +105,6 @@ void compute() {
   }
 }
 
-static std::string ramTestResult() {
-  return "result " + utils::toHex(ram_test_response0) + " type " + utils::toHex(ram_test_response1);
-}
-
 static void clearRamTestResult() {
   flags.ram_test_submitted = false;
   flags.ram_test_passed = false;
@@ -207,7 +202,7 @@ void update() {
           state = boot_challenge_state::ram_test_failed;
         }
       } else if (--boot_response_timeout == 0) {
-        debug::print_warn("BOOT: No RAM test result");
+        debug::print(debug::Level::Warnings, "BOOT: No RAM test result");
 #if SMC_BOOT_CHALLENGE
         state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
 #else
@@ -217,7 +212,7 @@ void update() {
       break;
 
     case boot_challenge_state::ram_test_ok:
-      debug::print_message("BOOT: RAM test passed, " + ramTestResult());
+      debug::print(debug::Level::Info, "BOOT: RAM test passed, result 0x%02X type 0x%02X", ram_test_response0, ram_test_response1);
       ram_test_failed_shown = false;
       failed_ram_banks = 0;
       challenge_check_pending = !SMC_FIRMWARE_NO_CHALLENGE;  // D01/DXF only check the RAM test
@@ -228,13 +223,14 @@ void update() {
       // Assumed: bits 0-3 of SMBus 0x12 flag the four RAM banks that failed
       // (0x00 is a pass with 64 MB). Kept, as a retry clears the result.
       failed_ram_banks = ram_test_response0 & 0x0F;
-      std::string banks;
+      Text<24> banks;
       for (uint8_t bank = 0; bank < 4; bank++) {
         if (failed_ram_banks & (1u << bank)) {
-          banks += " " + std::to_string(bank);
+          banks.append(" %u", bank);
         }
       }
-      debug::print_warn("BOOT: RAM test failed, " + ramTestResult() + (banks.empty() ? ", no bank flagged" : ", bank(s)" + banks));
+      debug::print(debug::Level::Warnings, "BOOT: RAM test failed, result 0x%02X type 0x%02X, %s%s", ram_test_response0, ram_test_response1,
+                   banks.empty() ? "no bank flagged" : "bank(s)", banks.c_str());
 
       // Blinking red, only for a failed RAM test (the PIC shows red/orange, 0x0F
       // red and 0x05 green, and only when it enforces the boot challenge). Shown
@@ -319,18 +315,18 @@ void update() {
       if (flags.challenge_response_received) {
         flags.challenge_response_received = false;
         if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
-          debug::print_message("BOOT: Challenge passed");
+          debug::print(debug::Level::Info, "BOOT: Challenge passed");
           challenge_passed = true;
           challenge_check_pending = false;  // As P2L: back to waiting for a reset
           state = boot_challenge_state::challenge_wait_for_reply;
           break;
         }
-        debug::print_warn("BOOT: Challenge failed, expected " + utils::toHex(challenge.expected0) + " " + utils::toHex(challenge.expected1) + " got " +
-                          utils::toHex(challenge.response0) + " " + utils::toHex(challenge.response1));
+        debug::print(debug::Level::Warnings, "BOOT: Challenge failed, expected 0x%02X 0x%02X got 0x%02X 0x%02X", challenge.expected0, challenge.expected1,
+                     challenge.response0, challenge.response1);
       } else if (--boot_response_timeout != 0) {
         break;
       } else {
-        debug::print_warn("BOOT: No challenge answer");
+        debug::print(debug::Level::Warnings, "BOOT: No challenge answer");
       }
 
 #if SMC_BOOT_CHALLENGE
@@ -382,13 +378,8 @@ challenge_struct& getChallengeStructRef() {
 
 void printState() {
   const size_t bc_state = static_cast<size_t>(state);
-  std::string  msg = "Boot challenge state [" + std::to_string(bc_state) + "]";
-
-  if (bc_state < std::size(state_names)) {
-    msg += std::string(" ") + state_names[bc_state];
-  }
-
-  debug::print_message(msg);
+  debug::print(debug::Level::Info, "Boot challenge state [%u] %s", static_cast<unsigned>(bc_state),
+               bc_state < std::size(state_names) ? state_names[bc_state] : "");
 }
 
 }  // namespace BootChallenge
