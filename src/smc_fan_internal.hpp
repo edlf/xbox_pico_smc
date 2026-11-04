@@ -33,7 +33,7 @@ extern uint8_t cpu_temperature_predicted;  // CPU temperature plus a margin for 
 void initShared(const uint8_t custom_speed);
 // Sets the fan speed, limited to 10-50
 void setSpeed(const uint8_t speed);
-// Applies a raiseSpeedTo() request from the SMBus interrupt
+// Applies a raiseSpeedTo() request (SMBus 0x05)
 void applyRaisedSpeed();
 // Updates cpu_temperature_increase and cpu_temperature_predicted
 void predictCpuTemperature();

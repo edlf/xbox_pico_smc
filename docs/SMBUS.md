@@ -9,6 +9,11 @@ default), P01, the debug kit versions D01 and DXF, or P2L (v1.6). Unknown
 commands are ignored on write and read as 0x00, and so are writes to read-only
 commands and reads of write-only ones. Times are in SMC ticks of 20 ms.
 
+Writes to the SMC's own registers (0x01, 0x0E, 0x12, 0x13, 0x1B) take effect at
+once, so a read straight after sees them. The others, which act on the tray,
+LEDs, fan, power and boot challenge, are queued by the interrupt and applied at
+the start of the next tick (within 20 ms), in the order they were written.
+
 ## Overview
 
 ### Stock

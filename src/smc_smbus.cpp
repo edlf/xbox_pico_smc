@@ -95,9 +95,22 @@ static void logTransaction(bool write, uint8_t command, uint8_t data) {
   smbus_log.push({write, command, data});  // Dropped when full
 }
 
+// Writes that act on the other modules wait here for the main loop
+// (applySMBusWrites), so only the main loop touches their flags. The BIOS
+// writes a handful per tick at most.
+struct PendingWrite {
+  uint8_t command;
+  uint8_t data;
+};
+static RingBuffer<PendingWrite, 32> pending_writes;  // Pushed by the IRQ, popped by the main loop
+
 void resetSMBusRegisters() {
   regs = {};
   bios_response_byte0 = 0;  // Error code, SMBus 0x0E/0x0F
+  // Nothing from before the reset: a power off request still waiting would
+  // turn the Xbox back on
+  pending_writes.clear();
+  pending_writes.takeDropped();
 }
 
 void printSMBusLog() {
@@ -110,7 +123,8 @@ void printSMBusLog() {
   }
 }
 
-uint8_t smbus_read_handler(uint8_t command) {
+// In the IRQ: the answer has to be on the bus at once
+static uint8_t readRegister(uint8_t command) {
   uint8_t response = 0;
 
   switch (command) {
@@ -237,7 +251,63 @@ uint8_t smbus_read_handler(uint8_t command) {
   return response;
 }
 
-void smbus_write_handler(uint8_t command, uint8_t data) {
+// In the IRQ: the writes to the slave's own registers, which a read straight
+// after must see. Returns true when that's all the write does; the others are
+// applied by applyWrite() from the main loop.
+static bool storeRegister(uint8_t command, uint8_t data) {
+  switch (command) {
+    case Command::FIRMWARE_REVISION:  // 0x01
+      // Restart the version string
+      regs.version_counter = 1;
+      return true;
+
+    case Command::WRITE_ERROR_CODE:  // 0x0E
+      // Error code from the BIOS (not used in normal operation), read by 0x0F
+      bios_response_byte0 = data;
+      return true;
+
+    case Command::WRITE_RAM_TYPE:  // 0x13
+      // RAM type, read by 0x15
+      ram_test_response1 = data;
+      return true;
+
+    case Command::WRITE_RAM_TEST_RESULTS:  // 0x12
+      // RAM test result, read by 0x14. Checked by applyWrite().
+      ram_test_response0 = data;
+      return false;
+
+    case Command::SCRATCH:  // 0x1B
+      // Plain storage for the kernel (bit 1 = display fatal error after the
+      // reboot, bit 3 = boot to dashboard, ...)
+      regs.scratch = data;
+      return true;
+
+    // Applied by applyWrite()
+    case Command::RESET:                        // 0x02
+    case Command::FAN_OVERRIDE:                 // 0x05
+    case Command::REQUEST_FAN_SPEED:            // 0x06
+    case Command::LED_OVERRIDE:                 // 0x07
+    case Command::LED_STATES:                   // 0x08
+    case Command::AUDIO_CLAMP:                  // 0x0B
+    case Command::DVD_TRAY_OPERATION:           // 0x0C
+    case Command::OS_RESUME:                    // 0x0D
+    case Command::OVERRIDE_RESET_ON_TRAY_OPEN:  // 0x19
+    case Command::OS_READY:                     // 0x1A
+    case Command::CHALLENGE_RESPONSE0:          // 0x20
+    case Command::CHALLENGE_RESPONSE1:          // 0x21
+    case Command::POWER_CYCLE_DELAY:            // 0x22
+    case Command::WRITE_LED_BRIGHTNESS:         // 0x34
+      return false;
+
+    // The rest do nothing: read-only commands, unknown ones, and 0x04 (video
+    // mode) and 0x18 (software interrupt), no-ops on the PIC
+    default:
+      return true;
+  }
+}
+
+// In the main loop: the writes that act on the other modules
+static void applyWrite(uint8_t command, uint8_t data) {
   switch (command) {
     case Command::RESET:  // 0x02
       // Same as the PIC: bit 0 = reset, bit 6 = power cycle,
@@ -254,10 +324,6 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
         SMI::flags.power_change_requested = true;
         SMI::flags.power_off_request = true;
       }
-      break;
-
-    case Command::VIDEO_MODE:  // 0x04
-      // No-op on the PIC, the mode comes from the AV connector
       break;
 
     case Command::FAN_OVERRIDE:  // 0x05
@@ -297,10 +363,10 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
       break;
 
     case Command::WRITE_LED_BRIGHTNESS:  // 0x34
-      // Percent, 1-100, anything else is ignored. Applied by Led::update(),
-      // not saved (Settings)
-      if (data >= 1 && data <= 100) {
-        Led::requestBrightness(data);
+      // Percent, 1-100, anything else is ignored. Not saved (Settings).
+      if (data >= 1 && data <= 100 && data != hal::get_led_brightness()) {
+        hal::set_led_brightness(data);
+        debug::print_message("LED: Brightness " + std::to_string(data) + "% (SMBus 0x34)");
       }
       break;
 
@@ -347,17 +413,11 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
       }
       break;
 
-    case Command::WRITE_ERROR_CODE:  // 0x0E
-      // Store error code from BIOS (not used in normal operation)
-      bios_response_byte0 = data;
-      break;
-
     case Command::WRITE_RAM_TEST_RESULTS:  // 0x12
       // As P2L: passed with 0x13 = 0x0F and 0x12 = 0xF0, or 0x13 = 0x00
       // or 0xFF and 0x12 = 0x00. The PIC passes 0x13 = 0x00/0xFF
-      // whatever 0x12 holds
+      // whatever 0x12 holds. The bytes were stored by storeRegister().
       BootChallenge::flags.ram_test_submitted = true;
-      ram_test_response0 = data;
       BootChallenge::flags.ram_test_passed = (ram_test_response1 == 0x0F && ram_test_response0 == 0xF0) ||
                                              ((ram_test_response1 == 0x00 || ram_test_response1 == 0xFF) && ram_test_response0 == 0x00);
       break;
@@ -374,15 +434,6 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     case Command::POWER_CYCLE_DELAY:  // 0x22
       // Same as P11/P2L: ticks to stay off during the next power cycle
       SMI::setPowerCycleDelay(data);
-      break;
-
-    case Command::WRITE_RAM_TYPE:  // 0x13
-      // Store RAM type information
-      ram_test_response1 = data;
-      break;
-
-    case Command::SOFTWARE_INTERRUPT:  // 0x18
-      // No-op on the PIC
       break;
 
     case Command::OVERRIDE_RESET_ON_TRAY_OPEN:  // 0x19
@@ -405,39 +456,18 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
       SMI::flags.os_ready = data & 0x01;
       break;
 
-    case Command::SCRATCH:  // 0x1B
-      // Plain storage for the kernel (bit 1 = display fatal error after the
-      // reboot, bit 3 = boot to dashboard, ...)
-      regs.scratch = data;
+    default:  // storeRegister() did all there was
       break;
+  }
+}
 
-    case Command::FIRMWARE_REVISION:  // 0x01
-      // Restart the version string
-      regs.version_counter = 1;
-      break;
-
-    // Read-only commands: writes are ignored
-    case Command::TRAY_STATE:             // 0x03
-    case Command::CPU_TEMPERATURE:        // 0x09
-    case Command::AIR_TEMPERATURE:        // 0x0A
-    case Command::READ_FAN_SPEED:         // 0x10
-    case Command::INTERRUPT_REASON:       // 0x11
-    case Command::READ_RAM_TEST_RESULTS:  // 0x14
-    case Command::READ_RAM_TYPE:          // 0x15
-    case Command::LAST_REGISTER_WRITTEN:  // 0x16
-    case Command::LAST_BYTE_WRITTEN:      // 0x17
-    case Command::CHALLENGE_BYTE0:        // 0x1C
-    case Command::CHALLENGE_BYTE1:        // 0x1D
-    case Command::CHALLENGE_BYTE2:        // 0x1E
-    case Command::CHALLENGE_BYTE3:        // 0x1F
-    case Command::CUSTOM_VERSION:         // 0x30
-    case Command::PICO_TEMPERATURE:       // 0x31
-    case Command::NTC_TEMPERATURE:        // 0x32
-    case Command::READ_LED_BRIGHTNESS:    // 0x33
-      break;
-
-    default:
-      break;
+void applySMBusWrites() {
+  PendingWrite write;
+  while (pending_writes.pop(write)) {
+    applyWrite(write.command, write.data);
+  }
+  if (const uint16_t dropped = pending_writes.takeDropped(); dropped != 0) {
+    debug::print_warn("SMBUS: " + std::to_string(dropped) + " writes lost (queue full)");
   }
 }
 
@@ -453,7 +483,9 @@ void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
         // Data byte of a write
         regs.last_write_command = regs.command;
         regs.last_write_data = data;
-        smbus_write_handler(regs.command, data);
+        if (!storeRegister(regs.command, data)) {
+          pending_writes.push({regs.command, data});  // Counted when dropped
+        }
         logTransaction(true, regs.command, data);
       }
       break;
@@ -462,7 +494,7 @@ void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
     case I2C_SLAVE_REQUEST: {  // master is requesting data
       // Always answer: with an empty TX FIFO the slave stretches the clock and
       // holds the bus
-      const uint8_t response = smbus_read_handler(regs.command);
+      const uint8_t response = readRegister(regs.command);
       i2c_write_byte_raw(i2c, response);
       logTransaction(false, regs.command, response);
       break;

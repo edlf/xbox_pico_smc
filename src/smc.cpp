@@ -105,6 +105,7 @@ void main_loop() {
 
   do {
     BootChallenge::seedStandby();
+    applySMBusWrites();
 #if SMC_WEB_INTERFACE
     Web::service();
 #endif
@@ -122,6 +123,7 @@ void main_loop() {
 #if SMC_WEB_INTERFACE
         Web::service();
 #endif
+        applySMBusWrites();
         PLL_Reset::update();
         BootChallenge::update();
         Dvd::updateTrayDebounce();

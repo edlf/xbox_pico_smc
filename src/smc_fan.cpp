@@ -19,8 +19,8 @@ uint8_t custom_fan_speed;
 uint8_t cpu_temperature_increase;
 uint8_t cpu_temperature_predicted;
 
-static uint8_t          previous_cpu_temperature;
-static volatile uint8_t raise_to_speed;  // P2L: SMBus 0x05 off, applied on the next tick
+static uint8_t previous_cpu_temperature;
+static uint8_t raise_to_speed;  // P2L: SMBus 0x05 off, applied on the next tick
 
 void initShared(const uint8_t custom_speed) {
   fan_speed = 0;
@@ -103,7 +103,7 @@ void predictCpuTemperature() {
 
 void printReadings() {
   debug::print_debug("FAN: CPU " + std::to_string(sensors.CPU_temperature) + " board " + std::to_string(sensors.board_temperature) + " predicted " +
-                       std::to_string(cpu_temperature_predicted) + " speed " + std::to_string(fan_speed));
+                     std::to_string(cpu_temperature_predicted) + " speed " + std::to_string(fan_speed));
 }
 
 // Called by the main loop once the Xbox is off

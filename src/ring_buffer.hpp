@@ -36,6 +36,11 @@ class RingBuffer {
     return tail == head;
   }
 
+  // Drops what's waiting. Consumer side, like pop().
+  void clear() {
+    tail = head;
+  }
+
   // Items dropped since the last call
   uint16_t takeDropped() {
     const uint16_t count = dropped;

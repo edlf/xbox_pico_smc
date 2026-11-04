@@ -20,13 +20,19 @@ class SmbusTest : public ::testing::Test {
     SMC::Led::init();
   }
 
-  // Xbox writes a byte: command byte, data byte, STOP
-  static void write(uint8_t command, uint8_t data) {
+  // Xbox writes a byte: command byte, data byte, STOP. Only what the interrupt does.
+  static void receive(uint8_t command, uint8_t data) {
     fake_i2c0.rx = command;
     SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_RECEIVE);
     fake_i2c0.rx = data;
     SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_RECEIVE);
     SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_FINISH);
+  }
+
+  // A write, then the main loop's next tick applying it
+  static void write(uint8_t command, uint8_t data) {
+    receive(command, data);
+    SMC::applySMBusWrites();
   }
 
   // Xbox reads a byte: command byte, repeated START, read, STOP
@@ -185,20 +191,70 @@ TEST_F(SmbusTest, NtcTemperatureIs0xFFWithoutOne) {
   EXPECT_EQ(read(0x32), 25);
 }
 
-TEST_F(SmbusTest, LedBrightnessAppliedByTheNextLedTick) {
+TEST_F(SmbusTest, LedBrightness) {
   hal::set_led_brightness(40);
   EXPECT_EQ(read(0x33), 40);
 
   write(0x34, 70);
-  EXPECT_EQ(hal::get_led_brightness(), 40);  // Not yet: the interrupt only records it
-  SMC::Led::update();
   EXPECT_EQ(hal::get_led_brightness(), 70);
   EXPECT_TRUE(fake::logged("LED: Brightness 70% (SMBus 0x34)"));
 
   write(0x34, 0);  // Out of range: ignored
   write(0x34, 101);
-  SMC::Led::update();
   EXPECT_EQ(read(0x33), 70);
+}
+
+// The interrupt only queues writes that act on other modules, the main loop
+// applies them at the start of its tick
+TEST_F(SmbusTest, ModuleWritesWaitForTheMainLoop) {
+  receive(0x0C, 0x00);  // Eject
+  receive(0x07, 0x01);  // LED override
+  EXPECT_FALSE(SMC::Dvd::flags.tray_eject_request);
+  EXPECT_FALSE(SMC::Led::flags.led_override);
+  SMC::applySMBusWrites();
+  EXPECT_TRUE(SMC::Dvd::flags.tray_eject_request);
+  EXPECT_TRUE(SMC::Led::flags.led_override);
+}
+
+// The slave's own registers change at once, so a read straight after sees them
+TEST_F(SmbusTest, RegisterWritesReadBackAtOnce) {
+  receive(0x1B, 0x42);
+  EXPECT_EQ(read(0x1B), 0x42);
+  receive(0x0E, 0x07);
+  EXPECT_EQ(read(0x0F), 0x07);
+  receive(0x13, 0x0F);
+  receive(0x12, 0xF0);
+  EXPECT_EQ(read(0x15), 0x0F);
+  EXPECT_EQ(read(0x14), 0xF0);
+  EXPECT_FALSE(SMC::BootChallenge::flags.ram_test_submitted);  // Its check waits for the main loop
+  SMC::applySMBusWrites();
+  EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_passed);
+}
+
+TEST_F(SmbusTest, QueuedWritesAreAppliedInOrder) {
+  receive(0x20, 0x11);  // Challenge response, low byte first
+  receive(0x21, 0x22);
+  SMC::applySMBusWrites();
+  EXPECT_EQ(SMC::BootChallenge::getChallengeStructRef().response0, 0x11);
+  EXPECT_EQ(SMC::BootChallenge::getChallengeStructRef().response1, 0x22);
+  EXPECT_TRUE(SMC::BootChallenge::flags.challenge_response_received);
+}
+
+// A power off request still queued when the Xbox goes off must not power it
+// back on
+TEST_F(SmbusTest, ResetDropsQueuedWrites) {
+  receive(0x02, 0x80);
+  SMC::resetSMBusRegisters();
+  SMC::applySMBusWrites();
+  EXPECT_FALSE(SMC::SMI::flags.power_change_requested);
+}
+
+TEST_F(SmbusTest, FullQueueIsReported) {
+  for (int i = 0; i < 40; i++) {
+    receive(0x07, 0x01);
+  }
+  SMC::applySMBusWrites();
+  EXPECT_TRUE(fake::logged("SMBUS: 9 writes lost (queue full)"));  // 31 kept
 }
 
 }  // namespace
