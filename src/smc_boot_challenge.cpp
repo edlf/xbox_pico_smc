@@ -201,7 +201,6 @@ void update() {
 
     case boot_challenge_state::wait_for_ram_test_result:
       if (flags.ram_test_submitted) {
-        // RAM test results submitted
         if (flags.ram_test_passed) {
           state = boot_challenge_state::ram_test_ok;
         } else {
@@ -236,7 +235,7 @@ void update() {
         }
       }
       debug::print_warn("BOOT: RAM test failed, " + ramTestResult() + (banks.empty() ? ", no bank flagged" : ", bank(s)" + banks));
-    }
+
       // Blinking red, only for a failed RAM test (the PIC shows red/orange, 0x0F
       // red and 0x05 green, and only when it enforces the boot challenge). Shown
       // on top of everything until a RAM test passes or the Xbox powers off.
@@ -251,6 +250,7 @@ void update() {
       state = boot_challenge_state::challenge_wait_for_reply;
 #endif
       break;
+    }
 
     case boot_challenge_state::challenge_failed_or_no_ram_test_result:
       Led::setRedPhases(0x0A);

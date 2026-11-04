@@ -55,36 +55,44 @@ static bool        changed = false;  // A mode register was written since the la
 static uint8_t     quiet_ticks = 0;  // Ticks since the last encoder write
 static std::string last_logged;
 
-// Conexant state
-static bool     cx_raster_valid = false;
-static uint8_t  cx_raster = 0;
-static uint8_t  cx_in_mode = 0;
-static uint8_t  cx_in_mode_have = 0;  // Bit 0: 0xC6 seen, bit 1: 0x32 seen
-static uint16_t cx_hactive = 0x0200;  // [10:8] is always 2, see X-HD
-static bool     cx_hactive_valid = false;
-static uint8_t  cx_wss = 0;
-static bool     cx_wss_valid = false;
+// What the CPU last wrote to each encoder's mode registers
+struct ConexantRegs {
+  bool     raster_valid = false;
+  uint8_t  raster = 0;
+  uint8_t  in_mode = 0;
+  uint8_t  in_mode_have = 0;  // Bit 0: 0xC6 seen, bit 1: 0x32 seen
+  uint16_t hactive = 0x0200;  // [10:8] is always 2, see X-HD
+  bool     hactive_valid = false;
+  uint8_t  wss = 0;
+  bool     wss_valid = false;
+};
 
-// Focus state
-static bool     fs_cntl_valid = false;
-static uint8_t  fs_cntl = 0;
-static uint16_t fs_ihw = 720;  // Power-on default
-static bool     fs_ihw_valid = false;
-static uint8_t  fs_iho = 0;
-static bool     fs_iho_valid = false;
-static uint8_t  fs_wss_b0 = 0;
-static uint8_t  fs_wss_b2 = 0;
-static bool     fs_wss_valid = false;
+struct FocusRegs {
+  bool     cntl_valid = false;
+  uint8_t  cntl = 0;
+  uint16_t ihw = 720;  // Power-on default
+  bool     ihw_valid = false;
+  uint8_t  iho = 0;
+  bool     iho_valid = false;
+  uint8_t  wss_b0 = 0;
+  uint8_t  wss_b2 = 0;
+  bool     wss_valid = false;
+};
 
-// Xcalibur state
-static uint32_t xc_value = 0;
-static uint32_t xc_in_raster = 0;
-static uint32_t xc_width = 0;
-static uint32_t xc_out_raster = 0;
-static uint8_t  xc_mode_index = 0;  // 0: unknown raster
-static bool     xc_mode_set = false;  // A mode set completed (0x56 written)
-static uint8_t  xc_aspect = 0;
-static bool     xc_aspect_valid = false;
+struct XcaliburRegs {
+  uint32_t value = 0;  // Block value being assembled
+  uint32_t in_raster = 0;
+  uint32_t width = 0;
+  uint32_t out_raster = 0;
+  uint8_t  mode_index = 0;    // 0: unknown raster
+  bool     mode_set = false;  // A mode set completed (0x56 written)
+  uint8_t  aspect = 0;
+  bool     aspect_valid = false;
+};
+
+static ConexantRegs conexant;
+static FocusRegs    focus;
+static XcaliburRegs xcalibur;
 
 static void resetXhd();
 
@@ -94,28 +102,18 @@ void reset() {
   changed = false;
   quiet_ticks = 0;
   last_logged.clear();
-  cx_raster_valid = false;
-  cx_in_mode_have = 0;
-  cx_hactive = 0x0200;
-  cx_hactive_valid = false;
-  cx_wss_valid = false;
-  fs_cntl_valid = false;
-  fs_ihw = 720;
-  fs_ihw_valid = false;
-  fs_iho_valid = false;
-  fs_wss_valid = false;
-  xc_mode_index = 0;
-  xc_mode_set = false;
-  xc_aspect_valid = false;
+  conexant = {};
+  focus = {};
+  xcalibur = {};
 }
 
 // The console's mode index (as in an X-HD mode packet), from the Xcalibur's
 // raster registers. 0x0F, 0x10 and 0x11 are register-identical to 0x02, 0x04
 // and 0x08 and read as those.
 static uint8_t xcaliburModeIndex(const uint8_t mode_sel) {
-  const uint16_t vtotal = xc_in_raster & 0x7FFF;
-  const bool     sdtv = (xc_in_raster & 0x8000) != 0;
-  const uint8_t  width16 = static_cast<uint8_t>(xc_width >> 24);
+  const uint16_t vtotal = xcalibur.in_raster & 0x7FFF;
+  const bool     sdtv = (xcalibur.in_raster & 0x8000) != 0;
+  const uint8_t  width16 = static_cast<uint8_t>(xcalibur.width >> 24);
   const bool     narrow = width16 == 0x28;  // 640
 
   switch (vtotal) {
@@ -123,7 +121,7 @@ static uint8_t xcaliburModeIndex(const uint8_t mode_sel) {
       return sdtv ? (narrow ? 0x01 : 0x02) : (narrow ? 0x07 : 0x08);
 
     case 0x271:  // 625 lines
-      if ((xc_out_raster & 0x7FFF) == 0x208) {
+      if ((xcalibur.out_raster & 0x7FFF) == 0x208) {
         return narrow ? 0x03 : 0x04;
       }
       if (narrow) {
@@ -170,9 +168,9 @@ constexpr ModeInfo mode_infos[] = {
     {0x12, "640x576i (1.1:1 PAR)", "PAL"      },
 };
 
-static const ModeInfo* modeInfo(const uint8_t index, const bool xcalibur) {
+static const ModeInfo* modeInfo(const uint8_t index, const bool is_xcalibur) {
   static constexpr ModeInfo xcalibur_480p_640 = {0x07, "640x480p", nullptr};
-  if (index == 0x07 && xcalibur) {
+  if (index == 0x07 && is_xcalibur) {
     return &xcalibur_480p_640;  // A real 640-wide raster there, 720-wide on the others
   }
 
@@ -215,40 +213,40 @@ static void wssMode(Mode& mode, const bool pal, const bool widescreen) {
 static void conexantWrite(const uint8_t reg, const uint8_t value) {
   switch (reg) {
     case cx::raster_sel: {
-      cx_raster = value;
-      cx_raster_valid = true;
+      conexant.raster = value;
+      conexant.raster_valid = true;
       const bool interlaced = (value & 0x03) == 0 && (value & 0x80) == 0;
       if (!interlaced) {
         // Progressive mode sets don't rewrite the WSS or H_ACTIVE, drop the SD values
-        cx_wss_valid = false;
-        cx_hactive_valid = false;
+        conexant.wss_valid = false;
+        conexant.hactive_valid = false;
       }
 
       break;
     }
 
     case cx::in_mode_lo:
-      cx_in_mode = (cx_in_mode & 0x08) | (value & 0x07);
-      cx_in_mode_have |= 0x01;
+      conexant.in_mode = (conexant.in_mode & 0x08) | (value & 0x07);
+      conexant.in_mode_have |= 0x01;
       break;
 
     case cx::in_mode_hi:
-      cx_in_mode = (cx_in_mode & 0x07) | (value & 0x08);
-      cx_in_mode_have |= 0x02;
+      conexant.in_mode = (conexant.in_mode & 0x07) | (value & 0x08);
+      conexant.in_mode_have |= 0x02;
       break;
 
     case cx::hactive_lo:
-      cx_hactive = (cx_hactive & 0xFF00) | value;
-      cx_hactive_valid = true;
+      conexant.hactive = (conexant.hactive & 0xFF00) | value;
+      conexant.hactive_valid = true;
       break;
 
     case cx::hactive_hi:
-      cx_hactive = (cx_hactive & 0x00FF) | (((value & 0x70) >> 4) << 8);
+      conexant.hactive = (conexant.hactive & 0x00FF) | (((value & 0x70) >> 4) << 8);
       break;
 
     case cx::wss_data:
-      cx_wss = value;
-      cx_wss_valid = true;
+      conexant.wss = value;
+      conexant.wss_valid = true;
       break;
 
     default:
@@ -260,36 +258,36 @@ static void conexantWrite(const uint8_t reg, const uint8_t value) {
 static void focusWrite(const uint8_t reg, const uint8_t value) {
   switch (reg) {
     case fs::vid_cntl0:
-      fs_cntl = value;
-      fs_cntl_valid = true;
+      focus.cntl = value;
+      focus.cntl_valid = true;
       if (!(value & 0x80)) {
-        fs_wss_valid = false;  // Progressive: no WSS, drop the SD values
-        fs_iho_valid = false;
+        focus.wss_valid = false;  // Progressive: no WSS, drop the SD values
+        focus.iho_valid = false;
       }
       break;
 
     case fs::iho_lo:
-      fs_iho = value;
-      fs_iho_valid = true;
+      focus.iho = value;
+      focus.iho_valid = true;
       break;
 
     case fs::ihw_lo:
-      fs_ihw = (fs_ihw & 0xFF00) | value;
-      fs_ihw_valid = true;
+      focus.ihw = (focus.ihw & 0xFF00) | value;
+      focus.ihw_valid = true;
       break;
 
     case fs::ihw_hi:
-      fs_ihw = (fs_ihw & 0x00FF) | ((value & 0x03) << 8);
-      fs_ihw_valid = true;
+      focus.ihw = (focus.ihw & 0x00FF) | ((value & 0x03) << 8);
+      focus.ihw_valid = true;
       break;
 
     case fs::wss_b0:
-      fs_wss_b0 = value;
-      fs_wss_valid = true;
+      focus.wss_b0 = value;
+      focus.wss_valid = true;
       break;
 
     case fs::wss_b2:
-      fs_wss_b2 = value;
+      focus.wss_b2 = value;
       break;
 
     default:
@@ -304,35 +302,35 @@ static void xcaliburWrite(const uint8_t reg, const uint8_t index, const uint8_t 
   }
 
   if (index == 1) {
-    xc_value = 0;
+    xcalibur.value = 0;
   }
 
-  xc_value |= (uint32_t)value << (8 * (index - 1));
+  xcalibur.value |= (uint32_t)value << (8 * (index - 1));
   if (index < 4) {
     return;
   }
 
   switch (reg) {
     case xc::in_raster:
-      xc_in_raster = xc_value;
+      xcalibur.in_raster = xcalibur.value;
       break;
 
     case xc::width:
-      xc_width = xc_value;
+      xcalibur.width = xcalibur.value;
       break;
 
     case xc::out_raster:
-      xc_out_raster = xc_value;
+      xcalibur.out_raster = xcalibur.value;
       break;
 
     case xc::mode_sel:
-      xc_mode_index = xcaliburModeIndex(xc_value & 0xFF);
-      xc_mode_set = true;
+      xcalibur.mode_index = xcaliburModeIndex(xcalibur.value & 0xFF);
+      xcalibur.mode_set = true;
       break;
 
     case xc::aspect:
-      xc_aspect = xc_value & 0xFF;
-      xc_aspect_valid = true;
+      xcalibur.aspect = xcalibur.value & 0xFF;
+      xcalibur.aspect_valid = true;
       break;
 
     default:
@@ -357,29 +355,33 @@ constexpr uint8_t write_config_apply = 131;
 constexpr uint8_t packet_size = 14;
 }  // namespace xhd
 
-static uint16_t xhd_bank = 0;
-static uint16_t xhd_index = 0;
-static uint8_t  xhd_packet[xhd::packet_size];
-static uint32_t xhd_logged_mode = 0;
+// Packet being written to the X-HD
+struct XhdPacket {
+  uint16_t bank = 0;
+  uint16_t index = 0;
+  uint8_t  bytes[xhd::packet_size] = {};
+  uint32_t logged_mode = 0;  // Mode dword last logged
+};
+static XhdPacket xhd_packet;
 
 static void xhdPacketApplied() {
-  const uint8_t  encoder_address = xhd_packet[0];
-  const uint32_t mode_dword = xhd_packet[2] | (xhd_packet[3] << 8) | (xhd_packet[4] << 16) | ((uint32_t)xhd_packet[5] << 24);
+  const uint8_t  encoder_address = xhd_packet.bytes[0];
+  const uint32_t mode_dword = xhd_packet.bytes[2] | (xhd_packet.bytes[3] << 8) | (xhd_packet.bytes[4] << 16) | ((uint32_t)xhd_packet.bytes[5] << 24);
 
-  if (mode_dword == xhd_logged_mode) {
+  if (mode_dword == xhd_packet.logged_mode) {
     return;  // The dashboard repeats it
   }
 
-  xhd_logged_mode = mode_dword;
+  xhd_packet.logged_mode = mode_dword;
 
   const uint8_t mode_index = (mode_dword >> 16) & 0xFF;
-  const bool    xcalibur = encoder_address == (address_xcalibur << 1);
+  const bool    is_xcalibur = encoder_address == (address_xcalibur << 1);
   char          dword[12];
   snprintf(dword, sizeof(dword), "0x%08lX", (unsigned long)mode_dword);
 
   Mode mode;
   mode.source = "X-HD mode packet, mode " + utils::toHex(mode_index) + ", encoder " + utils::toHex(encoder_address) + ", mode dword " + dword;
-  const ModeInfo* info = modeInfo(mode_index, xcalibur);
+  const ModeInfo* info = modeInfo(mode_index, is_xcalibur);
 
   if (info != nullptr) {
     mode.resolution = info->resolution;
@@ -403,9 +405,7 @@ static void xhdPacketApplied() {
 }
 
 static void resetXhd() {
-  xhd_bank = 0;
-  xhd_index = 0;
-  xhd_logged_mode = 0;
+  xhd_packet = {};
 }
 
 static void xhdWrite(const uint8_t command, const uint8_t index, const uint8_t value) {
@@ -415,24 +415,24 @@ static void xhdWrite(const uint8_t command, const uint8_t index, const uint8_t v
 
   switch (command) {
     case xhd::write_config: {
-      const uint16_t offset = (xhd_bank << 8) | xhd_index;
+      const uint16_t offset = (xhd_packet.bank << 8) | xhd_packet.index;
       if (offset < xhd::packet_size) {
-        xhd_packet[offset] = value;
+        xhd_packet.bytes[offset] = value;
       }
-      if (++xhd_index > 0xFF) {
-        xhd_index = 0;
-        xhd_bank++;
+      if (++xhd_packet.index > 0xFF) {
+        xhd_packet.index = 0;
+        xhd_packet.bank++;
       }
       break;
     }
 
     case xhd::write_config_bank:
-      xhd_bank = value;
-      xhd_index = 0;
+      xhd_packet.bank = value;
+      xhd_packet.index = 0;
       break;
 
     case xhd::write_config_index:
-      xhd_index = value;
+      xhd_packet.index = value;
       break;
 
     case xhd::write_config_apply:
@@ -472,28 +472,28 @@ void onWrite(const uint8_t address, const uint8_t reg, const uint8_t index, cons
 static std::string conexantMode() {
   Mode mode;
   mode.source = "Conexant";
-  if (cx_raster_valid) {
-    mode.source += ", 0x2E = " + utils::toHex(cx_raster);
+  if (conexant.raster_valid) {
+    mode.source += ", 0x2E = " + utils::toHex(conexant.raster);
   }
 
-  if (cx_hactive_valid) {
-    mode.source += ", H_ACTIVE " + std::to_string(cx_hactive);
+  if (conexant.hactive_valid) {
+    mode.source += ", H_ACTIVE " + std::to_string(conexant.hactive);
   }
 
-  const bool    hdtv = (cx_raster & 0x80) != 0;
-  const uint8_t raster = cx_raster & 0x03;
-  if (!cx_raster_valid) {
+  const bool    hdtv = (conexant.raster & 0x80) != 0;
+  const uint8_t raster = conexant.raster & 0x03;
+  if (!conexant.raster_valid) {
     // Nothing yet
   } else if (!hdtv && raster == 0) {
     std::string width = "?";
     std::string par;
 
-    if (cx_hactive_valid) {
-      if (cx_hactive == 728) {
+    if (conexant.hactive_valid) {
+      if (conexant.hactive == 728) {
         width = "720";
-      } else if (cx_hactive == 648) {
+      } else if (conexant.hactive == 648) {
         width = "640";
-      } else if (cx_hactive == 704) {
+      } else if (conexant.hactive == 704) {
         width = "640";
         par = " (1.1:1 PAR)";
       }
@@ -501,8 +501,8 @@ static std::string conexantMode() {
 
     std::string lines = "480/576";
 
-    if (cx_wss_valid) {
-      switch (cx_wss & 0x0F) {
+    if (conexant.wss_valid) {
+      switch (conexant.wss & 0x0F) {
         case 0x8:
           wssMode(mode, true, false);
           lines = "576";
@@ -538,8 +538,8 @@ static std::string conexantMode() {
     mode.aspect = "16:9";
   }
 
-  if (cx_in_mode_have == 0x03) {
-    const uint8_t m = cx_in_mode & 0x0F;
+  if (conexant.in_mode_have == 0x03) {
+    const uint8_t m = conexant.in_mode & 0x0F;
     mode.colour = (m == 0x0 || m == 0x1 || m == 0x2 || m == 0x8) ? "RGB" : "YCrCb";
   }
   return mode.text();
@@ -553,42 +553,42 @@ static std::string conexantMode() {
 static std::string focusMode() {
   Mode mode;
   mode.source = "Focus";
-  if (fs_cntl_valid) {
-    mode.source += ", 0x92 = " + utils::toHex(fs_cntl);
+  if (focus.cntl_valid) {
+    mode.source += ", 0x92 = " + utils::toHex(focus.cntl);
   }
 
-  if (fs_ihw_valid) {
-    mode.source += ", IHW " + std::to_string(fs_ihw);
+  if (focus.ihw_valid) {
+    mode.source += ", IHW " + std::to_string(focus.ihw);
   }
 
-  if (fs_iho_valid) {
-    mode.source += ", IHO " + std::to_string(fs_iho);
+  if (focus.iho_valid) {
+    mode.source += ", IHO " + std::to_string(focus.iho);
   }
 
-  if (!fs_cntl_valid) {
+  if (!focus.cntl_valid) {
     // Nothing yet
-  } else if (fs_cntl & 0x80) {
+  } else if (focus.cntl & 0x80) {
     std::string width = "?";
     std::string par;
 
-    if (fs_iho_valid) {
-      width = (fs_iho == 103 || fs_iho == 143) ? "720" : "640";
+    if (focus.iho_valid) {
+      width = (focus.iho == 103 || focus.iho == 143) ? "720" : "640";
 
-      if (fs_iho == 115 || fs_iho == 151) {
+      if (focus.iho == 115 || focus.iho == 151) {
         par = " (1.1:1 PAR)";
       }
-    } else if (fs_ihw_valid) {
-      width = fs_ihw >= 670 ? "720" : "640";
+    } else if (focus.ihw_valid) {
+      width = focus.ihw >= 670 ? "720" : "640";
     }
 
     std::string lines = "480/576";
 
-    if (fs_wss_valid) {
-      if (fs_wss_b0 == 0x18 || fs_wss_b0 == 0x60) {
-        wssMode(mode, false, fs_wss_b0 == 0x60);
+    if (focus.wss_valid) {
+      if (focus.wss_b0 == 0x18 || focus.wss_b0 == 0x60) {
+        wssMode(mode, false, focus.wss_b0 == 0x60);
         lines = "480";
-      } else if (fs_wss_b0 == 0x00 && (fs_wss_b2 == 0x08 || fs_wss_b2 == 0x07)) {
-        wssMode(mode, true, fs_wss_b2 == 0x07);
+      } else if (focus.wss_b0 == 0x00 && (focus.wss_b2 == 0x08 || focus.wss_b2 == 0x07)) {
+        wssMode(mode, true, focus.wss_b2 == 0x07);
         lines = "576";
       }
     }
@@ -598,8 +598,8 @@ static std::string focusMode() {
     mode.resolution = "progressive (480p or 720p)";
   }
 
-  if (fs_cntl_valid) {
-    mode.colour = (fs_cntl & 0x04) ? "YCrCb" : "RGB";
+  if (focus.cntl_valid) {
+    mode.colour = (focus.cntl & 0x04) ? "YCrCb" : "RGB";
   }
 
   return mode.text();
@@ -610,27 +610,27 @@ static std::string focusMode() {
 static std::string xcaliburMode() {
   Mode mode;
   mode.source = "Xcalibur";
-  const ModeInfo* info = modeInfo(xc_mode_index, true);
+  const ModeInfo* info = modeInfo(xcalibur.mode_index, true);
   if (info == nullptr) {
-    mode.source += ", input raster " + std::to_string(xc_in_raster & 0x7FFF) + " lines";
+    mode.source += ", input raster " + std::to_string(xcalibur.in_raster & 0x7FFF) + " lines";
     return mode.text();
   }
 
-  mode.source += ", mode " + utils::toHex(xc_mode_index);
+  mode.source += ", mode " + utils::toHex(xcalibur.mode_index);
   mode.resolution = info->resolution;
 
   if (info->standard != nullptr) {
     mode.standard = info->standard;
 
-    if (xc_aspect_valid) {
-      if (xc_aspect == 0x02 || xc_aspect == 0x0E) {
+    if (xcalibur.aspect_valid) {
+      if (xcalibur.aspect == 0x02 || xcalibur.aspect == 0x0E) {
         mode.aspect = "16:9";
-      } else if (xc_aspect == 0x00 || xc_aspect == 0x10) {
+      } else if (xcalibur.aspect == 0x00 || xcalibur.aspect == 0x10) {
         mode.aspect = "4:3";
       }
     }
 
-  } else if (xc_mode_index >= 0x0A) {
+  } else if (xcalibur.mode_index >= 0x0A) {
     mode.aspect = "16:9";  // HD
   }
   return mode.text();
@@ -654,12 +654,11 @@ void update() {
   } else if (encoder == address_focus) {
     mode = focusMode();
   } else if (encoder == address_xcalibur) {
-    if (!xc_mode_set && !xc_aspect_valid) {
+    if (!xcalibur.mode_set && !xcalibur.aspect_valid) {
       return;  // Nothing of a mode set yet
     }
 
     mode = xcaliburMode();
-
   }
 
   if (mode.empty() || mode == last_logged) {

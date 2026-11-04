@@ -1,7 +1,6 @@
 #include "smc.hpp"
 #include "debug.hpp"
 
-// Pico stuff
 #include "hardware/i2c.h"
 #include "hardware/watchdog.h"
 #include "pico/i2c_slave.h"
@@ -47,14 +46,9 @@ void smc_gpio_callback(unsigned int gpio, [[maybe_unused]] uint32_t events) {
     return;
   }
 
-  debug::print_message("ISR: power OK");
-
-  // ISR got called, but somehow power good didnt stay enabled
+  // POWOK dropped while the Xbox was meant to be on: power supply failure.
+  // panic() switches everything off and waits for the watchdog.
   if (!hal::get_power_ok()) {
-    // Power supply failure
-    shutdown_xbox();
-
-    // Enter infinite loop waiting for watchdog timer to reset the system
     panic("POWER_OK lost");
   }
 }
@@ -68,7 +62,6 @@ void update_LEDs() {
   Led::setManualControl(Led::flags.led_override);
   Led::setOverheat(Fan::flags.overheated);
   Led::setAvMissing(Video::flags.av_cable_missing);
-  // system_running is set while the system is powered
   Led::setPowerOff(!SMI::flags.system_running);
   Led::setQuickGreenBlink(Dvd::flags.tray_moving);
   // Once the boot challenge gives up (FRAG), or a failed RAM test
@@ -82,10 +75,8 @@ void main_loop() {
   hal::init();
   hal::pico_led_on();
 
-  // Make sure the xbox is turned off
   shutdown_xbox();
 
-  // Initialize state machines
   hal::fan_pin_low();
   hal::audio_clamp_on();
   PowerStandby::init();
@@ -208,7 +199,7 @@ void globals_init() {
   // First tray state change raises an interrupt
   Dvd::flags.tray_events_enabled = true;
 
-  Fan::sensors.CPU_temperature = 0x17;
+  Fan::sensors.CPU_temperature = 0x17;  // 23 °C, as the PIC
   Fan::sensors.board_temperature = 0x17;
   Dvd::sensors.tray_status = Dvd::drive_tray_state::closed;
   Video::sensors.vmode = Video::av_pack::scart;

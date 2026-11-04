@@ -14,6 +14,7 @@ sensors_struct sensors;
 // The mode pins read av_pack::none (all high) with no AV cable, and
 // av_pack::special while unplugged acts like a power button press.
 
+// Numbered as in the "VIDEO: Pins ... (state n)" debug line
 enum class video_state {
   monitor,           // 0
   changed,           // 1
@@ -26,13 +27,13 @@ enum class video_state {
 };
 
 // Fixed AV pack from CMake (SMC_AV_PACK_OVERRIDE), as mode pins: code << 1
-constexpr bool    override = SMC_AV_PACK_OVERRIDE;
-constexpr av_pack override_mode = static_cast<av_pack>((SMC_AV_PACK_MODE & 0x07) << 1);
-static video_state       state;
-static av_pack           vmode_raw = av_pack::scart;
-static av_pack           vmode_prev = av_pack::scart;
-static bool              mode_printed = false;  // Cable printed since power-up
-static uint8_t           settle_ticks = 0;      // Let the AV pack power up before trusting an unchanged mode
+constexpr bool     override = SMC_AV_PACK_OVERRIDE;
+constexpr av_pack  override_mode = static_cast<av_pack>((SMC_AV_PACK_MODE & 0x07) << 1);
+static video_state state;
+static av_pack     vmode_raw = av_pack::scart;
+static av_pack     vmode_prev = av_pack::scart;
+static bool        mode_printed = false;  // Cable printed since power-up
+static uint8_t     settle_ticks = 0;      // Let the AV pack power up before trusting an unchanged mode
 
 void init() {
   state = video_state::monitor;
@@ -72,7 +73,6 @@ static void setMode(av_pack mode) {
   if (mode != sensors.vmode) {
     printModeIfPowered(mode);
   }
-  
   sensors.vmode = mode;
 }
 
@@ -135,10 +135,9 @@ void update() {
       if (vmode_raw == av_pack::special) {
         state = video_state::special_debounce;
       } else if (vmode_raw != av_pack::none) {
-        // Cable is back
         debug::print_message("VIDEO: Cable back, audio unclamped");
         flags.av_cable_missing = false;
-        AudioClamp::flags.audio_unclamp_request = true;  // Request unclamp
+        AudioClamp::flags.audio_unclamp_request = true;
         state = video_state::monitor;
       }
       break;

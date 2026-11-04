@@ -33,7 +33,7 @@ constexpr p2l_temperature_thresholds p2l_default_thresholds = {
     0x62,  // shutdown_cpu    98
 };
 
-// In use, can be lowered from the web interface
+// In use, can be lowered (web interface, USB config)
 static p2l_temperature_thresholds p2l_thresholds = p2l_default_thresholds;
 
 static const threshold_entry threshold_entries[] = {

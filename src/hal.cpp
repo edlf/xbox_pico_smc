@@ -18,15 +18,14 @@
 
 namespace hal {
 
-// FAN PWM
-static pwm_config pwm_cfg;
-static uint       pwm_slice;
-static uint       pwm_channel;
+// Fan PWM output, see set_fan_speed()
+static uint pwm_slice;
+static uint pwm_channel;
 
 // Front panel LEDs are active low, like on the PIC (RA0/RA1 low = on). They
 // run as PWM so they can be dimmed: ~1 kHz, output inverted so the level is the
-// on-time. The brightness starts at SMC_LED_BRIGHTNESS and the web interface
-// can change it.
+// on-time. The brightness starts at SMC_LED_BRIGHTNESS (or the saved setting)
+// and the web interface, SMBus 0x34 and the USB config can change it.
 constexpr uint16_t LED_PWM_WRAP = 999;
 constexpr uint32_t LED_PWM_HZ = 1000;
 
@@ -34,23 +33,26 @@ static constexpr uint16_t ledLevel(uint8_t percent) {
   return static_cast<uint16_t>((uint32_t)(LED_PWM_WRAP + 1) * percent / 100);
 }
 
-static volatile uint8_t  led_brightness = SMC_LED_BRIGHTNESS;
-static volatile uint16_t led_on_level = ledLevel(SMC_LED_BRIGHTNESS);
-static uint8_t           led_fade = 255;  // Power up/down fade, 255 = full brightness
-static bool              green_lit = false;
-static bool              red_lit = false;
+struct FrontLeds {
+  volatile uint8_t  brightness = SMC_LED_BRIGHTNESS;  // Percent
+  volatile uint16_t on_level = ledLevel(SMC_LED_BRIGHTNESS);
+  uint8_t           fade = 255;  // Power up/down fade, 255 = full brightness
+  bool              green_lit = false;
+  bool              red_lit = false;
+};
+static FrontLeds leds;
 
 // PWM level of a lit LED: brightness scaled by the fade
 static uint16_t litLevel() {
-  return static_cast<uint16_t>((uint32_t)led_on_level * led_fade / 255);
+  return static_cast<uint16_t>((uint32_t)leds.on_level * leds.fade / 255);
 }
 
 // Lit LEDs follow a brightness or fade change right away
 static void updateLitLeds() {
-  if (green_lit) {
+  if (leds.green_lit) {
     pwm_set_gpio_level(pins::LED_GREEN, litLevel());
   }
-  if (red_lit) {
+  if (leds.red_lit) {
     pwm_set_gpio_level(pins::LED_RED, litLevel());
   }
 }
@@ -71,22 +73,22 @@ static void initLeds() {
 }
 
 void led_green_on() {
-  green_lit = true;
+  leds.green_lit = true;
   pwm_set_gpio_level(pins::LED_GREEN, litLevel());
 }
 
 void led_green_off() {
-  green_lit = false;
+  leds.green_lit = false;
   pwm_set_gpio_level(pins::LED_GREEN, 0);
 }
 
 void led_red_on() {
-  red_lit = true;
+  leds.red_lit = true;
   pwm_set_gpio_level(pins::LED_RED, litLevel());
 }
 
 void led_red_off() {
-  red_lit = false;
+  leds.red_lit = false;
   pwm_set_gpio_level(pins::LED_RED, 0);
 }
 
@@ -96,18 +98,18 @@ void set_led_brightness(uint8_t percent) {
   } else if (percent > 100) {
     percent = 100;
   }
-  led_brightness = percent;
-  led_on_level = ledLevel(percent);
+  leds.brightness = percent;
+  leds.on_level = ledLevel(percent);
   updateLitLeds();
 }
 
 void set_led_fade(uint8_t level) {
-  led_fade = level;
+  leds.fade = level;
   updateLitLeds();
 }
 
 uint8_t get_led_brightness() {
-  return led_brightness;
+  return leds.brightness;
 }
 
 // Pico onboard LED, PWM driven (same rate as the front panel LEDs) so it can
@@ -258,11 +260,10 @@ static bool readWeakInput(const uint8_t pin) {
 #endif
 }
 
-// Gets video cable type
+// AV pack ID pins, as PORTB & 0x0E on the PIC (av_pack)
 uint8_t get_video_mode() {
   uint8_t video_mode = 0;
 
-  // Video mode is set as 0b0000_1110
   if (readWeakInput(pins::VIDEO_MODE_0)) {
     video_mode = video_mode | (1 << 1);
   }
@@ -276,10 +277,10 @@ uint8_t get_video_mode() {
   return video_mode;
 }
 
+// DVD drive tray state pins, as PORTB & 0x70 on the PIC (drive_tray_state)
 uint8_t get_tray_state() {
   uint8_t tray_state = 0;
 
-  // Tray state is set as 0b0111_0000
   if (gpio_get(pins::TRAY_STATE_0)) {
     tray_state = tray_state | (1 << 4);
   }
@@ -293,13 +294,12 @@ uint8_t get_tray_state() {
   return tray_state;
 }
 
+// The buttons pull their line low
 bool power_button_pressed() {
-  // High is not pressed
   return !readWeakInput(pins::SW_POWER);
 }
 
 bool eject_button_pressed() {
-  // High is not pressed
   return !readWeakInput(pins::SW_EJECT);
 }
 
@@ -323,7 +323,7 @@ void set_fan_speed(uint8_t speed) {
   pwm_set_chan_level(pwm_slice, pwm_channel, level);
 
   if (speed != fan_speed_set) {
-    debug::print_debug("GPIO: Fan speed " + std::to_string(speed)); // Fan::setSpeed() logs the change (INFO)
+    debug::print_debug("GPIO: Fan speed " + std::to_string(speed));  // Fan::setSpeed() logs the change (INFO)
     fan_speed_set = speed;
   }
 }
@@ -682,7 +682,7 @@ void init() {
   debug::print_message("GPIO: PWM Init");
   pwm_slice = pwm_gpio_to_slice_num(pins::FAN_PWM1);
   pwm_channel = pwm_gpio_to_channel(pins::FAN_PWM1);
-  pwm_cfg = pwm_get_default_config();
+  pwm_config pwm_cfg = pwm_get_default_config();
   pwm_config_set_clkdiv(&pwm_cfg, (float)clock_get_hz(clk_sys) / (FAN_PWM_HZ * (FAN_PWM_WRAP + 1)));
   pwm_config_set_wrap(&pwm_cfg, FAN_PWM_WRAP);
   pwm_init(pwm_slice, &pwm_cfg, false);
@@ -709,37 +709,40 @@ bool system_reset_asserted() {
 
 #if SMC_RGB_LED
 // WS2812 RGB LED on pins::RGB_LED, driven by a PIO state machine
-static PIO      rgb_pio;
-static uint     rgb_sm;
-static bool     rgb_ready = false;
-static uint32_t rgb_sent = 0xFFFFFFFF;  // Nothing sent yet
+struct RgbLed {
+  PIO      pio = nullptr;
+  uint     sm = 0;
+  bool     ready = false;
+  uint32_t sent = 0xFFFFFFFF;  // Nothing sent yet
+};
+static RgbLed rgb;
 
 void rgb_led_init() {
   uint offset;
 
-  if (!pio_claim_free_sm_and_add_program_for_gpio_range(&ws2812_program, &rgb_pio, &rgb_sm, &offset, pins::RGB_LED, 1, true)) {
+  if (!pio_claim_free_sm_and_add_program_for_gpio_range(&ws2812_program, &rgb.pio, &rgb.sm, &offset, pins::RGB_LED, 1, true)) {
     debug::print_warn("GPIO: No free PIO state machine for the RGB LED");
     return;
   }
 
-  ws2812_program_init(rgb_pio, rgb_sm, offset, pins::RGB_LED);
-  rgb_ready = true;
+  ws2812_program_init(rgb.pio, rgb.sm, offset, pins::RGB_LED);
+  rgb.ready = true;
   set_rgb_led(0, 0, 0);
 }
 
 void set_rgb_led(const uint8_t red, const uint8_t green, const uint8_t blue) {
-  if (!rgb_ready) {
+  if (!rgb.ready) {
     return;
   }
 
   const uint32_t grb = ((uint32_t)(green) << 16) | ((uint32_t)(red) << 8) | (blue);
 
-  if (grb == rgb_sent || pio_sm_is_tx_fifo_full(rgb_pio, rgb_sm)) {
+  if (grb == rgb.sent || pio_sm_is_tx_fifo_full(rgb.pio, rgb.sm)) {
     return;  // Unchanged, or try again next tick
   }
 
-  pio_sm_put(rgb_pio, rgb_sm, grb << 8);
-  rgb_sent = grb;
+  pio_sm_put(rgb.pio, rgb.sm, grb << 8);
+  rgb.sent = grb;
 }
 #else
 void rgb_led_init() {}

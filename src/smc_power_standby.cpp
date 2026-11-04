@@ -10,7 +10,7 @@ namespace SMC {
 namespace PowerStandby {
 
 static power_standby_state state;
-static uint16_t     power_timeout3 = 0;
+static uint16_t            power_timeout3 = 0;
 
 // The Pico's onboard LED breathes while the Xbox is off (solid while it runs)
 constexpr uint8_t breathe_ticks = 200;  // 4 s per breath
@@ -29,8 +29,8 @@ void init() {
   state = power_standby_state::initial;
 }
 
+// Runs while the Xbox is off, until it powers up (returns 1)
 uint8_t update() {
-  // Done, untested, some port stuff missing
   switch (state) {
     case power_standby_state::initial:  // State 0
       hal::led_red_off();
@@ -49,7 +49,9 @@ uint8_t update() {
       break;
 
     case power_standby_state::check_av_power_button:  // State 2
-      // Check power button or AVIP port kiosk power on
+      // Power on with the power button, or when the AV pins read no cable (as
+      // the PIC: AV mode 1 is pulled up to POWON, so they only read that way when
+      // forced, e.g. by a kiosk)
       FrontPanelSW::updatePower();
       if ((Video::sensors.vmode != Video::av_pack::none) && (!SMI::flags.power_change_requested)) {
         state = power_standby_state::check_eject_button;
@@ -97,16 +99,15 @@ uint8_t update() {
       I2CSniffer::update();
       Settings::update();  // Only here: saving pauses both cores
       hal::timer1_wait();
-      state = power_standby_state::read_av;  // Loop back to AV reading
+      state = power_standby_state::read_av;
       return 0;
-      break;
 
     case power_standby_state::turn_on_power_alternative:  // State 7
       Dvd::flags.tray_open_expected = true;               // Powered on by the eject button
       hal::turn_on_psu();
       // The PIC holds the pin high (speed 0), P2L starts at 30
       hal::set_fan_speed(SMC_FIRMWARE_P2L ? 30 : hal::FAN_MIN_SPEED);
-      power_timeout3 = 0x32;  // 50 cycles
+      power_timeout3 = 50;
       state = power_standby_state::powered_up_wait_power_ok_alternative;
       break;
 
@@ -146,7 +147,6 @@ uint8_t update() {
       hal::timer1_init(hal::TICK_US);
       setPowerOkIrq(true);
       return 1;
-      break;
 
     default:
       state = power_standby_state::initial;

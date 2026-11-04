@@ -1,6 +1,7 @@
 #include "smc.hpp"
 #include "hal.hpp"
 #include "utils.hpp"
+#include "ring_buffer.hpp"
 #include "pin_assignments.hpp"
 
 namespace SMC {
@@ -59,21 +60,27 @@ static uint8_t temperatureByte(const int16_t tenths) {
   return static_cast<uint8_t>(whole > 0xFE ? 0xFE : whole);
 }
 
-// SMBus state. Like the PIC, the command byte is kept after the transaction
+static bool expecting_command = true;  // Next received byte is a command byte
+
+// The slave's registers, back to these at boot and power off (as the PIC's
+// RAM_init). Like the PIC, the command byte is kept after the transaction
 // ends: a read byte is "write command, repeated START, read", and the START
 // must not make us forget the command.
-static bool    expecting_command = true;  // Next received byte is a command byte
-static uint8_t smbus_command = 0;
-static uint8_t last_write_command = 0;  // SMBus 0x16, only updated by writes
-static uint8_t last_write_data = 0;     // SMBus 0x17, only updated by writes
+struct Registers {
+  uint8_t command = 0;
+  uint8_t last_write_command = 0;  // SMBus 0x16, only updated by writes
+  uint8_t last_write_data = 0;     // SMBus 0x17, only updated by writes
+  uint8_t version_counter = 1;     // SMBus 0x01: 1-3, the character read next
+  uint8_t scratch = 0;             // SMBus 0x1B, kernel boot flags kept across reboots
+};
+static Registers regs;
+
 // SMBus 0x01, SMC_VERSION_STRING (CMake SMC_REPORT_VERSION)
 const char version_string[] = SMC_VERSION_STRING;
 static_assert(sizeof(version_string) == 4, "The version is 3 characters");
 // SMBus 0x30: version of this SMC firmware (the commands it adds), separate
 // from the PIC version above. Bump it when the custom commands change.
 constexpr uint8_t custom_version = 0x01;
-static uint8_t smbus_version_counter = 1;  // 1-3, the character read next
-static uint8_t scratch_register = 0;       // SMBus 0x1B, kernel boot flags kept across reboots
 
 // Transactions are printed from the main loop (printSMBusLog): printing in
 // the IRQ would stretch the SMBus clock for milliseconds per byte
@@ -82,34 +89,20 @@ struct SMBusLogEntry {
   uint8_t command;
   uint8_t data;
 };
-static constexpr uint8_t smbus_log_size = 32;
-static SMBusLogEntry     smbus_log[smbus_log_size];
-static volatile uint8_t  smbus_log_head = 0;  // Written by the IRQ
-static volatile uint8_t  smbus_log_tail = 0;  // Written by the main loop
+static RingBuffer<SMBusLogEntry, 32> smbus_log;  // Pushed by the IRQ, popped by the main loop
 
 static void logTransaction(bool write, uint8_t command, uint8_t data) {
-  const uint8_t next = static_cast<uint8_t>((smbus_log_head + 1) % smbus_log_size);
-  if (next == smbus_log_tail) {
-    return;  // Full, drop
-  }
-  smbus_log[smbus_log_head] = {write, command, data};
-  smbus_log_head = next;
+  smbus_log.push({write, command, data});  // Dropped when full
 }
 
-// Same as the PIC's RAM_init, called at boot and on power off
 void resetSMBusRegisters() {
-  smbus_command = 0;
-  last_write_command = 0;
-  last_write_data = 0;
-  smbus_version_counter = 1;
-  scratch_register = 0;
+  regs = {};
   bios_response_byte0 = 0;  // Error code, SMBus 0x0E/0x0F
 }
 
 void printSMBusLog() {
-  while (smbus_log_tail != smbus_log_head) {
-    const SMBusLogEntry entry = smbus_log[smbus_log_tail];
-    smbus_log_tail = static_cast<uint8_t>((smbus_log_tail + 1) % smbus_log_size);
+  SMBusLogEntry entry;
+  while (smbus_log.pop(entry)) {
     if (debug::debug_enabled()) {  // Debug level only, they're too frequent for Info
       debug::print_debug(std::string("SMBUS: ") + (entry.write ? "Write" : "Read ") + " cmd [" + utils::toHex(entry.command) + "] data [" +
                          utils::toHex(entry.data) + "]");
@@ -124,16 +117,16 @@ uint8_t smbus_read_handler(uint8_t command) {
     case Command::FIRMWARE_REVISION:  // 0x01
       // One character per read, the index survives between transactions and
       // is only reset by writing 0x01 (same as the PIC)
-      if (smbus_version_counter < 1 || smbus_version_counter > 3) {
-        smbus_version_counter = 1;
+      if (regs.version_counter < 1 || regs.version_counter > 3) {
+        regs.version_counter = 1;
       }
-      response = version_string[smbus_version_counter - 1];
-      smbus_version_counter = (smbus_version_counter == 3) ? 1 : smbus_version_counter + 1;
+      response = version_string[regs.version_counter - 1];
+      regs.version_counter = (regs.version_counter == 3) ? 1 : regs.version_counter + 1;
       break;
 
     case Command::TRAY_STATE:  // 0x03
       response = static_cast<uint8_t>(Dvd::sensors.tray_status);
-      // Set bit 0 if tray_insert flag is set
+      // Bit 0: the tray is moving
       if (Dvd::flags.tray_moving) {
         response |= 0x01;
       }
@@ -187,15 +180,15 @@ uint8_t smbus_read_handler(uint8_t command) {
       break;
 
     case Command::LAST_REGISTER_WRITTEN:  // 0x16
-      response = last_write_command;
+      response = regs.last_write_command;
       break;
 
     case Command::LAST_BYTE_WRITTEN:  // 0x17
-      response = last_write_data;
+      response = regs.last_write_data;
       break;
 
     case Command::SCRATCH:  // 0x1B
-      response = scratch_register;
+      response = regs.scratch;
       break;
 
     case Command::READ_ERROR_CODE:  // 0x0F
@@ -219,6 +212,7 @@ uint8_t smbus_read_handler(uint8_t command) {
       response = BootChallenge::getChallengeStructRef().input_byte3;
       break;
 
+    // Write-only commands read as 0
     case Command::CHALLENGE_RESPONSE0:          // 0x20
     case Command::CHALLENGE_RESPONSE1:          // 0x21
     case Command::AUDIO_CLAMP:                  // 0x0B
@@ -236,7 +230,6 @@ uint8_t smbus_read_handler(uint8_t command) {
     case Command::OVERRIDE_RESET_ON_TRAY_OPEN:  // 0x19
     case Command::OS_READY:                     // 0x1A
     case Command::WRITE_LED_BRIGHTNESS:         // 0x34
-                                                // Unsupported/write-only commands - return 0
     default:
       break;
   }
@@ -268,16 +261,16 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
       break;
 
     case Command::FAN_OVERRIDE:  // 0x05
-                                 // Same as the PIC: bit 0 = use the speed from 0x06 (fan_override), only
-                                 // accepted when that speed is valid
+                                 // Bit 0 = use the speed from 0x06 (fan_override)
 #if SMC_FIRMWARE_P2L
-                                 // P2L: always accepted (the speed starts at 50); turning it off
-      // raises the fan to at least 30
+                                 // P2L: always accepted (the speed starts at 50); turning it off raises
+      // the fan to at least 30
       Fan::flags.fan_override = data & 0x01;
       if (!Fan::flags.fan_override) {
         Fan::raiseSpeedTo(30);
       }
 #else
+                                 // The PIC: only accepted when that speed is valid
       if (!(data & 0x01)) {
         Fan::flags.fan_override = false;
       } else if (Fan::getCustomFanSpeed() <= hal::FAN_MAX_SPEED) {
@@ -293,16 +286,12 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
       break;
 
     case Command::LED_OVERRIDE:  // 0x07
-      // Same as the PIC: bit 0 = show the 0x08 pattern (led_override)
-      if (data & 0x01) {
-        Led::flags.led_override = true;
-      } else {
-        Led::flags.led_override = false;
-      }
+      // Same as the PIC: bit 0 = show the 0x08 pattern
+      Led::flags.led_override = data & 0x01;
       break;
 
     case Command::LED_STATES:  // 0x08
-      // data: LED color/state bits
+      // Green phases in bits 0-3, red in bits 4-7
       Led::setGreenPhases((data >> 0) & 0x0F);
       Led::setRedPhases((data >> 4) & 0x0F);
       break;
@@ -419,31 +408,32 @@ void smbus_write_handler(uint8_t command, uint8_t data) {
     case Command::SCRATCH:  // 0x1B
       // Plain storage for the kernel (bit 1 = display fatal error after the
       // reboot, bit 3 = boot to dashboard, ...)
-      scratch_register = data;
+      regs.scratch = data;
       break;
 
     case Command::FIRMWARE_REVISION:  // 0x01
       // Restart the version string
-      smbus_version_counter = 1;
+      regs.version_counter = 1;
       break;
 
-    case Command::TRAY_STATE:             // 0x03 (read-only, ignore writes)
-    case Command::CPU_TEMPERATURE:        // 0x09 (read-only, ignore writes)
-    case Command::AIR_TEMPERATURE:        // 0x0A (read-only, ignore writes)
-    case Command::READ_FAN_SPEED:         // 0x10 (read-only, ignore writes)
-    case Command::CUSTOM_VERSION:         // 0x30 (read-only, ignore writes)
-    case Command::PICO_TEMPERATURE:       // 0x31 (read-only, ignore writes)
-    case Command::NTC_TEMPERATURE:        // 0x32 (read-only, ignore writes)
-    case Command::INTERRUPT_REASON:       // 0x11 (read-only, ignore writes)
-    case Command::READ_RAM_TEST_RESULTS:  // 0x14 (read-only, ignore writes)
-    case Command::READ_RAM_TYPE:          // 0x15 (read-only, ignore writes)
-    case Command::LAST_REGISTER_WRITTEN:  // 0x16 (read-only, ignore writes)
-    case Command::LAST_BYTE_WRITTEN:      // 0x17 (read-only, ignore writes)
-    case Command::CHALLENGE_BYTE0:        // 0x1C (read-only, ignore writes)
-    case Command::CHALLENGE_BYTE1:        // 0x1D (read-only, ignore writes)
-    case Command::CHALLENGE_BYTE2:        // 0x1E (read-only, ignore writes)
-    case Command::CHALLENGE_BYTE3:        // 0x1F (read-only, ignore writes)
-      // Read-only commands - silently ignore writes
+    // Read-only commands: writes are ignored
+    case Command::TRAY_STATE:             // 0x03
+    case Command::CPU_TEMPERATURE:        // 0x09
+    case Command::AIR_TEMPERATURE:        // 0x0A
+    case Command::READ_FAN_SPEED:         // 0x10
+    case Command::INTERRUPT_REASON:       // 0x11
+    case Command::READ_RAM_TEST_RESULTS:  // 0x14
+    case Command::READ_RAM_TYPE:          // 0x15
+    case Command::LAST_REGISTER_WRITTEN:  // 0x16
+    case Command::LAST_BYTE_WRITTEN:      // 0x17
+    case Command::CHALLENGE_BYTE0:        // 0x1C
+    case Command::CHALLENGE_BYTE1:        // 0x1D
+    case Command::CHALLENGE_BYTE2:        // 0x1E
+    case Command::CHALLENGE_BYTE3:        // 0x1F
+    case Command::CUSTOM_VERSION:         // 0x30
+    case Command::PICO_TEMPERATURE:       // 0x31
+    case Command::NTC_TEMPERATURE:        // 0x32
+    case Command::READ_LED_BRIGHTNESS:    // 0x33
       break;
 
     default:
@@ -457,14 +447,14 @@ void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
       const uint8_t data = i2c_read_byte_raw(i2c);
 
       if (expecting_command) {
-        smbus_command = data;
+        regs.command = data;
         expecting_command = false;
       } else {
         // Data byte of a write
-        last_write_command = smbus_command;
-        last_write_data = data;
-        smbus_write_handler(smbus_command, data);
-        logTransaction(true, smbus_command, data);
+        regs.last_write_command = regs.command;
+        regs.last_write_data = data;
+        smbus_write_handler(regs.command, data);
+        logTransaction(true, regs.command, data);
       }
       break;
     }
@@ -472,9 +462,9 @@ void handle_SMBus_interrupt(i2c_inst_t* i2c, i2c_slave_event_t event) {
     case I2C_SLAVE_REQUEST: {  // master is requesting data
       // Always answer: with an empty TX FIFO the slave stretches the clock and
       // holds the bus
-      const uint8_t response = smbus_read_handler(smbus_command);
+      const uint8_t response = smbus_read_handler(regs.command);
       i2c_write_byte_raw(i2c, response);
-      logTransaction(false, smbus_command, response);
+      logTransaction(false, regs.command, response);
       break;
     }
 

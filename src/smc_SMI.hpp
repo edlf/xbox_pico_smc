@@ -8,14 +8,13 @@ namespace SMI {
 
 // SMI reasons, the bits of SMBus 0x11 (flags.interrupt_reason)
 enum InterruptReason : uint8_t {
-  // bit 0 - power button pressed
-  InterruptReason_power_sw_pressed = 0b00000001,
-  InterruptReason_dvd_tray0 = 0b00000010,
-  InterruptReason_dvd_tray1 = 0b00000100,
+  InterruptReason_power_sw_pressed = 0b00000001,  // Power button (or AV power mode)
+  InterruptReason_dvd_tray0 = 0b00000010,         // Tray closed with or without a disc (0x40/0x60)
+  InterruptReason_dvd_tray1 = 0b00000100,         // Tray opening (0x30)
   InterruptReason_av_mode_changed = 0b00001000,
   InterruptReason_av_unplugged = 0b00010000,
   InterruptReason_eject_sw_pressed = 0b00100000,
-  InterruptReason_dvd_tray2 = 0b01000000,
+  InterruptReason_dvd_tray2 = 0b01000000,  // Tray closed (0x00)
   InterruptReason_unused = 0b10000000
 };
 

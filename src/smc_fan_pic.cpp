@@ -57,7 +57,7 @@ constexpr temperature_thresholds p11_thresholds = {
 
 constexpr const temperature_thresholds& default_thresholds = SMC_FIRMWARE_P11 ? p11_thresholds : p01_thresholds;
 
-// In use, can be lowered from the web interface
+// In use, can be lowered (web interface, USB config)
 static temperature_thresholds thresholds = default_thresholds;
 
 static const threshold_entry threshold_entries[] = {
@@ -87,15 +87,15 @@ constexpr uint8_t wait_rounds = 0x14;
 constexpr bool bus_recovery = !SMC_FIRMWARE_DXF;
 
 static fan_control_state state;
-static uint8_t           timeout1;  // 0x47
-static uint8_t           timeout2;  // 0x46
+static uint8_t           timeout1;  // Ticks left in the current round
+static uint8_t           timeout2;  // Rounds left
 
-static uint8_t samples_left;   // 0x59
-static uint8_t retry_timeout;  // 0x5A
+static uint8_t samples_left;   // Readings still to take
+static uint8_t retry_timeout;  // Ticks left to retry a failed reading
 static uint8_t cpu_samples[sample_count];
 static uint8_t board_samples[sample_count];
 
-static bool bus_recovery_allowed;  // re-armed by every good reading
+static bool bus_recovery_allowed;  // Re-armed by every good reading
 
 void init() {
   // Same as the PIC's RAM_init
@@ -146,7 +146,7 @@ void update_fan_temp() {
 
     case fan_control_state::decision_state:
       timeout2 = wait_rounds;
-      timeout1 = wait_round_ticks;  // Next decision in 20 * 50 ticks = 20 s
+      timeout1 = wait_round_ticks;
 
       if (sensors.CPU_temperature > thresholds.critical_cpu || sensors.board_temperature > thresholds.critical_board) {
         state = fan_control_state::overheated;

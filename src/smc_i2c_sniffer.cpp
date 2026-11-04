@@ -3,6 +3,7 @@
 #include "smc.hpp"
 #include "pin_assignments.hpp"
 #include "utils.hpp"
+#include "ring_buffer.hpp"
 
 #include "hardware/clocks.h"
 #include "hardware/dma.h"
@@ -81,17 +82,21 @@ static const char* encoderName(const uint8_t address) {
 static uint8_t found_mask = 0;
 static uint8_t logged_mask = 0;
 
-// Decoder state
-constexpr uint8_t max_bytes = 6;        // Address, register and up to 4 data bytes kept
-static uint8_t    prev_state = 0x3;     // Idle: SDA and SCL high
-static bool       in_transfer = false;  // Between START and STOP
-static uint8_t    bit_count = 0;        // Bits of the current byte, the 9th is the ACK
-static uint8_t    current_byte = 0;
-static uint8_t    bytes[max_bytes];
-static uint8_t    byte_count = 0;     // Bytes in this segment (more than max_bytes are counted, not kept)
-static bool       nacked = false;     // A byte of this segment wasn't acknowledged
-static bool       restarted = false;  // A repeated START in this transfer: a read, not a write
-static bool       ignoring = false;   // During our own master transfer
+// Where the decoder is in the bus traffic
+constexpr uint8_t max_bytes = 6;  // Address, register and up to 4 data bytes kept
+struct Decoder {
+  uint8_t prev_state = 0x3;     // Idle: SDA and SCL high
+  bool    in_transfer = false;  // Between START and STOP
+  bool    restarted = false;    // A repeated START in this transfer: a read, not a write
+  // The current segment (after a START)
+  uint8_t bit_count = 0;  // Bits of the current byte, the 9th is the ACK
+  uint8_t current_byte = 0;
+  uint8_t bytes[max_bytes] = {};
+  uint8_t byte_count = 0;  // Bytes in this segment (more than max_bytes are counted, not kept)
+  bool    nacked = false;  // A byte of this segment wasn't acknowledged
+};
+static Decoder decoder;
+static bool    ignoring = false;  // During our own master transfer
 
 // Writes waiting to be printed. Printing is slow (~4 ms a line at 115200
 // baud), so only a couple per tick: the BIOS writes the encoder in bursts.
@@ -101,93 +106,85 @@ struct LogEntry {
   uint8_t data[max_bytes - 1];
   bool    nacked;
 };
-constexpr uint8_t log_size = 128;
-constexpr uint8_t prints_per_tick = 2;
-static LogEntry   log_entries[log_size];
-static uint8_t    log_head = 0;
-static uint8_t    log_tail = 0;
-static uint16_t   dropped = 0;
+constexpr uint8_t                prints_per_tick = 2;
+static RingBuffer<LogEntry, 128> writes;
 
 static void segmentStart() {
-  bit_count = 0;
-  current_byte = 0;
-  byte_count = 0;
-  nacked = false;
+  decoder.bit_count = 0;
+  decoder.current_byte = 0;
+  decoder.byte_count = 0;
+  decoder.nacked = false;
 }
 
 // A write ended by STOP, to an encoder, with a register and at least one byte
 static void segmentEnd() {
-  if (!debug::debug_enabled() || ignoring || restarted || byte_count < 3 || (bytes[0] & 1) != 0) {
+  if (!debug::debug_enabled() || ignoring || decoder.restarted || decoder.byte_count < 3 || (decoder.bytes[0] & 1) != 0) {
     return;
   }
-  const uint8_t address = bytes[0] >> 1;
+  const uint8_t address = decoder.bytes[0] >> 1;
   if (encoderName(address) == nullptr) {
     return;
   }
-  const uint8_t next = static_cast<uint8_t>((log_head + 1) % log_size);
-  if (next == log_tail) {
-    dropped++;
-    return;
-  }
-  LogEntry& entry = log_entries[log_head];
+  LogEntry entry = {};
   entry.address = address;
-  entry.count = byte_count - 1;
-  for (uint8_t i = 1; i < byte_count && i < max_bytes; i++) {
-    entry.data[i - 1] = bytes[i];
+  entry.count = decoder.byte_count - 1;
+  for (uint8_t i = 1; i < decoder.byte_count && i < max_bytes; i++) {
+    entry.data[i - 1] = decoder.bytes[i];
   }
-  entry.nacked = nacked;
-  log_head = next;
+  entry.nacked = decoder.nacked;
+  writes.push(entry);
 }
 
 static void decodeSample(const uint8_t state) {
-  if (state == prev_state) {
+  if (state == decoder.prev_state) {
     return;
   }
   const bool sda = state & 1;
   const bool scl = state & 2;
-  const bool prev_scl = prev_state & 2;
-  prev_state = state;
+  const bool prev_scl = decoder.prev_state & 2;
+  decoder.prev_state = state;
 
   if (prev_scl && scl) {
     // SDA changed with SCL high
     if (!sda) {  // START or repeated START
-      restarted = in_transfer;
-      in_transfer = true;
+      decoder.restarted = decoder.in_transfer;
+      decoder.in_transfer = true;
       segmentStart();
-    } else if (in_transfer) {  // STOP
+    } else if (decoder.in_transfer) {  // STOP
       segmentEnd();
-      in_transfer = false;
+      decoder.in_transfer = false;
     }
     return;
   }
 
-  if (!prev_scl && scl && in_transfer) {
+  if (!prev_scl && scl && decoder.in_transfer) {
     // SCL rising: a data bit, or the ACK after 8 of them
-    if (bit_count < 8) {
-      current_byte = (current_byte << 1) | sda;
-      bit_count++;
+    if (decoder.bit_count < 8) {
+      decoder.current_byte = (decoder.current_byte << 1) | sda;
+      decoder.bit_count++;
     } else {
-      if (byte_count < max_bytes) {
-        bytes[byte_count] = current_byte;
+      if (decoder.byte_count < max_bytes) {
+        decoder.bytes[decoder.byte_count] = decoder.current_byte;
       }
       // Each data byte the CPU writes to an encoder or an X-HD (0x69, its mode
       // packet), register byte at index 1
-      if (byte_count >= 2 && !ignoring && (bytes[0] & 1) == 0 && (encoderIndex(bytes[0] >> 1) >= 0 || (bytes[0] >> 1) == 0x69)) {
-        EncoderMode::onWrite(bytes[0] >> 1, bytes[1], byte_count - 2, current_byte);
+      if (decoder.byte_count >= 2 && !ignoring && (decoder.bytes[0] & 1) == 0 &&
+          (encoderIndex(decoder.bytes[0] >> 1) >= 0 || (decoder.bytes[0] >> 1) == 0x69)) {
+        EncoderMode::onWrite(decoder.bytes[0] >> 1, decoder.bytes[1], decoder.byte_count - 2, decoder.current_byte);
       }
-      if (byte_count < 255) {
-        byte_count++;
+      if (decoder.byte_count < 255) {
+        decoder.byte_count++;
       }
-      nacked |= sda;  // SDA high: not acknowledged
-      if (byte_count == 1 && !sda && !ignoring) {
+      decoder.nacked |= sda;  // SDA high: not acknowledged
+      if (decoder.byte_count == 1 && !sda && !ignoring) {
         // An encoder answered its address: it's on this board
-        const int8_t i = encoderIndex(current_byte >> 1);
+        const int8_t i = encoderIndex(decoder.current_byte >> 1);
         if (i >= 0) {
           found_mask |= 1u << i;
         }
       }
-      bit_count = 0;
-      current_byte = 0;
+      decoder.bit_count = 0;
+      decoder.current_byte = 0;
     }
   }
 }
@@ -232,10 +229,8 @@ static void printFound() {
 }
 
 static void printWrites() {
-  for (uint8_t n = 0; n < prints_per_tick && log_tail != log_head; n++) {
-    const LogEntry& entry = log_entries[log_tail];
-    log_tail = static_cast<uint8_t>((log_tail + 1) % log_size);
-
+  LogEntry entry;
+  for (uint8_t n = 0; n < prints_per_tick && writes.pop(entry); n++) {
     std::string   msg = std::string("ENCODER: ") + encoderName(entry.address) + " [" + utils::toHex(entry.data[0]) + "] =";
     const uint8_t kept = entry.count < max_bytes - 1 ? entry.count : max_bytes - 1;
     for (uint8_t i = 1; i < kept; i++) {
@@ -250,9 +245,10 @@ static void printWrites() {
     debug::print_debug(msg);
   }
 
-  if (dropped != 0 && log_tail == log_head) {
-    debug::print_warn("ENCODER: " + std::to_string(dropped) + " writes not logged (log full)");
-    dropped = 0;
+  if (writes.empty()) {
+    if (const uint16_t dropped = writes.takeDropped(); dropped != 0) {
+      debug::print_warn("ENCODER: " + std::to_string(dropped) + " writes not logged (log full)");
+    }
   }
 }
 

@@ -16,6 +16,14 @@ constexpr uint32_t magic = 0x534D4353;  // "SCMS"
 constexpr uint16_t version = 0;         // Bump when the layout changes, older records are ignored
 constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 
+// The settings kept here rather than by their module, stored as they are.
+// Wi-Fi access point: SMC_WIFI_SSID / SMC_WIFI_PASSWORD (src/config.hpp) unless saved.
+struct Values {
+  char    wifi_ssid[max_ssid_length + 1] = SMC_WIFI_SSID;              // Zero-terminated
+  char    wifi_password[max_password_length + 1] = SMC_WIFI_PASSWORD;  // Zero-terminated, empty: made from the board ID
+  uint8_t web_enabled = 1;                                             // Start the web interface (ignored without one in the build)
+};
+
 struct Record {
   uint32_t magic;
   uint16_t version;
@@ -24,10 +32,8 @@ struct Record {
   uint8_t  led_brightness;  // Percent
   uint8_t  threshold_count;
   uint8_t  thresholds[Fan::max_thresholds];
-  char     wifi_ssid[max_ssid_length + 1];          // Zero-terminated
-  char     wifi_password[max_password_length + 1];  // Zero-terminated, empty: made from the board ID
-  uint8_t  web_enabled;                             // Start the web interface (ignored without one in the build)
-  uint32_t checksum;                                // FNV-1a over everything above
+  Values   values;
+  uint32_t checksum;  // FNV-1a over everything above
 };
 static_assert(sizeof(Record) <= FLASH_PAGE_SIZE, "One flash page");
 
@@ -35,11 +41,7 @@ static Record        saved;  // What's in flash (or the defaults)
 static bool          saved_valid = false;
 static volatile bool save_requested = false;  // requestSave(), done by update()
 static bool          usable = false;          // The sector is past the end of the firmware
-
-// Wi-Fi access point, SMC_WIFI_SSID / SMC_WIFI_PASSWORD (src/config.hpp) unless saved
-static char wifi_ssid[max_ssid_length + 1] = SMC_WIFI_SSID;
-static char wifi_password[max_password_length + 1] = SMC_WIFI_PASSWORD;
-static bool web_enabled = true;
+static Values        values;                  // Live, the setters keep them valid
 
 extern "C" uint8_t __flash_binary_end;
 
@@ -60,7 +62,7 @@ static void firmwareName(char (&out)[4]) {
 // The settings as they are now
 static Record current() {
   Record r;
-  memset(&r, 0, sizeof(r));
+  memset(static_cast<void*>(&r), 0, sizeof(r));  // Padding too, the checksum covers it
   r.magic = magic;
   r.version = version;
   r.size = sizeof(Record);
@@ -70,9 +72,7 @@ static Record current() {
   for (uint8_t i = 0; i < r.threshold_count && i < Fan::max_thresholds; i++) {
     r.thresholds[i] = Fan::getThreshold(i);
   }
-  memcpy(r.wifi_ssid, wifi_ssid, strlen(wifi_ssid));  // The setters keep them in range, r is zeroed
-  memcpy(r.wifi_password, wifi_password, strlen(wifi_password));
-  r.web_enabled = web_enabled;
+  r.values = values;
   r.checksum = checksum(r);
   return r;
 }
@@ -88,11 +88,11 @@ static bool printable(const char* text, const size_t length) {
 }
 
 const char* wifiSsid() {
-  return wifi_ssid;
+  return values.wifi_ssid;
 }
 
 const char* wifiPassword() {
-  return wifi_password;
+  return values.wifi_password;
 }
 
 bool setWifiSsid(const char* ssid) {
@@ -100,7 +100,8 @@ bool setWifiSsid(const char* ssid) {
   if (length < 1 || length > max_ssid_length || !printable(ssid, length)) {
     return false;
   }
-  memcpy(wifi_ssid, ssid, length + 1);
+  memset(values.wifi_ssid, 0, sizeof(values.wifi_ssid));  // Zeroed past the end, so equal names compare equal
+  memcpy(values.wifi_ssid, ssid, length);
   return true;
 }
 
@@ -109,7 +110,8 @@ bool setWifiPassword(const char* password) {
   if ((length != 0 && length < min_password_length) || length > max_password_length || !printable(password, length)) {
     return false;
   }
-  memcpy(wifi_password, password, length + 1);
+  memset(values.wifi_password, 0, sizeof(values.wifi_password));
+  memcpy(values.wifi_password, password, length);
   return true;
 }
 
@@ -119,11 +121,11 @@ void resetWifi() {
 }
 
 bool webEnabled() {
-  return web_enabled;
+  return values.web_enabled != 0;
 }
 
 void setWebEnabled(const bool enabled) {
-  web_enabled = enabled;
+  values.web_enabled = enabled ? 1 : 0;
 }
 
 static bool sameSettings(const Record& a, const Record& b) {
@@ -157,18 +159,18 @@ void load() {
     }
     // Checked like a new value, the defaults stay on anything invalid
     char text[max_password_length + 1];
-    memcpy(text, stored->wifi_ssid, max_ssid_length);
+    memcpy(text, stored->values.wifi_ssid, max_ssid_length);
     text[max_ssid_length] = '\0';
     if (setWifiSsid(text)) {
       msg += ", Wi-Fi name";
     }
-    memcpy(text, stored->wifi_password, max_password_length);
+    memcpy(text, stored->values.wifi_password, max_password_length);
     text[max_password_length] = '\0';
     if (setWifiPassword(text)) {
       msg += ", Wi-Fi password";
     }
-    web_enabled = stored->web_enabled != 0;
-    msg += web_enabled ? ", web interface on" : ", web interface off";
+    setWebEnabled(stored->values.web_enabled != 0);
+    msg += webEnabled() ? ", web interface on" : ", web interface off";
     debug::print_message(msg);
   }
   saved = current();  // What's applied now, so only real changes are written

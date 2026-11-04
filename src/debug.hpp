@@ -8,7 +8,6 @@ namespace debug {
 // Ordered by verbosity: a level prints its own messages and everything above it
 enum class DebugLevel { Silent, Critical, Warnings, Info, Debug };
 
-// Check if debug level is enabled
 bool enabled(DebugLevel level);
 
 // Timestamp, level tag and the message, if the level is enabled

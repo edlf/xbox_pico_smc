@@ -12,34 +12,50 @@ namespace Led {
 
 flags_struct flags;
 
+// A blink pattern: 4 phases per colour, bit 3 shown first. Both on is orange.
+struct Pattern {
+  uint8_t red = 0;
+  uint8_t green = 0;
+};
+
+constexpr Pattern dark_pattern = {0x0, 0x0};
+constexpr Pattern overheat_pattern = {0x3, 0x3};           // Slow orange blink
+constexpr Pattern quick_green_blink_pattern = {0x0, 0x5};  // Tray moving
+constexpr Pattern solid_green_pattern = {0x0, 0xF};
+constexpr Pattern quick_green_orange_pattern = {0x5, 0xF};  // No AV cable
+
 static led_state state;
 static uint8_t   state_counter;
 static uint8_t   led_phase;  // Phase bit shown next, 3 down to 0
-static uint8_t   green_phases_manual;
-static uint8_t   red_phases_manual;
-static uint8_t   green_phases;
-static uint8_t   red_phases;
-static bool      manual_control = false;
-static bool      overheat = false;
-static bool      av_missing = false;
-static bool      power_off_bit = true;
-static bool      quick_green_blink = false;
-static bool      boot_failure = false;
-static uint8_t   red_phases_failure;
-static uint8_t   green_phases_failure;
+static Pattern   pattern;    // Being shown
+static Pattern   manual_pattern;
+static Pattern   failure_pattern;
+
+// What picks the pattern, set by update_LEDs() every tick
+struct Inputs {
+  bool manual_control = false;  // SMBus LED override
+  bool overheat = false;
+  bool av_missing = false;
+  bool power_off = true;
+  bool quick_green_blink = false;
+  bool boot_failure = false;
+};
+static Inputs inputs;
 
 // With SMC_LED_FADE the LEDs fade in when the Xbox powers up and fade out the
 // last pattern when it powers down, instead of switching at once like the PIC
 enum class fade_direction { none, in, out };
-constexpr uint8_t     fade_in_ticks = 50;   // 1 s
-constexpr uint8_t     fade_out_ticks = 25;  // 0.5 s, power off waits for it
-static fade_direction fade = fade_direction::none;
-static uint8_t        fade_step;          // 0 to fade_in_ticks or fade_out_ticks
-static uint8_t        red_phases_fading;  // Pattern shown while fading out
-static uint8_t        green_phases_fading;
-// Faded out: dark until the power is off, so a pattern that wins over "off"
-// (the SMBus LED override) can't light up again while the tray closes
-static bool dark_until_power_off = false;
+constexpr uint8_t fade_in_ticks = 50;   // 1 s
+constexpr uint8_t fade_out_ticks = 25;  // 0.5 s, power off waits for it
+struct Fade {
+  fade_direction direction = fade_direction::none;
+  uint8_t        step = 0;  // 0 to fade_in_ticks or fade_out_ticks
+  Pattern        pattern;   // Shown while fading out
+  // Faded out: dark until the power is off, so a pattern that wins over "off"
+  // (the SMBus LED override) can't light up again while the tray closes
+  bool dark_until_power_off = false;
+};
+static Fade fade;
 
 constexpr const char* state_names[] = {"Initial",     "Overheat",    "Manual control", "Quick green blink",   "Solid green",
                                        "Off",         "Tick update", "Set GPIOs",      "Reset phase counter", "Quick green/orange (Missing AV)",
@@ -49,31 +65,26 @@ void init() {
   state = led_state::resetPhaseCounter;
   state_counter = 0;
   led_phase = 0;
-  green_phases_manual = 0;
-  red_phases_manual = 0;
-  green_phases = 0;
-  red_phases = 0;
-  manual_control = false;
-  red_phases_failure = 0;
-  green_phases_failure = 0;
-  power_off_bit = true;
-  fade = fade_direction::none;
-  dark_until_power_off = false;
+  pattern = {};
+  manual_pattern = {};
+  failure_pattern = {};
+  inputs.manual_control = false;
+  inputs.power_off = true;
+  fade = {};
   hal::set_led_fade(255);
 }
 
 // Called by the main loop once the Xbox is off
 void resetPhaseCounter() {
   state = led_state::resetPhaseCounter;
-  dark_until_power_off = false;
+  fade.dark_until_power_off = false;
 }
 
 void clearPhases() {
-  if (fade == fade_direction::out) {
+  if (fade.direction == fade_direction::out) {
     return;  // The fade turns them off
   }
-  green_phases = 0;
-  red_phases = 0;
+  pattern = dark_pattern;
 }
 
 // Brightness for a fade step out of ticks: squared, so the change looks even
@@ -83,105 +94,103 @@ static uint8_t fadeLevel(uint8_t step, uint8_t ticks) {
 
 // Called once per tick
 static void stepFade() {
-  switch (fade) {
+  switch (fade.direction) {
     case fade_direction::none:
       break;
 
     case fade_direction::in:
-      if (++fade_step >= fade_in_ticks) {
-        fade = fade_direction::none;
+      if (++fade.step >= fade_in_ticks) {
+        fade.direction = fade_direction::none;
         hal::set_led_fade(255);
       } else {
-        hal::set_led_fade(fadeLevel(fade_step, fade_in_ticks));
+        hal::set_led_fade(fadeLevel(fade.step, fade_in_ticks));
       }
       break;
 
     case fade_direction::out:
-      if (fade_step == 0 || --fade_step == 0) {
+      if (fade.step == 0 || --fade.step == 0) {
         // Dark: switch off, then back to full brightness for what comes next
-        fade = fade_direction::none;
-        dark_until_power_off = true;
+        fade.direction = fade_direction::none;
+        fade.dark_until_power_off = true;
         hal::led_red_off();
         hal::led_green_off();
         hal::set_led_fade(255);
       } else {
-        hal::set_led_fade(fadeLevel(fade_step, fade_out_ticks));
+        hal::set_led_fade(fadeLevel(fade.step, fade_out_ticks));
       }
       break;
   }
 }
 
 bool isFadingOut() {
-  return fade == fade_direction::out;
+  return fade.direction == fade_direction::out;
 }
 
 void setGreenPhases(const uint8_t phase) {
-  green_phases_manual = phase;
+  manual_pattern.green = phase;
 }
 
 void setRedPhases(const uint8_t phase) {
-  red_phases_manual = phase;
+  manual_pattern.red = phase;
 }
 
 uint8_t getGreenPhases() {
-  return green_phases_manual;
+  return manual_pattern.green;
 }
 
 uint8_t getRedPhases() {
-  return red_phases_manual;
+  return manual_pattern.red;
 }
 
 void setManualControl(const bool i) {
-  manual_control = i;
+  inputs.manual_control = i;
 }
 
 void setOverheat(const bool i) {
-  overheat = i;
+  inputs.overheat = i;
 }
 
 void setAvMissing(const bool i) {
-  av_missing = i;
+  inputs.av_missing = i;
 }
 
 void setPowerOff(const bool i) {
   if (!SMC_LED_FADE) {
     // Switched at once, like the PIC
-  } else if (i && !power_off_bit) {
+  } else if (i && !inputs.power_off) {
     // Powering down: keep showing the current pattern while it fades out,
     // from wherever a fade in had got to
-    red_phases_fading = red_phases;
-    green_phases_fading = green_phases;
-    if (fade == fade_direction::in) {
-      fade_step = (uint16_t)fade_step * fade_out_ticks / fade_in_ticks;  // Same level
+    fade.pattern = pattern;
+    if (fade.direction == fade_direction::in) {
+      fade.step = static_cast<uint8_t>(fade.step * fade_out_ticks / fade_in_ticks);  // Same level
     } else {
-      fade_step = fade_out_ticks;
+      fade.step = fade_out_ticks;
     }
-    fade = fade_direction::out;
-  } else if (!i && power_off_bit) {
+    fade.direction = fade_direction::out;
+  } else if (!i && inputs.power_off) {
     // Powering up: fade in from dark (or from where a fade out had got to)
-    dark_until_power_off = false;
-    if (fade == fade_direction::out) {
-      fade_step = (uint16_t)fade_step * fade_in_ticks / fade_out_ticks;  // Same level
+    fade.dark_until_power_off = false;
+    if (fade.direction == fade_direction::out) {
+      fade.step = static_cast<uint8_t>(fade.step * fade_in_ticks / fade_out_ticks);  // Same level
     } else {
-      fade_step = 0;
+      fade.step = 0;
     }
-    fade = fade_direction::in;
-    hal::set_led_fade(fadeLevel(fade_step, fade_in_ticks));
+    fade.direction = fade_direction::in;
+    hal::set_led_fade(fadeLevel(fade.step, fade_in_ticks));
   }
-  power_off_bit = i;
+  inputs.power_off = i;
 }
 
 void setQuickGreenBlink(const bool i) {
-  quick_green_blink = i;
+  inputs.quick_green_blink = i;
 }
 
 void setBootFailure(const bool i) {
-  boot_failure = i;
+  inputs.boot_failure = i;
 }
 
 void setBootFailurePattern(const uint8_t red, const uint8_t green) {
-  red_phases_failure = red;
-  green_phases_failure = green;
+  failure_pattern = {red, green};
 }
 
 void printState() {
@@ -203,7 +212,7 @@ void requestBrightness(const uint8_t percent) {
 
 void update() {
   const uint32_t irq_state = save_and_disable_interrupts();  // Take it without losing a newer one
-  const uint8_t brightness = requested_brightness;
+  const uint8_t  brightness = requested_brightness;
   requested_brightness = 0;
   restore_interrupts(irq_state);
   if (brightness != 0) {
@@ -219,7 +228,7 @@ void update() {
     case led_state::initial:  // 0
       state_counter = 6;
 
-      if (dark_until_power_off) {
+      if (fade.dark_until_power_off) {
         state = led_state::off;
         return;
       }
@@ -227,12 +236,12 @@ void update() {
       // The boot failure error code wins over everything, an overheat and the
       // SMBus LED override included (the PIC shows it through the override, so a
       // later SMBus 0x07/0x08 write or an overheat could hide it)
-      if (boot_failure) {
+      if (inputs.boot_failure) {
         state = led_state::boot_failure;
         return;
       }
 
-      if (overheat) {
+      if (inputs.overheat) {
         state = led_state::overheat;
         return;
       }
@@ -240,24 +249,24 @@ void update() {
       // A missing AV cable wins over the SMBus LED override on every firmware, so
       // a dashboard that sets its own LEDs can't hide it (P11 checks the override
       // first)
-      if (av_missing) {
+      if (inputs.av_missing) {
         state = led_state::quick_green_orange;
         return;
       }
 
       // The SMBus LED override comes before power off, as P11/P2L (P01 checks
       // power off first)
-      if (manual_control) {
+      if (inputs.manual_control) {
         state = led_state::manual_control;
         return;
       }
 
-      if (power_off_bit) {
+      if (inputs.power_off) {
         state = led_state::off;
         return;
       }
 
-      if (quick_green_blink) {
+      if (inputs.quick_green_blink) {
         state = led_state::quick_green_blink;
         return;
       }
@@ -266,39 +275,27 @@ void update() {
       break;
 
     case led_state::overheat:  // 1
-      // System overheated: slow blinking
-      red_phases = 3;
-      green_phases = 3;
+      pattern = overheat_pattern;
       state = led_state::tick_update;
       break;
 
     case led_state::manual_control:  // 2
-      red_phases = red_phases_manual;
-      green_phases = green_phases_manual;
+      pattern = manual_pattern;
       state = led_state::tick_update;
       break;
 
     case led_state::quick_green_blink:  // 3
-      // Quick green blinking
-      red_phases = 0;
-      green_phases = 5;
+      pattern = quick_green_blink_pattern;
       state = led_state::tick_update;
       break;
 
     case led_state::solid_green:  // 4
-      red_phases = 0;
-      green_phases = 0xF;
+      pattern = solid_green_pattern;
       state = led_state::tick_update;
       break;
 
     case led_state::off:  // 5
-      if (fade == fade_direction::out) {
-        red_phases = red_phases_fading;
-        green_phases = green_phases_fading;
-      } else {
-        red_phases = 0;
-        green_phases = 0;
-      }
+      pattern = fade.direction == fade_direction::out ? fade.pattern : dark_pattern;
       state = led_state::tick_update;
       break;
 
@@ -311,12 +308,12 @@ void update() {
       break;
 
     case led_state::set_gpios:  // 7
-      if (red_phases & (1 << led_phase)) {
+      if (pattern.red & (1 << led_phase)) {
         hal::led_red_on();
       } else {
         hal::led_red_off();
       }
-      if (green_phases & (1 << led_phase)) {
+      if (pattern.green & (1 << led_phase)) {
         hal::led_green_on();
       } else {
         hal::led_green_off();
@@ -335,14 +332,12 @@ void update() {
       break;
 
     case led_state::quick_green_orange:  // 9
-      red_phases = 5;
-      green_phases = 0xF;
+      pattern = quick_green_orange_pattern;
       state = led_state::tick_update;
       break;
 
     case led_state::boot_failure:  // 10
-      red_phases = red_phases_failure;
-      green_phases = green_phases_failure;
+      pattern = failure_pattern;
       state = led_state::tick_update;
       break;
 

@@ -3,7 +3,6 @@
 
 #include <cstdint>
 
-// pico stuff
 #include "hardware/i2c.h"
 #include "pico/i2c_slave.h"
 

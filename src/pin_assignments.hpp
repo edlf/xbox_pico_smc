@@ -4,8 +4,8 @@
 #include <cstdint>
 #include "hardware/i2c.h"
 
+// GPIO numbers, see docs/Wiring.md for the PIC pins they replace
 namespace pins {
-// SMC
 constexpr uint8_t LED_RED = 2;
 constexpr uint8_t LED_GREEN = 3;
 constexpr uint8_t SYSTEM_RESET = 4;
@@ -15,10 +15,9 @@ constexpr uint8_t DVD_EJECT = 7;
 constexpr uint8_t AUDIO_CLAMP = 8;
 constexpr uint8_t POWER_OK = 9;
 constexpr uint8_t FAN_PWM1 = 10;
-// 14-28
+constexpr uint8_t POWER_ON = 11;
 constexpr uint8_t I2C_SDA = 12;
 constexpr uint8_t I2C_SCL = 13;
-constexpr uint8_t POWER_ON = 11;
 constexpr uint8_t RTC_DUMP = 14;
 constexpr uint8_t SW_POWER = 15;
 constexpr uint8_t PLL_ENABLE = 16;
