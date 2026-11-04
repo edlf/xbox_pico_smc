@@ -138,6 +138,10 @@ void main_loop() {
         ExtraTemp::update();
         I2CSniffer::update();
 
+        // Again, so an OS answer (SMBus 0x0D) that came in during this tick is
+        // seen now, as when the interrupt set the flags itself: the OS's
+        // answer windows (25 ticks for a power off) keep their full length
+        applySMBusWrites();
         power_standby_state = SMI::update();
         printSMBusLog();
         if ((power_standby_state & 1) != 0) {

@@ -1,0 +1,74 @@
+# Builds the firmware for the four supported boards and runs the host tests on
+# every push and pull request. The .uf2 files are kept as build artifacts.
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PICO_SDK_VERSION: 2.2.0
+  ARM_GCC_VERSION: 14.2.Rel1
+
+jobs:
+  firmware:
+    name: Firmware (${{ matrix.board }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [pico, pico_w, pico2, pico2_w]
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Check out the Pico SDK
+        uses: actions/checkout@v4
+        with:
+          repository: raspberrypi/pico-sdk
+          ref: ${{ env.PICO_SDK_VERSION }}
+          path: pico-sdk
+          submodules: true  # TinyUSB, and cyw43-driver and lwIP for the W boards
+
+      - name: Install the Arm toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: ${{ env.ARM_GCC_VERSION }}
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DPICO_BOARD=${{ matrix.board }} -DPICO_SDK_PATH=${{ github.workspace }}/pico-sdk
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: OG_SMC-${{ matrix.board }}
+          path: |
+            build/OG_SMC.uf2
+            build/OG_SMC.elf
+
+  tests:
+    name: Host tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install GoogleTest
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgtest-dev
+
+      - name: Build
+        run: |
+          cmake -S tests -B build-tests -G Ninja
+          cmake --build build-tests
+
+      - name: Run
+        run: ctest --test-dir build-tests --output-on-failure
