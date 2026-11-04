@@ -81,7 +81,8 @@ static uint32_t xc_value = 0;
 static uint32_t xc_in_raster = 0;
 static uint32_t xc_width = 0;
 static uint32_t xc_out_raster = 0;
-static uint8_t  xc_mode_index = 0;  // 0: none yet or unknown
+static uint8_t  xc_mode_index = 0;  // 0: unknown raster
+static bool     xc_mode_set = false;  // A mode set completed (0x56 written)
 static uint8_t  xc_aspect = 0;
 static bool     xc_aspect_valid = false;
 
@@ -104,6 +105,7 @@ void reset() {
   fs_iho_valid = false;
   fs_wss_valid = false;
   xc_mode_index = 0;
+  xc_mode_set = false;
   xc_aspect_valid = false;
 }
 
@@ -325,6 +327,7 @@ static void xcaliburWrite(const uint8_t reg, const uint8_t index, const uint8_t 
 
     case xc::mode_sel:
       xc_mode_index = xcaliburModeIndex(xc_value & 0xFF);
+      xc_mode_set = true;
       break;
 
     case xc::aspect:
@@ -651,7 +654,7 @@ void update() {
   } else if (encoder == address_focus) {
     mode = focusMode();
   } else if (encoder == address_xcalibur) {
-    if (xc_mode_index == 0 && !xc_aspect_valid) {
+    if (!xc_mode_set && !xc_aspect_valid) {
       return;  // Nothing of a mode set yet
     }
 

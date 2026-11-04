@@ -1,0 +1,204 @@
+// SMBus slave commands (src/smc_smbus.cpp), driven through
+// handle_SMBus_interrupt() the way the Pico's I2C slave calls it
+
+#include <gtest/gtest.h>
+
+#include <cstdint>
+
+#include "fakes.hpp"
+#include "hal.hpp"
+#include "smc.hpp"
+
+namespace {
+
+class SmbusTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    fake::reset();
+    SMC::globals_init();
+    SMC::Fan::init();
+    SMC::Led::init();
+  }
+
+  // Xbox writes a byte: command byte, data byte, STOP
+  static void write(uint8_t command, uint8_t data) {
+    fake_i2c0.rx = command;
+    SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_RECEIVE);
+    fake_i2c0.rx = data;
+    SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_RECEIVE);
+    SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_FINISH);
+  }
+
+  // Xbox reads a byte: command byte, repeated START, read, STOP
+  static uint8_t read(uint8_t command) {
+    fake_i2c0.rx = command;
+    SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_RECEIVE);
+    SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_FINISH);
+    SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_REQUEST);
+    SMC::handle_SMBus_interrupt(i2c0, I2C_SLAVE_FINISH);
+    return fake_i2c0.tx;
+  }
+};
+
+TEST_F(SmbusTest, FirmwareVersionOneCharacterPerRead) {
+  EXPECT_EQ(read(0x01), 'P');
+  EXPECT_EQ(read(0x01), '1');
+  EXPECT_EQ(read(0x01), '1');
+  EXPECT_EQ(read(0x01), 'P');  // Wraps around
+  read(0x01);
+  write(0x01, 0x00);  // Restarts the string
+  EXPECT_EQ(read(0x01), 'P');
+}
+
+TEST_F(SmbusTest, ResetRequest) {
+  write(0x02, 0x01);
+  EXPECT_TRUE(SMC::PLL_Reset::flags.warm_reset_request);
+  EXPECT_TRUE(SMC::SMI::flags.os_reset_request);
+  EXPECT_FALSE(SMC::SMI::flags.power_change_requested);
+}
+
+TEST_F(SmbusTest, PowerCycleRequest) {
+  write(0x02, 0x40);
+  EXPECT_TRUE(SMC::SMI::flags.power_cycle_request);
+  EXPECT_TRUE(SMC::SMI::flags.power_change_requested);
+}
+
+TEST_F(SmbusTest, PowerOffRequest) {
+  write(0x02, 0x80);
+  EXPECT_TRUE(SMC::SMI::flags.power_off_request);
+  EXPECT_TRUE(SMC::SMI::flags.power_change_requested);
+}
+
+TEST_F(SmbusTest, FanOverrideNeedsASpeedFirstCappedAt50) {
+  write(0x05, 0x01);  // No speed set yet: refused
+  EXPECT_FALSE(SMC::Fan::flags.fan_override);
+  write(0x06, 70);
+  EXPECT_EQ(SMC::Fan::getCustomFanSpeed(), 50);
+  write(0x05, 0x01);
+  EXPECT_TRUE(SMC::Fan::flags.fan_override);
+  write(0x05, 0x00);
+  EXPECT_FALSE(SMC::Fan::flags.fan_override);
+}
+
+TEST_F(SmbusTest, Temperatures) {
+  SMC::Fan::sensors.CPU_temperature = 52;
+  SMC::Fan::sensors.board_temperature = 38;
+  EXPECT_EQ(read(0x09), 52);
+  EXPECT_EQ(read(0x0A), 38);  // P11 reports the board sensor
+}
+
+TEST_F(SmbusTest, OsAnswerOnlyWhileWaitingForIt) {
+  write(0x0D, 0x04);
+  EXPECT_FALSE(SMC::SMI::flags.os_event_handled);  // Not waiting: ignored
+
+  SMC::SMI::flags.waiting_for_os = true;
+  write(0x0D, 0x02);  // Busy: still waiting
+  EXPECT_TRUE(SMC::SMI::flags.os_busy);
+  EXPECT_TRUE(SMC::SMI::flags.waiting_for_os);
+  write(0x0D, 0x04);  // Handled
+  EXPECT_TRUE(SMC::SMI::flags.os_event_handled);
+  EXPECT_FALSE(SMC::SMI::flags.waiting_for_os);
+}
+
+TEST_F(SmbusTest, InterruptReasonIsClearedByReadingIt) {
+  SMC::SMI::flags.interrupt_reason = 0x21;
+  EXPECT_EQ(read(0x11), 0x21);
+  EXPECT_EQ(read(0x11), 0x00);
+}
+
+TEST_F(SmbusTest, RamTestPassed128Mb) {
+  write(0x13, 0x0F);
+  write(0x12, 0xF0);
+  EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_submitted);
+  EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_passed);
+  EXPECT_EQ(read(0x14), 0xF0);
+  EXPECT_EQ(read(0x15), 0x0F);
+}
+
+TEST_F(SmbusTest, RamTestPassed64Mb) {
+  write(0x13, 0x00);
+  write(0x12, 0x00);
+  EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_passed);
+}
+
+TEST_F(SmbusTest, RamTestFailed) {
+  write(0x13, 0x00);
+  write(0x12, 0x05);  // Banks 0 and 2 flagged
+  EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_submitted);
+  EXPECT_FALSE(SMC::BootChallenge::flags.ram_test_passed);
+}
+
+TEST_F(SmbusTest, RamTestType0xFFAlsoNeedsAZeroResult) {
+  write(0x13, 0xFF);  // P2L rule, for every firmware
+  write(0x12, 0x01);
+  EXPECT_FALSE(SMC::BootChallenge::flags.ram_test_passed);
+}
+
+TEST_F(SmbusTest, LastCommandAndByteWritten) {
+  write(0x1B, 0x5A);
+  EXPECT_EQ(read(0x16), 0x1B);
+  EXPECT_EQ(read(0x17), 0x5A);
+}
+
+TEST_F(SmbusTest, ResetOnEjectOnlyTheFirstWriteCanKeepItOff) {
+  SMC::SMI::flags.reset_on_eject_writable = true;  // As after a reset
+  write(0x19, 0x01);
+  EXPECT_TRUE(SMC::SMI::flags.reset_on_eject_disabled);
+  write(0x19, 0x00);  // Enables it
+  EXPECT_FALSE(SMC::SMI::flags.reset_on_eject_disabled);
+  write(0x19, 0x01);  // Too late to disable it again
+  EXPECT_FALSE(SMC::SMI::flags.reset_on_eject_disabled);
+}
+
+TEST_F(SmbusTest, OsReadyFollowsBit0) {
+  write(0x1A, 0x01);
+  EXPECT_TRUE(SMC::SMI::flags.os_ready);
+  write(0x1A, 0x00);
+  EXPECT_FALSE(SMC::SMI::flags.os_ready);
+}
+
+TEST_F(SmbusTest, ScratchRegister) {
+  write(0x1B, 0xA5);
+  EXPECT_EQ(read(0x1B), 0xA5);
+}
+
+TEST_F(SmbusTest, CustomSmcVersion) {
+  EXPECT_EQ(read(0x30), 0x01);
+  write(0x30, 0x55);  // Read-only
+  EXPECT_EQ(read(0x30), 0x01);
+}
+
+TEST_F(SmbusTest, PicoTemperatureInWholeDegrees) {
+  SMC::ExtraTemp::sensors.pico_temperature = 345;  // 34.5 °C
+  EXPECT_EQ(read(0x31), 35);
+  SMC::ExtraTemp::sensors.pico_temperature = -52;
+  EXPECT_EQ(read(0x31), 0);
+  SMC::ExtraTemp::sensors.pico_temperature = 3000;
+  EXPECT_EQ(read(0x31), 0xFE);  // 0xFF means no reading
+}
+
+TEST_F(SmbusTest, NtcTemperatureIs0xFFWithoutOne) {
+  SMC::ExtraTemp::sensors.ntc_connected = false;
+  SMC::ExtraTemp::sensors.ntc_temperature = 251;
+  EXPECT_EQ(read(0x32), 0xFF);
+  SMC::ExtraTemp::sensors.ntc_connected = true;
+  EXPECT_EQ(read(0x32), 25);
+}
+
+TEST_F(SmbusTest, LedBrightnessAppliedByTheNextLedTick) {
+  hal::set_led_brightness(40);
+  EXPECT_EQ(read(0x33), 40);
+
+  write(0x34, 70);
+  EXPECT_EQ(hal::get_led_brightness(), 40);  // Not yet: the interrupt only records it
+  SMC::Led::update();
+  EXPECT_EQ(hal::get_led_brightness(), 70);
+  EXPECT_TRUE(fake::logged("LED: Brightness 70% (SMBus 0x34)"));
+
+  write(0x34, 0);  // Out of range: ignored
+  write(0x34, 101);
+  SMC::Led::update();
+  EXPECT_EQ(read(0x33), 70);
+}
+
+}  // namespace

@@ -4,6 +4,7 @@
 #include "smc.hpp"
 #include "smc_pll_reset.hpp"
 #include "hal.hpp"
+#include "pico/time.h"  // busy_wait_us
 
 #include <cstdio>
 #include <iterator>
