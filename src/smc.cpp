@@ -152,19 +152,7 @@ void main_loop() {
         hal::petWatchdog();
       }
 
-      Fan::powerOff();
-
-      PowerStandby::init();
-      Fan::init();
-      Dvd::init();
-      Video::init();
-      AudioClamp::init();
-      BootChallenge::init();
-      Led::resetPhaseCounter();
-      SMI::init();
-      hal::petWatchdog();
-
-      globals_init();
+      resetAfterPowerOff();
 
       // As P2L: no wait when powering back on after a power cycle,
       // 25 ticks otherwise (P11 waits 24, P01 always waits 25)
@@ -185,6 +173,27 @@ void main_loop() {
     printSMBusLog();
     hal::petWatchdog();
   } while (true);
+}
+
+void resetAfterPowerOff() {
+  Fan::powerOff();
+
+  PowerStandby::init();
+  Fan::init();
+  Dvd::init();
+  Video::init();
+  AudioClamp::init();
+  BootChallenge::init();
+  Led::resetPhaseCounter();
+  SMI::init();
+  // As the PIC: the next power on starts it from the top again, which turns
+  // reset-on-eject off and lets the first SMBus 0x19 write decide. Without it
+  // globals_init() leaves reset-on-eject on and locked, and opening the tray
+  // resets the Xbox.
+  PLL_Reset::init();
+  hal::petWatchdog();
+
+  globals_init();
 }
 
 void globals_init() {

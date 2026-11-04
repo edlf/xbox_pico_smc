@@ -32,6 +32,9 @@ void configureConexantEncoder();
 void configureTemperatureSensor();
 
 void main_loop();
+// After the Xbox has powered off: the state machines and flags back to their
+// power-on state, ready for the next power up
+void resetAfterPowerOff();
 void globals_init();
 
 void smc_gpio_callback(unsigned int gpio, uint32_t events);
