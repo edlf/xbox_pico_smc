@@ -4,7 +4,8 @@
 #include "smc.hpp"
 #include "smc_pll_reset.hpp"
 #include "hal.hpp"
-#include "pico/time.h"  // busy_wait_us
+#include "hardware/sync.h"  // save_and_disable_interrupts
+#include "pico/time.h"      // busy_wait_us
 
 #include <cstdio>
 #include <iterator>
@@ -76,8 +77,12 @@ void resetInterruptReason() {
   flags.interrupt_reason = 0;
 }
 
+// The SMBus interrupt reads and clears interrupt_reason (0x11), so the |= must
+// not be split by it: a read in between would bring the read bits back
 static void setInterruptReason(uint8_t ir) {
-  flags.interrupt_reason |= ir;
+  const uint32_t irq_state = save_and_disable_interrupts();
+  flags.interrupt_reason = static_cast<uint8_t>(flags.interrupt_reason | ir);
+  restore_interrupts(irq_state);
 }
 
 static void fireSystemInterrupt() {
