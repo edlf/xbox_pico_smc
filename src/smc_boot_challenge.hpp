@@ -77,11 +77,43 @@ uint8_t failedRamChips();
 
 // The CPU answered this boot's challenge correctly. Cleared by a reset.
 bool challengePassed();
-void update();
-void compute();
-void seedStandby();
-void seedPowerUp();
-void printState();
+
+// Where the Xbox is in its boot, now
+enum class Stage : uint8_t {
+  off,         // Xbox off
+  reset,       // Powered, held in reset
+  bios,        // The BIOS runs, no RAM test result yet
+  kernel,      // RAM test passed, waiting for the kernel
+  booted,      // Challenge passed or the OS is up (SMBus 0x1A)
+  ram_failed,  // The RAM test failed
+  gave_up,     // Repeated failures: FRAG
+};
+Stage stage();
+
+// The last boot's results, for the web interface: kept after the power off,
+// until the next boot replaces them
+enum class ChallengeResult : uint8_t {
+  none,     // No RAM test result yet: the challenge comes after it
+  waiting,  // Not answered yet
+  passed,
+  wrong,        // A wrong answer
+  no_answer,    // None in time
+  not_checked,  // D01/DXF: no challenge
+};
+struct BootReport {
+  bool            ram_tested;  // A RAM test result since the Pico started
+  bool            ram_passed;
+  uint8_t         ram_result;  // SMBus 0x12
+  uint8_t         ram_type;    // SMBus 0x13
+  ChallengeResult challenge;
+  uint8_t         failed_boots;  // Failed boots since the last power cycle (enforced only)
+};
+const BootReport& bootReport();
+void              update();
+void              compute();
+void              seedStandby();
+void              seedPowerUp();
+void              printState();
 
 challenge_struct& getChallengeStructRef();
 

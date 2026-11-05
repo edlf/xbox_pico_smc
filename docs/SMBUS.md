@@ -291,7 +291,7 @@ Error code from the BIOS or kernel, read back with 0x0F. The boot challenge
 also sets it: 0x01 challenge failed, 0x04 RAM test failed. Cleared at power off.
 
 Each write is logged (`BIOS: Error code 0x10 (16) written (SMBus 0x0E)`), and
-the web interface's Power card shows the last one written since the Pico
+the web interface's Boot card shows the last one written since the Pico
 started, also after a power off.
 
 ### 0x10 Fan speed (read)
@@ -354,7 +354,9 @@ for example `BOOT: RAM test failed, result 0xF1 type 0x0E, 64 MB board, chip(s)
   answers but has its 0x13 bit clear, e.g. 0x13 = 0x0B with 0x12 = 0xF0 for
   chip 2. Or an 8 MB part fitted next to 16 MB ones.
 
-The RGB LED shows the chips at fault (see [Wiring.md](Wiring.md)). Which chip
+The RGB LED shows the chips at fault (see [Wiring.md](Wiring.md)), and the web
+interface's Boot card the last RAM test: the RAM found, the chips at fault and
+the raw bytes, kept after the power off until the next boot. Which chip
 number is which chip on the board isn't known yet.
 Without a passed test the SMC doesn't wait for the OS at power off.
 Read back with 0x14 and 0x15.

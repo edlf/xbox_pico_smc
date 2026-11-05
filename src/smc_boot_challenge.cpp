@@ -27,10 +27,11 @@ static uint8_t              failure_countdown;  // Power cycles left before lock
 static uint8_t              rtc_dump_time;
 
 // As P2L: the answer is only checked after a passed RAM test
-static bool    challenge_check_pending;
-static bool    ram_test_failed_shown = false;  // Blinking red LEDs
-static uint8_t failed_ram_chips = 0;           // decodeRamTest() of the failed test: failed or wrong size
-static bool    challenge_passed = false;
+static bool       challenge_check_pending;
+static bool       ram_test_failed_shown = false;  // Blinking red LEDs
+static uint8_t    failed_ram_chips = 0;           // decodeRamTest() of the failed test: failed or wrong size
+static bool       challenge_passed = false;
+static BootReport report = {};  // Not cleared by init(): it outlives the power off
 
 void init() {
   // Same as the PIC's RAM_init
@@ -107,6 +108,39 @@ static Text<24> chipList(const uint8_t chips) {
 
 bool challengePassed() {
   return challenge_passed;
+}
+
+const BootReport& bootReport() {
+  report.failed_boots = failure_count;
+  return report;
+}
+
+Stage stage() {
+  // As the RGB LED's phases
+  if (!SMI::flags.system_running) {
+    return Stage::off;
+  }
+  if (ram_test_failed_shown) {
+    return Stage::ram_failed;
+  }
+  if (flags.frag_power_off) {
+    return Stage::gave_up;
+  }
+  if (hal::system_reset_asserted()) {
+    return Stage::reset;
+  }
+  if (challenge_passed || SMI::flags.os_ready) {
+    return Stage::booted;
+  }
+  return flags.ram_test_submitted && flags.ram_test_passed ? Stage::kernel : Stage::bios;
+}
+
+static void reportRamTest(const bool passed) {
+  report.ram_tested = true;
+  report.ram_passed = passed;
+  report.ram_result = ram_test_response0;
+  report.ram_type = ram_test_response1;
+  report.challenge = passed ? (SMC_FIRMWARE_NO_CHALLENGE ? ChallengeResult::not_checked : ChallengeResult::waiting) : ChallengeResult::none;
 }
 
 // The PIC uses its free running timers as entropy: TMR0 runs at the
@@ -271,6 +305,7 @@ void update() {
     case boot_challenge_state::ram_test_ok:
       debug::print(debug::Level::Info, "BOOT: RAM test passed, result 0x%02X type 0x%02X", ram_test_response0, ram_test_response1);
       logRamFound(decodeRamTest(ram_test_response0, ram_test_response1));
+      reportRamTest(true);
       ram_test_failed_shown = false;
       failed_ram_chips = 0;
       challenge_check_pending = !SMC_FIRMWARE_NO_CHALLENGE;  // D01/DXF only check the RAM test
@@ -291,6 +326,7 @@ void update() {
       debug::print(debug::Level::Warnings, "BOOT: RAM test failed, result 0x%02X type 0x%02X, %s board%s", ram_test_response0, ram_test_response1,
                    test.board_mb == 128 ? "128 MB" : "64 MB", chips.empty() ? ", no chip flagged" : chips.c_str());
       logRamFound(test);
+      reportRamTest(false);
 
       // Blinking red, only for a failed RAM test (the PIC shows red/orange, 0x0F
       // red and 0x05 green, and only when it enforces the boot challenge). Shown
@@ -377,16 +413,19 @@ void update() {
         if (challenge.response0 == challenge.expected0 && challenge.response1 == challenge.expected1) {
           debug::print(debug::Level::Info, "BOOT: Challenge passed");
           challenge_passed = true;
+          report.challenge = ChallengeResult::passed;
           challenge_check_pending = false;  // As P2L: back to waiting for a reset
           state = boot_challenge_state::challenge_wait_for_reply;
           break;
         }
         debug::print(debug::Level::Warnings, "BOOT: Challenge failed, expected 0x%02X 0x%02X got 0x%02X 0x%02X", challenge.expected0, challenge.expected1,
                      challenge.response0, challenge.response1);
+        report.challenge = ChallengeResult::wrong;
       } else if (--boot_response_timeout != 0) {
         break;
       } else {
         debug::print(debug::Level::Warnings, "BOOT: No challenge answer");
+        report.challenge = ChallengeResult::no_answer;
       }
 
       if (enforce) {

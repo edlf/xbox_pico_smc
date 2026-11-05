@@ -54,32 +54,36 @@ struct LogMessage {
 };
 
 struct WebStatus {
-  uint32_t uptime_s;
-  bool     powered;
-  uint8_t  cpu_temperature;
-  uint8_t  board_temperature;
-  int16_t  pico_temperature;  // Tenths of °C
-  int16_t  ntc_temperature;   // Tenths of °C
-  bool     ntc_connected;
-  uint8_t  fan_speed;
-  bool     fan_override;
-  uint8_t  tray_state;
-  bool     tray_closed;
-  uint8_t  av_pack;
-  bool     av_missing;
-  bool     overheated;
-  bool     led_override;
-  uint8_t  led_red;
-  uint8_t  led_green;
-  uint8_t  led_brightness;
-  uint8_t  rgb_mode;
-  uint8_t  rgb_brightness;
-  bool     rgb_override;
-  uint8_t  rgb_colour[3];
-  uint8_t  interrupt_reason;
-  bool     bios_error_seen;  // SMBus 0x0E written since the Pico started
-  uint8_t  bios_error_code;
-  uint8_t  thresholds[Fan::max_thresholds];
+  uint32_t                  uptime_s;
+  bool                      powered;
+  uint8_t                   cpu_temperature;
+  uint8_t                   board_temperature;
+  int16_t                   pico_temperature;  // Tenths of °C
+  int16_t                   ntc_temperature;   // Tenths of °C
+  bool                      ntc_connected;
+  uint8_t                   fan_speed;
+  bool                      fan_override;
+  uint8_t                   tray_state;
+  bool                      tray_closed;
+  uint8_t                   av_pack;
+  bool                      av_missing;
+  bool                      overheated;
+  bool                      led_override;
+  uint8_t                   led_red;
+  uint8_t                   led_green;
+  uint8_t                   led_brightness;
+  uint8_t                   rgb_mode;
+  uint8_t                   rgb_brightness;
+  bool                      rgb_override;
+  uint8_t                   rgb_colour[3];
+  uint8_t                   interrupt_reason;
+  bool                      bios_error_seen;  // SMBus 0x0E written since the Pico started
+  uint8_t                   bios_error_code;
+  uint8_t                   boot_stage;  // BootChallenge::Stage
+  bool                      boot_enforced;
+  BootChallenge::BootReport boot;
+  BootChallenge::RamTest    ram;  // decodeRamTest() of boot's RAM test
+  uint8_t                   thresholds[Fan::max_thresholds];
 };
 
 constexpr uint16_t http_port = 80;
@@ -126,6 +130,8 @@ input[type=number]{width:64px;background:#2a362a;color:var(--fg);border:1px soli
 <div class="grid">
 <div class="card"><h2>Power</h2><div class="value" id="power">-</div><div class="note" id="extra"></div>
 <div class="row"><button onclick="act('power')">Power button</button><button onclick="act('reset')">Reset</button></div></div>
+<div class="card"><h2>Boot</h2><div class="value" id="boot">-</div><div class="note" id="bootRam"></div>
+<div class="note" id="bootChallenge"></div><div class="note" id="bootError"></div></div>
 <div class="card"><h2>Temperatures</h2><div class="value"><span id="cpu">-</span> / <span id="board">-</span></div><div class="note">CPU / board</div>
 <div class="value"><span id="pico">-</span> / <span id="ntc">-</span></div><div class="note">Pico / NTC</div></div>
 <div class="card"><h2>DVD tray</h2><div class="value" id="tray">-</div><div class="note" id="trayNote"></div>
@@ -167,12 +173,31 @@ async function act(cmd){
 function setLed(){const [r,g]=$("ledPattern").value.split(",");act("led&red="+r+"&green="+g);}
 function setRgb(){const c=$("rgbColour").value;act("rgb_colour&red="+parseInt(c.substr(1,2),16)+"&green="+parseInt(c.substr(3,2),16)+"&blue="+parseInt(c.substr(5,2),16));}
 const hex2=v=>v.toString(16).padStart(2,"0");
+const STAGE=["Off","Held in reset","BIOS running","RAM test passed","Booted",'<span class="bad">RAM test failed</span>','<span class="bad">Gave up (FRAG)</span>'];
+const CHALLENGE=["","waiting for the answer","passed",'<span class="bad">wrong answer</span>','<span class="bad">no answer</span>',"not used by this firmware"];
+const chips=m=>[0,1,2,3,4,5,6,7].filter(i=>m&(1<<i)).join(", ");
+function showBoot(s){
+  const b=s.boot,r=b.ram;
+  $("boot").innerHTML=STAGE[b.stage];
+  let ram="RAM: no test result yet";
+  if(r){
+    const parts=[r.chips16?r.chips16+" x 16 MB":"",r.chips8?r.chips8+" x 8 MB":""].filter(x=>x).join(", ")||"no chip working";
+    ram=r.found==r.board?"RAM: "+r.found+" MB ("+parts+")":'<span class="bad">RAM: '+r.found+" of "+r.board+" MB ("+parts+")</span>";
+    if(r.failed)ram+='<br><span class="bad">Chip(s) '+chips(r.failed)+" failed or missing</span>";
+    if(r.wrongSize)ram+='<br><span class="bad">Chip(s) '+chips(r.wrongSize)+" read as 8 MB (address line R11)</span>";
+    ram+="<br>Test "+(r.passed?"passed":'<span class="bad">failed</span>')+", type 0x"+hex2(r.type)+" result 0x"+hex2(r.result);
+  }
+  $("bootRam").innerHTML=ram;
+  $("bootChallenge").innerHTML=(b.challenge?"Challenge: "+CHALLENGE[b.challenge]:"")+(b.enforced?" (enforced)":"")+(b.failedBoots?'<br><span class="warn">Failed boots: '+b.failedBoots+"</span>":"");
+  $("bootError").innerHTML=s.biosError===null?"":'<span class="warn">BIOS error code 0x'+hex2(s.biosError)+" ("+s.biosError+")</span>";
+}
 async function tick(){
   try{
     const s=await(await fetch("/status.json")).json();
     $("conn").textContent="Connected, up "+Math.floor(s.uptime/60)+" min";
     $("power").textContent=s.powered?"On":"Off";
-    $("extra").innerHTML=(s.overheated?'<span class="bad">Overheated</span> ':'')+"Interrupt reasons 0x"+s.irq.toString(16).padStart(2,"0")+(s.biosError===null?"":'<br><span class="warn">BIOS error code 0x'+hex2(s.biosError)+" ("+s.biosError+")</span>");
+    $("extra").innerHTML=(s.overheated?'<span class="bad">Overheated</span> ':'')+"Interrupt reasons 0x"+s.irq.toString(16).padStart(2,"0");
+    showBoot(s);
     $("cpu").textContent=s.powered?s.cpu+" \u00b0C":"-";
     $("board").textContent=s.powered?s.board+" \u00b0C":"-";
     $("pico").textContent=(s.pico/10).toFixed(1)+" \u00b0C";
@@ -225,18 +250,28 @@ int statusJson(char* out, size_t size) {
   if (s.bios_error_seen) {
     snprintf(bios_error, sizeof(bios_error), "%u", s.bios_error_code);
   }
+  // The last RAM test, decoded: null before the first one
+  char ram[160] = "null";
+  if (s.boot.ram_tested) {
+    snprintf(ram, sizeof(ram),
+             "{\"passed\":%s,\"result\":%u,\"type\":%u,\"failed\":%u,\"wrongSize\":%u,\"found\":%u,\"board\":%u,\"chips16\":%u,\"chips8\":%u}",
+             s.boot.ram_passed ? "true" : "false", s.boot.ram_result, s.boot.ram_type, s.ram.failed, s.ram.wrong_size, s.ram.found_mb, s.ram.board_mb,
+             s.ram.chips_16mb, s.ram.chips_8mb);
+  }
 
   return snprintf(out, size,
                   "{\"uptime\":%lu,\"powered\":%s,\"cpu\":%u,\"board\":%u,\"pico\":%d,\"ntc\":%s,\"ntcEnabled\":%s,"
                   "\"fan\":%u,\"fanOverride\":%s,"
                   "\"dvd\":%s,\"tray\":%u,\"trayClosed\":%s,\"av\":%u,\"avMissing\":%s,\"overheated\":%s,"
                   "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,"
-                  "\"rgb\":%s,\"rgbMode\":%u,\"rgbBrightness\":%u,\"rgbOverride\":%s,\"rgbRed\":%u,\"rgbGreen\":%u,\"rgbBlue\":%u,\"irq\":%u,\"biosError\":%s}",
+                  "\"rgb\":%s,\"rgbMode\":%u,\"rgbBrightness\":%u,\"rgbOverride\":%s,\"rgbRed\":%u,\"rgbGreen\":%u,\"rgbBlue\":%u,\"irq\":%u,\"biosError\":%s,"
+                  "\"boot\":{\"stage\":%u,\"enforced\":%s,\"challenge\":%u,\"failedBoots\":%u,\"ram\":%s}}",
                   static_cast<unsigned long>(s.uptime_s), s.powered ? "true" : "false", s.cpu_temperature, s.board_temperature, s.pico_temperature, ntc,
                   ExtraTemp::ntcConfig().enabled ? "true" : "false", s.fan_speed, s.fan_override ? "true" : "false", Dvd::supported() ? "true" : "false",
                   s.tray_state, s.tray_closed ? "true" : "false", s.av_pack, s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
                   s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness, SMC_RGB_LED ? "true" : "false", s.rgb_mode, s.rgb_brightness,
-                  s.rgb_override ? "true" : "false", s.rgb_colour[0], s.rgb_colour[1], s.rgb_colour[2], s.interrupt_reason, bios_error);
+                  s.rgb_override ? "true" : "false", s.rgb_colour[0], s.rgb_colour[1], s.rgb_colour[2], s.interrupt_reason, bios_error, s.boot_stage,
+                  s.boot_enforced ? "true" : "false", static_cast<unsigned>(s.boot.challenge), s.boot.failed_boots, ram);
 }
 
 // Labels and defaults are constant, the values come from the core 0 snapshot
@@ -385,7 +420,7 @@ void handleRequest(tcp_pcb* pcb, const char* request) {
   if (strncmp(request, "GET / ", 6) == 0 || strncmp(request, "GET /index.html ", 16) == 0) {
     respond(pcb, "200 OK", "text/html; charset=utf-8", page, sizeof(page) - 1, true);
   } else if (strncmp(request, "GET /status.json ", 17) == 0) {
-    char      json[640];
+    char      json[1280];
     const int len = statusJson(json, sizeof(json));
     respond(pcb, "200 OK", "application/json", json, len, false);
   } else if (strncmp(request, "GET /thresholds.json ", 21) == 0) {
@@ -646,6 +681,10 @@ void publishStatus() {
   }
   s.interrupt_reason = SMI::flags.interrupt_reason;
   s.bios_error_seen = lastBiosErrorCode(s.bios_error_code);
+  s.boot_stage = static_cast<uint8_t>(BootChallenge::stage());
+  s.boot_enforced = BootChallenge::enforced();
+  s.boot = BootChallenge::bootReport();
+  s.ram = BootChallenge::decodeRamTest(s.boot.ram_result, s.boot.ram_type);
   for (uint8_t i = 0; i < Fan::max_thresholds; i++) {
     s.thresholds[i] = Fan::getThreshold(i);
   }

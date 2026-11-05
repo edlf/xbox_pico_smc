@@ -52,6 +52,42 @@ TEST_F(ScenarioTest, RamTestFailureOnlyLoggedWhenNotEnforced) {
   EXPECT_EQ(sim->resets(), 0);
 }
 
+// The boot report for the web interface: the stage as it goes, the results
+// kept after the power off
+TEST_F(ScenarioTest, BootReportFollowsTheBoot) {
+  using SMC::BootChallenge::ChallengeResult;
+  using SMC::BootChallenge::Stage;
+  EXPECT_EQ(SMC::BootChallenge::stage(), Stage::off);
+  boot();
+  EXPECT_EQ(SMC::BootChallenge::stage(), Stage::booted);
+  const SMC::BootChallenge::BootReport& report = SMC::BootChallenge::bootReport();
+  EXPECT_TRUE(report.ram_tested);
+  EXPECT_TRUE(report.ram_passed);
+  EXPECT_EQ(report.ram_result, 0xF0);
+  EXPECT_EQ(report.ram_type, 0x0F);
+  EXPECT_EQ(report.challenge, SMC_FIRMWARE_NO_CHALLENGE ? ChallengeResult::not_checked : ChallengeResult::passed);
+
+  sim->pressPower();  // Shut down through the OS
+  sim->run(6000);
+  ASSERT_FALSE(sim->xboxOn())
+  << sim->status();
+  EXPECT_EQ(SMC::BootChallenge::stage(), Stage::off);
+  EXPECT_TRUE(SMC::BootChallenge::bootReport().ram_passed);  // Still there
+  EXPECT_EQ(SMC::BootChallenge::bootReport().ram_result, 0xF0);
+}
+
+TEST_F(ScenarioTest, BootReportOfAFailedRamTest) {
+  using SMC::BootChallenge::ChallengeResult;
+  sim->os.ram_test_passes = false;
+  boot();
+  EXPECT_EQ(SMC::BootChallenge::stage(), SMC::BootChallenge::Stage::ram_failed);
+  const SMC::BootChallenge::BootReport& report = SMC::BootChallenge::bootReport();
+  EXPECT_TRUE(report.ram_tested);
+  EXPECT_FALSE(report.ram_passed);
+  EXPECT_EQ(report.ram_result, 0xF1);
+  EXPECT_EQ(report.challenge, ChallengeResult::none);
+}
+
 // A 128 MB board with chip 5 dead and chip 7 aliasing as an 8 MB part
 TEST_F(ScenarioTest, RamTestFailureOn128MbNamesTheChips) {
   sim->os.ram_test_passes = false;
