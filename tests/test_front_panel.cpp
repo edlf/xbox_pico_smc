@@ -29,6 +29,22 @@ class FrontPanelTest : public ::testing::Test {
   }
 };
 
+// The UART console's and web interface's presses: only while the other button
+// is idle, as a front panel press
+TEST_F(FrontPanelTest, RemotePressesWaitForTheOtherButton) {
+  fake::hal.eject_button = true;
+  ticks(2);
+  SMC::Dvd::flags.eject_change_requested = false;
+  EXPECT_FALSE(SMC::FrontPanelSW::pressPower());
+  EXPECT_FALSE(SMC::SMI::flags.power_change_requested);
+  fake::hal.eject_button = false;
+  ticks(2);
+  EXPECT_TRUE(SMC::FrontPanelSW::pressPower());
+  EXPECT_TRUE(SMC::SMI::flags.power_change_requested);
+  EXPECT_TRUE(SMC::FrontPanelSW::pressEject());
+  EXPECT_TRUE(SMC::Dvd::flags.eject_change_requested);
+}
+
 TEST_F(FrontPanelTest, EjectPressCountsAfterTwoReadings) {
   fake::hal.eject_button = true;
   ticks(1);

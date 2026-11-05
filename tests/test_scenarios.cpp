@@ -166,7 +166,8 @@ TEST_F(ScenarioTest, SerialConsoleRefusesOtherLines) {
   sim->run(200);
   EXPECT_TRUE(fake::logged("SERIAL: Commands: power (power button), eject (eject button)"));
   EXPECT_TRUE(fake::logged("SERIAL: Unknown command 'reboot', try help"));
-  EXPECT_TRUE(fake::logged("SERIAL: Unknown command 'powerpowerpower', try help"));  // Cut off
+  EXPECT_TRUE(fake::logged("SERIAL: Line too long, ignored"));
+  EXPECT_FALSE(fake::logged("SERIAL: Unknown command 'powerpowerpower'"));
   EXPECT_FALSE(sim->xboxOn());
 }
 

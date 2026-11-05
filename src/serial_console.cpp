@@ -13,12 +13,17 @@ static size_t    length = 0;
 
 static void command(const char* text) {
   if (strcmp(text, "power") == 0) {
-    debug::print(debug::Level::Info, "SERIAL: Power button");
-    SMI::flags.power_change_requested = true;
+    if (FrontPanelSW::pressPower()) {
+      debug::print(debug::Level::Info, "SERIAL: Power button");
+    } else {
+      debug::print(debug::Level::Info, "SERIAL: Power button ignored, the eject button is held");
+    }
   } else if (strcmp(text, "eject") == 0) {
-    debug::print(debug::Level::Info, "SERIAL: Eject button");
-    Dvd::flags.eject_change_requested = true;
-    Dvd::flags.eject_button_event = true;
+    if (FrontPanelSW::pressEject()) {
+      debug::print(debug::Level::Info, "SERIAL: Eject button");
+    } else {
+      debug::print(debug::Level::Info, "SERIAL: Eject button ignored, the power button is held");
+    }
   } else if (strcmp(text, "help") == 0) {
     debug::print(debug::Level::Info, "SERIAL: Commands: power (power button), eject (eject button)");
   } else {
@@ -34,8 +39,10 @@ void service() {
       return;
     }
     if (c == '\r' || c == '\n') {
-      if (length > 0) {
-        line[length < line_size ? length : line_size - 1] = '\0';
+      if (length == line_size) {
+        debug::print(debug::Level::Info, "SERIAL: Line too long, ignored");
+      } else if (length > 0) {
+        line[length] = '\0';
         command(line);
       }
       length = 0;

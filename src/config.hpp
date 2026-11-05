@@ -125,15 +125,16 @@ static_assert(SMC_RGB_MODE >= 0 && SMC_RGB_MODE <= 2, "SMC_RGB_MODE must be 0-2"
 
 // Wi-Fi access point with a status and control page, served from core 1
 // (W boards only)
-#ifndef SMC_WEB_INTERFACE
-#define SMC_WEB_INTERFACE 0
+#ifndef SMC_WEB_INTERFACE_SUPPORT
+#define SMC_WEB_INTERFACE_SUPPORT 0
 #endif
 
 // Start the web interface at power-up, unless the saved settings say
-// otherwise. Off by default: turn it on with the USB config (`set web on`, or
-// the config GUI) and save. The W boards need external power for the Wi-Fi.
-#ifndef SMC_WEB_START
-#define SMC_WEB_START 0
+// otherwise (CMake SMC_WEB_INTERFACE_DEFAULT). Off by default: turn it on with
+// the USB config (`set web on`, or the config GUI) and save. The W boards need
+// external power for the Wi-Fi.
+#ifndef SMC_WEB_INTERFACE_DEFAULT
+#define SMC_WEB_INTERFACE_DEFAULT 0
 #endif
 
 // Access point name, unless one is saved

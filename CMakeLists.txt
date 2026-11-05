@@ -81,30 +81,31 @@ endif()
 # booted, red on a boot failure. -DSMC_RGB_LED=OFF to leave it out
 option(SMC_RGB_LED "WS2812 RGB LED on GP27 showing the boot phases" ON)
 
-# Wi-Fi access point with a status and control page, W boards only. Left out
-# by default: -DSMC_WEB_INTERFACE=ON to build it in, or AUTO for "on for boards
-# with Wi-Fi". Built in, it still only starts once turned on in the settings
-# (USB config `set web on`; SMC_WEB_START in src/config.hpp, off by default).
+# Wi-Fi access point with a status and control page, W boards only. Built in
+# by default on the boards with Wi-Fi (AUTO), -DSMC_WEB_INTERFACE_SUPPORT=OFF
+# to leave it out. Built in, it still only starts once turned on in the
+# settings (USB config `set web on`; off by default, SMC_WEB_INTERFACE_DEFAULT
+# below).
 # Connect to the network (name and password in src/config.hpp) and open
 # http://192.168.4.1
-set(SMC_WEB_INTERFACE OFF CACHE STRING "Wi-Fi access point with a status and control page: OFF (default), ON, or AUTO (on for boards with Wi-Fi)")
-set_property(CACHE SMC_WEB_INTERFACE PROPERTY STRINGS OFF ON AUTO)
-string(TOUPPER "${SMC_WEB_INTERFACE}" SMC_WEB_INTERFACE_SETTING)
-if(SMC_WEB_INTERFACE_SETTING STREQUAL "AUTO" AND PICO_CYW43_SUPPORTED)
-  set(SMC_WEB_ENABLED ON)
-elseif(SMC_WEB_INTERFACE_SETTING STREQUAL "AUTO")
-  set(SMC_WEB_ENABLED OFF)
-elseif(SMC_WEB_INTERFACE_SETTING MATCHES "^(ON|YES|TRUE|1)$")
-  set(SMC_WEB_ENABLED ON)
-elseif(SMC_WEB_INTERFACE_SETTING MATCHES "^(OFF|NO|FALSE|0)$")
-  set(SMC_WEB_ENABLED OFF)
+set(SMC_WEB_INTERFACE_SUPPORT AUTO CACHE STRING "Wi-Fi access point with a status and control page: AUTO (default, on for boards with Wi-Fi), ON or OFF")
+set_property(CACHE SMC_WEB_INTERFACE_SUPPORT PROPERTY STRINGS AUTO ON OFF)
+string(TOUPPER "${SMC_WEB_INTERFACE_SUPPORT}" SMC_WEB_INTERFACE_SUPPORT_SETTING)
+if(SMC_WEB_INTERFACE_SUPPORT_SETTING STREQUAL "AUTO" AND PICO_CYW43_SUPPORTED)
+  set(SMC_WEB_BUILT ON)
+elseif(SMC_WEB_INTERFACE_SUPPORT_SETTING STREQUAL "AUTO")
+  set(SMC_WEB_BUILT OFF)
+elseif(SMC_WEB_INTERFACE_SUPPORT_SETTING MATCHES "^(ON|YES|TRUE|1)$")
+  set(SMC_WEB_BUILT ON)
+elseif(SMC_WEB_INTERFACE_SUPPORT_SETTING MATCHES "^(OFF|NO|FALSE|0)$")
+  set(SMC_WEB_BUILT OFF)
 else()
-  message(FATAL_ERROR "SMC_WEB_INTERFACE must be AUTO, ON or OFF, got '${SMC_WEB_INTERFACE}'")
+  message(FATAL_ERROR "SMC_WEB_INTERFACE_SUPPORT must be AUTO, ON or OFF, got '${SMC_WEB_INTERFACE_SUPPORT}'")
 endif()
-if(SMC_WEB_ENABLED AND NOT PICO_CYW43_SUPPORTED)
-  message(FATAL_ERROR "SMC_WEB_INTERFACE needs a board with Wi-Fi (pico_w, pico2_w), PICO_BOARD is '${PICO_BOARD}'")
+if(SMC_WEB_BUILT AND NOT PICO_CYW43_SUPPORTED)
+  message(FATAL_ERROR "SMC_WEB_INTERFACE_SUPPORT needs a board with Wi-Fi (pico_w, pico2_w), PICO_BOARD is '${PICO_BOARD}'")
 endif()
-message(STATUS "Web interface (SMC_WEB_INTERFACE=${SMC_WEB_INTERFACE}): ${SMC_WEB_ENABLED}")
+message(STATUS "Web interface (SMC_WEB_INTERFACE_SUPPORT=${SMC_WEB_INTERFACE_SUPPORT}): ${SMC_WEB_BUILT}")
 
 # USB product name. The config tools (tools/smcx_config*.py) only open ports
 # with this name, so they leave other Picos and serial devices alone.
@@ -118,6 +119,12 @@ set(SMC_USB_PID "" CACHE STRING "USB product ID, e.g. 0x10XX; empty for the Pico
 # Defaults of saved settings: the firmware always has the code, and the USB
 # config (tools/smcx_config_gui.py) changes them without a rebuild
 # ------------------------------------------------------------------------------
+
+# Start the web interface at power-up by default (builds with it only, see
+# SMC_WEB_INTERFACE_SUPPORT above): -DSMC_WEB_INTERFACE_DEFAULT=ON. Off: it's
+# turned on with the USB config (`set web on`) and saved. The W boards need
+# external power for the Wi-Fi.
+option(SMC_WEB_INTERFACE_DEFAULT "Start the web interface at power-up, default" OFF)
 
 # No DVD drive by default, for drive-less systems: -DSMC_NO_DVD=ON
 option(SMC_NO_DVD "No DVD drive by default (tray reported closed and empty)" OFF)
@@ -225,7 +232,7 @@ add_executable(SMCX ${SMC_SRC_DIR}/debug.cpp
                     ${SMC_SRC_DIR}/usb_config.cpp
                     ${SMC_SRC_DIR}/serial_console.cpp
                     ${SMC_SRC_DIR}/smc_rgb_led.cpp)
-if(SMC_WEB_ENABLED)
+if(SMC_WEB_BUILT)
   target_sources(SMCX PRIVATE ${SMC_SRC_DIR}/web.cpp ${SMC_SRC_DIR}/dhcp_server.cpp)
 endif()
 pico_generate_pio_header(SMCX ${SMC_SRC_DIR}/ws2812.pio)
@@ -261,7 +268,8 @@ target_compile_definitions(SMCX PRIVATE SMC_NO_DVD=$<BOOL:${SMC_NO_DVD}>
                                         SMC_FIRMWARE_P2L=$<BOOL:${SMC_FIRMWARE_P2L}>
                                         SMC_VERSION_STRING="${SMC_VERSION_REPORTED}"
                                         SMC_DEBUG_LEVEL=${SMC_DEBUG_LEVEL_INDEX}
-                                        SMC_WEB_INTERFACE=$<BOOL:${SMC_WEB_ENABLED}>
+                                        SMC_WEB_INTERFACE_SUPPORT=$<BOOL:${SMC_WEB_BUILT}>
+                                        SMC_WEB_INTERFACE_DEFAULT=$<BOOL:${SMC_WEB_INTERFACE_DEFAULT}>
                                         SMC_BOARD="${PICO_BOARD}"
                                         USBD_PRODUCT="${SMC_USB_PRODUCT}")
 if(SMC_USB_PID)
@@ -284,7 +292,7 @@ target_link_libraries(SMCX
         hardware_pio
         hardware_pwm
         hardware_watchdog)
-if(SMC_WEB_ENABLED)
+if(SMC_WEB_BUILT)
   target_link_libraries(SMCX pico_cyw43_arch_lwip_poll pico_multicore)
 endif()
 

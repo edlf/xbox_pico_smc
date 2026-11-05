@@ -7,6 +7,7 @@
 #include "pico/flash.h"
 #include "pico/unique_id.h"
 
+#include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include "text.hpp"
@@ -23,7 +24,7 @@ constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 struct Values {
   char    wifi_ssid[max_ssid_length + 1] = SMC_WIFI_SSID;              // Zero-terminated
   char    wifi_password[max_password_length + 1] = SMC_WIFI_PASSWORD;  // Zero-terminated, empty: made from the board ID
-  uint8_t web_enabled = SMC_WEB_START;                                 // Start the web interface (ignored without one in the build)
+  uint8_t web_enabled = SMC_WEB_INTERFACE_DEFAULT;                     // Start the web interface (ignored without one in the build)
 };
 
 struct Record {
@@ -300,34 +301,92 @@ static const char* onOff(const bool on) {
   return on ? "on" : "off";
 }
 
-void printSettings() {
-  debug::line("Settings (%s):", loaded ? "saved" : "none saved, the defaults");
-  debug::line("  > brightness=%u%%, fade=%s", hal::get_led_brightness(), onOff(Led::fadeEnabled()));
-  debug::line("  > power-button=%s, eject-button=%s, bootsel-power=%s%s", onOff(FrontPanelSW::powerButtonEnabled()), onOff(FrontPanelSW::ejectButtonEnabled()),
-              onOff(FrontPanelSW::bootselIsPower()),
-              FrontPanelSW::bootselIsPower() && !FrontPanelSW::bootselPowerSetting() ? " (the power button is off)" : "");
-  debug::line("  > rgb-mode=%s, rgb-brightness=%u%%", RgbLed::modeName(RgbLed::mode()), RgbLed::brightness());
-  char       password[max_password_length + 1];
-  const bool from_board = accessPointPassword(password, sizeof(password));
-  debug::line("  > web=%s, ssid=%s, password=%s%s", onOff(webEnabled()), wifiSsid(), password, from_board ? " (from the board ID)" : "");
-  debug::line("  > report-version=%s%s", reportedVersion(), reportedVersionIsDefault() ? " (the build's)" : "");
+__attribute__((format(printf, 2, 3))) static void emitf(void (*emit)(const char*), const char* format, ...) {
+  char    line[160];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(line, sizeof(line), format, args);
+  va_end(args);
+  emit(line);
+}
+
+void describe(void (*emit)(const char* line)) {
+  // SMBus 0x01: "auto" while it's the build's, which follows
+  emitf(emit, "report-version %s default %s", reportedVersionIsDefault() ? "auto" : reportedVersion(), SMC_VERSION_STRING);
+  emitf(emit, "brightness %u", hal::get_led_brightness());
+  emitf(emit, "fade %s", onOff(Led::fadeEnabled()));
+  // Kept on builds without the RGB LED too, ignored there
+  emitf(emit, "rgb-mode %s%s", RgbLed::modeName(RgbLed::mode()), SMC_RGB_LED ? "" : " (no RGB LED in this build, ignored)");
+  emitf(emit, "rgb-brightness %u", RgbLed::brightness());
+  emitf(emit, "ssid %s", wifiSsid());
+  emitf(emit, "password %s", wifiPassword());  // Empty: made from the board ID
+  char board_password[32];
+  boardWifiPassword(board_password, sizeof(board_password));
+  emitf(emit, "board-password %s", board_password);  // Used while the password is empty
+  // The setting is kept on builds without a web interface, it's ignored there
+  emitf(emit, "web %s%s", onOff(webEnabled()), SMC_WEB_INTERFACE_SUPPORT ? "" : " (no web interface in this build, ignored)");
+  emitf(emit, "boot-challenge %s", onOff(BootChallenge::enforced()));
   if (Video::avPackOverride() >= 0) {
-    debug::line("  > av-pack=%d, no-dvd=%s, boot-challenge=%s", Video::avPackOverride(), onOff(!Dvd::supported()), onOff(BootChallenge::enforced()));
+    emitf(emit, "av-pack %d", Video::avPackOverride());
   } else {
-    debug::line("  > av-pack=detect, no-dvd=%s, boot-challenge=%s", onOff(!Dvd::supported()), onOff(BootChallenge::enforced()));
+    emit("av-pack detect");
   }
-  Text<64> thresholds;
-  for (uint8_t i = 0; i < Fan::thresholdCount(); i++) {
-    thresholds.append(i == 0 ? "%u" : " %u", Fan::getThreshold(i));
-  }
-  debug::line("  > thresholds=%s", thresholds.c_str());
-  const Fan::Ramp& ramp = Fan::ramp();
-  debug::line("  > fan-ramp up x%u down x%u, glide-up %u ms, glide-down %u ms", ramp.up, ramp.down, ramp.glide_up_ms, ramp.glide_down_ms);
+  emitf(emit, "log-level %s", debug::levelName(debug::level()));
+  emitf(emit, "no-dvd %s", onOff(!Dvd::supported()));  // On: no drive, the tray reads closed and empty
+  emitf(emit, "sniffer %s", onOff(I2CSniffer::enabled()));
   const ExtraTemp::NtcConfig& ntc = ExtraTemp::ntcConfig();
-  debug::line("  > ntc=%s, beta %u, r25 %lu, series %lu", onOff(ntc.enabled), ntc.beta, static_cast<unsigned long>(ntc.r25),
-              static_cast<unsigned long>(ntc.series_r));
-  debug::line("  > sensor-bypass=%s, offsets cpu %+d board %+d", onOff(Fan::temperatureBypass()), Fan::bypassOffsets().cpu, Fan::bypassOffsets().board);
-  debug::line("  > log-level=%s, sniffer=%s", debug::levelName(debug::level()), onOff(I2CSniffer::enabled()));
+  emitf(emit, "ntc %s beta %u r25 %lu series %lu", onOff(ntc.enabled), ntc.beta, static_cast<unsigned long>(ntc.r25), static_cast<unsigned long>(ntc.series_r));
+  const Fan::Ramp& ramp = Fan::ramp();
+  emitf(emit, "fan-ramp up %u down %u glide-up %u glide-down %u", ramp.up, ramp.down, ramp.glide_up_ms, ramp.glide_down_ms);
+  emitf(emit, "sensor-bypass %s", onOff(Fan::temperatureBypass()));
+  emitf(emit, "bypass-offsets cpu %d board %d", Fan::bypassOffsets().cpu, Fan::bypassOffsets().board);
+  emitf(emit, "power-button %s", onOff(FrontPanelSW::powerButtonEnabled()));
+  emitf(emit, "eject-button %s", onOff(FrontPanelSW::ejectButtonEnabled()));
+  // As set; it's in use anyway while the power button is off
+  emitf(emit, "bootsel-power %s", onOff(FrontPanelSW::bootselPowerSetting()));
+  for (uint8_t i = 0; i < Fan::thresholdCount(); i++) {
+    emitf(emit, "threshold %u %u default %u min %u label %s", i, Fan::getThreshold(i), Fan::thresholdDefault(i), Fan::min_threshold, Fan::thresholdLabel(i));
+  }
+}
+
+void printSettings() {
+  // Not at the quieter levels: it's long, and has the Wi-Fi password
+  if (debug::level() < debug::Level::Info) {
+    return;
+  }
+  debug::line("Settings (%s):", loaded ? "saved" : "none saved, the defaults");
+  // Shorter than the `get` reply: no fan thresholds (long lines, and the USB
+  // config shows them), and no empty password (board-password is the one in
+  // use then)
+  describe([](const char* line) {
+    if (strncmp(line, "threshold ", 10) == 0 || strcmp(line, "password ") == 0) {
+      return;
+    }
+    debug::line("  > %s", line);
+  });
+}
+
+void resetToDefaults() {
+  hal::set_led_brightness(SMC_LED_BRIGHTNESS);
+  Led::setFade(SMC_LED_FADE);
+  RgbLed::setMode(static_cast<RgbLed::Mode>(SMC_RGB_MODE));
+  RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
+  Fan::resetThresholds();
+  resetWifi();
+  setWebEnabled(SMC_WEB_INTERFACE_DEFAULT);
+  setReportedVersion("auto");
+  BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
+  Fan::setRamp(Fan::default_ramp);
+  Fan::setTemperatureBypass(false);
+  Fan::setBypassOffsets(Fan::default_bypass_offsets);
+  FrontPanelSW::setPowerButtonEnabled(true);
+  FrontPanelSW::setEjectButtonEnabled(true);
+  FrontPanelSW::setBootselPower(SMC_BOOTSEL_POWER);
+  Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
+  debug::setLevel(static_cast<debug::Level>(SMC_DEBUG_LEVEL));
+  Dvd::setSupported(!SMC_NO_DVD);
+  I2CSniffer::setEnabled(SMC_I2C_SNIFFER);
+  ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
 }
 
 static void eraseAndProgram(void* param) {

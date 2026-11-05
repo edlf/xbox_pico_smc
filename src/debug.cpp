@@ -119,7 +119,7 @@ void print_build_flags() {
   printf("  > PICO_BOARD=%s\n", SMC_BOARD);
   printf("  > SMC_FIRMWARE=%s\n", SMC_FIRMWARE_NAME);
   printf("  > SMC_RGB_LED=%s\n", onOff(SMC_RGB_LED));
-  printf("  > SMC_WEB_INTERFACE=%s\n", onOff(SMC_WEB_INTERFACE));
+  printf("  > SMC_WEB_INTERFACE_SUPPORT=%s\n", onOff(SMC_WEB_INTERFACE_SUPPORT));
   fflush(stdout);
 }
 

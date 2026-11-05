@@ -524,14 +524,19 @@ void core1Main() {
 void runCommand(const CommandMessage& message) {
   switch (message.command) {
     case Command::power:
-      debug::print(debug::Level::Info, "WEB: Power button");
-      SMI::flags.power_change_requested = true;
+      if (FrontPanelSW::pressPower()) {
+        debug::print(debug::Level::Info, "WEB: Power button");
+      } else {
+        debug::print(debug::Level::Info, "WEB: Power button ignored, the eject button is held");
+      }
       break;
 
     case Command::eject:
-      debug::print(debug::Level::Info, "WEB: Eject button");
-      Dvd::flags.eject_change_requested = true;
-      Dvd::flags.eject_button_event = true;
+      if (FrontPanelSW::pressEject()) {
+        debug::print(debug::Level::Info, "WEB: Eject button");
+      } else {
+        debug::print(debug::Level::Info, "WEB: Eject button ignored, the power button is held");
+      }
       break;
 
     case Command::reset:
@@ -667,6 +672,17 @@ void start() {
   }
   debug::print(debug::Level::Info, "WEB: Starting core 1");
   multicore_launch_core1_with_stack(core1Main, core1_stack, sizeof(core1_stack));
+  // Until core 1 can be paused (flash_safe_execute_core_init(), its first
+  // step) it runs from flash unguarded: a settings save or a BOOTSEL read in
+  // that time would pull the flash away from under it. hal::run_flash_safe()
+  // pauses it from then on.
+  const absolute_time_t deadline = make_timeout_time_ms(100);
+  while (!multicore_lockout_victim_is_initialized(1) && !time_reached(deadline)) {
+    tight_loop_contents();
+  }
+  if (!multicore_lockout_victim_is_initialized(1)) {
+    debug::print(debug::Level::Warnings, "WEB: Core 1 didn't start");
+  }
 }
 
 void service() {

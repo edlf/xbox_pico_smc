@@ -102,7 +102,7 @@ void main_loop() {
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
 
   hal::enableWatchdog();
-#if SMC_WEB_INTERFACE
+#if SMC_WEB_INTERFACE_SUPPORT
   Web::start();
 #endif
   hal::timer1_init(hal::TICK_US);
@@ -110,7 +110,7 @@ void main_loop() {
   do {
     BootChallenge::seedStandby();
     applySMBusWrites();
-#if SMC_WEB_INTERFACE
+#if SMC_WEB_INTERFACE_SUPPORT
     Web::service();
 #endif
     SerialConsole::service();
@@ -125,7 +125,7 @@ void main_loop() {
       BootChallenge::seedPowerUp();
 
       while (true) {
-#if SMC_WEB_INTERFACE
+#if SMC_WEB_INTERFACE_SUPPORT
         Web::service();
 #endif
         SerialConsole::service();

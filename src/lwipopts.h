@@ -1,7 +1,7 @@
 #ifndef _LWIPOPTS_H
 #define _LWIPOPTS_H
 
-// lwIP settings for the web interface (SMC_WEB_INTERFACE): no OS, polled from
+// lwIP settings for the web interface (SMC_WEB_INTERFACE_SUPPORT): no OS, polled from
 // core 1 (pico_cyw43_arch_lwip_poll), access point with a few clients
 
 // clang-format off: aligned by hand, as a table

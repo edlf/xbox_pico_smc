@@ -200,12 +200,13 @@ class Smc:
 
     def command(self, line, timeout=5.0):
         """Sends one command, returns its reply lines (without the final OK).
-        The first one after opening the port is tried again once if it gets no
-        answer or isn't understood (see sync()); later ones aren't, a "save"
-        or "reboot" mustn't run twice."""
-        if not self.first:
-            return self.send(line, timeout)
+        A "get" as the first command after opening the port is tried again once
+        if it gets no answer or isn't understood (see sync()). Nothing else is:
+        a "save" or "reboot" whose reply was lost mustn't run twice."""
+        retry = self.first and line == "get"
         self.first = False
+        if not retry:
+            return self.send(line, timeout)
         try:
             return self.send(line, timeout)
         except (TimeoutError, SmcError) as e:

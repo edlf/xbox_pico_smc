@@ -15,6 +15,12 @@ bool bootselPowerSetting();  // As set
 bool bootselIsPower();       // In use: set, or the power button is off
 void setBootselPower(bool on);
 
+// A press of the power / eject button from elsewhere (UART console, web
+// interface), counted as a front panel one: only while the other button is
+// idle (as P2L). False, and ignored, while it's held.
+bool pressPower();
+bool pressEject();
+
 void init();
 void update();
 void updatePower();

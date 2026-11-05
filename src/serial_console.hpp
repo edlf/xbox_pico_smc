@@ -10,7 +10,8 @@ namespace SerialConsole {
 //   eject   press the eject button
 //   help    the commands
 // The same as the front panel buttons (and the web interface's), even with
-// those turned off in the settings. The USB serial port is only there in USB
+// those turned off in the settings: one counts only while the other button
+// isn't held, see FrontPanelSW::pressPower(). The USB serial port is only there in USB
 // config mode, see usb_config.hpp.
 
 // Called once per tick, in standby and while running: takes what came in

@@ -83,44 +83,7 @@ static void error(const char* reason) {
 static void printSettings() {
   printf("firmware %s\n", SMC_FIRMWARE_NAME);
   printf("git %s\n", SMC_GIT_HASH);  // Short hash of the build, "-dirty" with uncommitted changes
-  // SMBus 0x01: "auto" while it's the build's, which follows
-  printf("report-version %s default %s\n", SMC::Settings::reportedVersionIsDefault() ? "auto" : SMC::Settings::reportedVersion(), SMC_VERSION_STRING);
-  printf("brightness %u\n", hal::get_led_brightness());
-  printf("fade %s\n", SMC::Led::fadeEnabled() ? "on" : "off");
-  // Kept on builds without the RGB LED too, ignored there
-  printf("rgb-mode %s%s\n", SMC::RgbLed::modeName(SMC::RgbLed::mode()), SMC_RGB_LED ? "" : " (no RGB LED in this build, ignored)");
-  printf("rgb-brightness %u\n", SMC::RgbLed::brightness());
-  printf("ssid %s\n", SMC::Settings::wifiSsid());
-  printf("password %s\n", SMC::Settings::wifiPassword());  // Empty: made from the board ID
-  char board_password[32];
-  SMC::Settings::boardWifiPassword(board_password, sizeof(board_password));
-  printf("board-password %s\n", board_password);  // Used while the password is empty
-  // The setting is kept on builds without a web interface, it's ignored there
-  printf("web %s%s\n", SMC::Settings::webEnabled() ? "on" : "off", SMC_WEB_INTERFACE ? "" : " (no web interface in this build, ignored)");
-  printf("boot-challenge %s\n", SMC::BootChallenge::enforced() ? "on" : "off");
-  if (SMC::Video::avPackOverride() >= 0) {
-    printf("av-pack %d\n", SMC::Video::avPackOverride());
-  } else {
-    printf("av-pack detect\n");
-  }
-  printf("log-level %s\n", debug::levelName(debug::level()));
-  printf("no-dvd %s\n", SMC::Dvd::supported() ? "off" : "on");  // On: no drive, the tray reads closed and empty
-  printf("sniffer %s\n", SMC::I2CSniffer::enabled() ? "on" : "off");
-  const SMC::ExtraTemp::NtcConfig& ntc = SMC::ExtraTemp::ntcConfig();
-  printf("ntc %s beta %u r25 %lu series %lu\n", ntc.enabled ? "on" : "off", ntc.beta, static_cast<unsigned long>(ntc.r25),
-         static_cast<unsigned long>(ntc.series_r));
-  const SMC::Fan::Ramp& ramp = SMC::Fan::ramp();
-  printf("fan-ramp up %u down %u glide-up %u glide-down %u\n", ramp.up, ramp.down, ramp.glide_up_ms, ramp.glide_down_ms);
-  printf("sensor-bypass %s\n", SMC::Fan::temperatureBypass() ? "on" : "off");
-  printf("bypass-offsets cpu %d board %d\n", SMC::Fan::bypassOffsets().cpu, SMC::Fan::bypassOffsets().board);
-  printf("power-button %s\n", SMC::FrontPanelSW::powerButtonEnabled() ? "on" : "off");
-  printf("eject-button %s\n", SMC::FrontPanelSW::ejectButtonEnabled() ? "on" : "off");
-  // As set; it's in use anyway while the power button is off
-  printf("bootsel-power %s\n", SMC::FrontPanelSW::bootselPowerSetting() ? "on" : "off");
-  for (uint8_t i = 0; i < SMC::Fan::thresholdCount(); i++) {
-    printf("threshold %u %u default %u min %u label %s\n", i, SMC::Fan::getThreshold(i), SMC::Fan::thresholdDefault(i), SMC::Fan::min_threshold,
-           SMC::Fan::thresholdLabel(i));
-  }
+  SMC::Settings::describe([](const char* line) { printf("%s\n", line); });
 }
 
 // Whole decimal number, false on anything else
@@ -378,26 +341,7 @@ static void command(char* line) {
     }
     ok();
   } else if (strcmp(words[0], "defaults") == 0) {
-    hal::set_led_brightness(SMC_LED_BRIGHTNESS);
-    SMC::Led::setFade(SMC_LED_FADE);
-    SMC::RgbLed::setMode(static_cast<SMC::RgbLed::Mode>(SMC_RGB_MODE));
-    SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
-    SMC::Fan::resetThresholds();
-    SMC::Settings::resetWifi();
-    SMC::Settings::setWebEnabled(SMC_WEB_START);
-    SMC::Settings::setReportedVersion("auto");
-    SMC::BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
-    SMC::Fan::setRamp(SMC::Fan::default_ramp);
-    SMC::Fan::setTemperatureBypass(false);
-    SMC::Fan::setBypassOffsets(SMC::Fan::default_bypass_offsets);
-    SMC::FrontPanelSW::setPowerButtonEnabled(true);
-    SMC::FrontPanelSW::setEjectButtonEnabled(true);
-    SMC::FrontPanelSW::setBootselPower(SMC_BOOTSEL_POWER);
-    SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
-    debug::setLevel(static_cast<debug::Level>(SMC_DEBUG_LEVEL));
-    SMC::Dvd::setSupported(!SMC_NO_DVD);
-    SMC::I2CSniffer::setEnabled(SMC_I2C_SNIFFER);
-    SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
+    SMC::Settings::resetToDefaults();
     ok();
   } else if (strcmp(words[0], "save") == 0) {
     if (!SMC::Settings::saveNow()) {

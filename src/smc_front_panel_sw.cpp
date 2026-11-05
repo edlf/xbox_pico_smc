@@ -78,6 +78,23 @@ static bool powerPressed() {
   return button || (bootselIsPower() && hal::bootsel_button_pressed());
 }
 
+bool pressPower() {
+  if (!eject.idle()) {
+    return false;
+  }
+  SMI::flags.power_change_requested = true;
+  return true;
+}
+
+bool pressEject() {
+  if (!power.idle()) {
+    return false;
+  }
+  Dvd::flags.eject_change_requested = true;
+  Dvd::flags.eject_button_event = true;
+  return true;
+}
+
 void init() {
   power = {};
   eject = {};
@@ -90,16 +107,15 @@ void update() {
 
 void updatePower() {
   // Only counts while the eject button is idle (as P2L)
-  if (power.update(powerPressed()) && eject.idle()) {
-    SMI::flags.power_change_requested = true;
+  if (power.update(powerPressed())) {
+    pressPower();
   }
 }
 
 void updateEject() {
   // Only counts while the power button is idle (as P2L)
-  if (eject.update(eject_button && hal::eject_button_pressed()) && power.idle()) {
-    Dvd::flags.eject_change_requested = true;
-    Dvd::flags.eject_button_event = true;
+  if (eject.update(eject_button && hal::eject_button_pressed())) {
+    pressEject();
   }
 }
 

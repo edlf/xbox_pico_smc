@@ -44,12 +44,10 @@ jobs:
       - name: Install build tools
         run: sudo apt-get update && sudo apt-get install -y ninja-build
 
-      # The web interface is left out by default: the W boards build it in, so
-      # its code is built and the W artifacts have it (off until `set web on`)
+      # The W boards build the web interface in (SMC_WEB_INTERFACE_SUPPORT=AUTO), off
+      # until `set web on`
       - name: Configure
-        run: >
-          cmake -S . -B build -G Ninja -DPICO_BOARD=${{ matrix.board }} -DPICO_SDK_PATH=${{ github.workspace }}/pico-sdk
-          -DSMC_WEB_INTERFACE=${{ endsWith(matrix.board, '_w') && 'ON' || 'OFF' }}
+        run: cmake -S . -B build -G Ninja -DPICO_BOARD=${{ matrix.board }} -DPICO_SDK_PATH=${{ github.workspace }}/pico-sdk
 
       - name: Build
         run: cmake --build build

@@ -25,32 +25,12 @@ class SettingsTest : public ::testing::Test {
     SMC::Fan::init();
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
-    SMC::Settings::setWebEnabled(SMC_WEB_START);
+    SMC::Settings::setWebEnabled(SMC_WEB_INTERFACE_DEFAULT);
   }
 
-  // The RGB settings live in the module, back to the defaults for the next test
+  // The settings live in their modules: back to the defaults for the next test
   void TearDown() override {
-    SMC::RgbLed::setMode(static_cast<SMC::RgbLed::Mode>(SMC_RGB_MODE));
-    SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
-    SMC::Settings::setReportedVersion("auto");
-    SMC::Led::setFade(SMC_LED_FADE);
-    resetSystemSettings();
-  }
-
-  // The settings added in layout version 4, back to the build's defaults
-  static void resetSystemSettings() {
-    SMC::BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
-    SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
-    debug::setLevel(static_cast<debug::Level>(SMC_DEBUG_LEVEL));
-    SMC::Dvd::setSupported(!SMC_NO_DVD);
-    SMC::I2CSniffer::setEnabled(SMC_I2C_SNIFFER);
-    SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
-    SMC::Fan::setRamp(SMC::Fan::default_ramp);
-    SMC::Fan::setTemperatureBypass(false);
-    SMC::FrontPanelSW::setPowerButtonEnabled(true);
-    SMC::FrontPanelSW::setEjectButtonEnabled(true);
-    SMC::FrontPanelSW::setBootselPower(SMC_BOOTSEL_POWER);
-    SMC::Fan::setBypassOffsets(SMC::Fan::default_bypass_offsets);
+    SMC::Settings::resetToDefaults();
   }
 
   // And all different from them
@@ -93,20 +73,14 @@ class SettingsTest : public ::testing::Test {
     ASSERT_TRUE(SMC::Fan::setThreshold(0, static_cast<uint8_t>(SMC::Fan::getThreshold(0) - 1)));
     ASSERT_TRUE(SMC::Settings::setWifiSsid("Living room"));
     ASSERT_TRUE(SMC::Settings::setWifiPassword("correct horse"));
-    SMC::Settings::setWebEnabled(!SMC_WEB_START);
+    SMC::Settings::setWebEnabled(!SMC_WEB_INTERFACE_DEFAULT);
     SMC::RgbLed::setMode(SMC::RgbLed::Mode::mirror);
     ASSERT_TRUE(SMC::RgbLed::setBrightness(30));
     SMC::Led::setFade(!SMC_LED_FADE);
   }
 
   static void backToDefaults() {
-    SMC::RgbLed::setMode(static_cast<SMC::RgbLed::Mode>(SMC_RGB_MODE));
-    SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
-    hal::set_led_brightness(100);
-    SMC::Fan::resetThresholds();
-    SMC::Settings::resetWifi();
-    SMC::Settings::setWebEnabled(SMC_WEB_START);
-    SMC::Led::setFade(SMC_LED_FADE);
+    SMC::Settings::resetToDefaults();
   }
 };
 
@@ -115,12 +89,13 @@ TEST_F(SettingsTest, NoneSavedKeepsDefaults) {
   EXPECT_TRUE(fake::logged("SETTINGS: None saved, using the defaults"));
   SMC::Settings::printSettings();
   EXPECT_TRUE(fake::logged("Settings (none saved, the defaults):"));
-  EXPECT_TRUE(fake::logged("  > brightness=100%"));
-  EXPECT_TRUE(fake::logged(", password=smcx-"));
-  EXPECT_TRUE(fake::logged(" (from the board ID)"));
+  EXPECT_TRUE(fake::logged("  > brightness 100"));
+  EXPECT_TRUE(fake::logged("  > board-password smcx-"));
+  EXPECT_FALSE(fake::logged("  > password"));
+  EXPECT_FALSE(fake::logged("  > threshold "));
   EXPECT_EQ(hal::get_led_brightness(), 100);
   EXPECT_STREQ(SMC::Settings::wifiSsid(), SMC_WIFI_SSID);
-  EXPECT_EQ(SMC::Settings::webEnabled(), static_cast<bool>(SMC_WEB_START));
+  EXPECT_EQ(SMC::Settings::webEnabled(), static_cast<bool>(SMC_WEB_INTERFACE_DEFAULT));
 }
 
 TEST_F(SettingsTest, SavedSettingsLoadBack) {
@@ -135,15 +110,17 @@ TEST_F(SettingsTest, SavedSettingsLoadBack) {
   EXPECT_TRUE(fake::logged("SETTINGS: Loaded"));
   SMC::Settings::printSettings();
   EXPECT_TRUE(fake::logged("Settings (saved):"));
-  EXPECT_TRUE(fake::logged("  > brightness=40%"));
-  EXPECT_TRUE(fake::logged("  > rgb-mode=mirror, rgb-brightness=30%"));
-  EXPECT_TRUE(fake::logged("ssid=Living room, password=correct horse"));
-  EXPECT_TRUE(fake::logged(SMC_WEB_START ? "  > web=off" : "  > web=on"));
+  EXPECT_TRUE(fake::logged("  > brightness 40"));
+  EXPECT_TRUE(fake::logged("  > rgb-mode mirror"));
+  EXPECT_TRUE(fake::logged("  > rgb-brightness 30"));
+  EXPECT_TRUE(fake::logged("  > ssid Living room"));
+  EXPECT_TRUE(fake::logged("  > password correct horse"));
+  EXPECT_TRUE(fake::logged(SMC_WEB_INTERFACE_DEFAULT ? "  > web off" : "  > web on"));
   EXPECT_EQ(hal::get_led_brightness(), 40);
   EXPECT_EQ(SMC::Fan::getThreshold(0), threshold);
   EXPECT_STREQ(SMC::Settings::wifiSsid(), "Living room");
   EXPECT_STREQ(SMC::Settings::wifiPassword(), "correct horse");
-  EXPECT_EQ(SMC::Settings::webEnabled(), !SMC_WEB_START);
+  EXPECT_EQ(SMC::Settings::webEnabled(), !SMC_WEB_INTERFACE_DEFAULT);
   EXPECT_EQ(SMC::RgbLed::mode(), SMC::RgbLed::Mode::mirror);
   EXPECT_EQ(SMC::RgbLed::brightness(), 30);
   EXPECT_EQ(SMC::Led::fadeEnabled(), !SMC_LED_FADE);
@@ -234,7 +211,7 @@ TEST_F(SettingsTest, ReportedVersionIsCheckedAndSaved) {
   ASSERT_TRUE(SMC::Settings::setReportedVersion("auto"));
   SMC::Settings::load();
   SMC::Settings::printSettings();
-  EXPECT_TRUE(fake::logged("  > report-version=D01"));
+  EXPECT_TRUE(fake::logged("  > report-version D01 default "));
   EXPECT_STREQ(SMC::Settings::reportedVersion(), "D01");
   EXPECT_FALSE(SMC::Settings::reportedVersionIsDefault());
 }
@@ -243,7 +220,7 @@ TEST_F(SettingsTest, SystemSettingsAreSaved) {
   SMC::Settings::load();
   changeSystemSettings();
   ASSERT_TRUE(SMC::Settings::saveNow());
-  resetSystemSettings();
+  SMC::Settings::resetToDefaults();
   SMC::Settings::load();
   EXPECT_EQ(SMC::BootChallenge::enforced(), !SMC_BOOT_CHALLENGE);
   EXPECT_EQ(SMC::Video::avPackOverride(), SMC_AV_PACK_OVERRIDE ? -1 : 6);
@@ -256,21 +233,23 @@ TEST_F(SettingsTest, SystemSettingsAreSaved) {
   EXPECT_EQ(ntc.r25, 4700u);
   EXPECT_EQ(ntc.series_r, 22000u);
   SMC::Settings::printSettings();
-  EXPECT_TRUE(fake::logged(SMC_BOOT_CHALLENGE ? "boot-challenge=off" : "boot-challenge=on"));
+  EXPECT_TRUE(fake::logged(SMC_BOOT_CHALLENGE ? "  > boot-challenge off" : "  > boot-challenge on"));
   EXPECT_EQ(SMC::Fan::ramp().up, 2);
   EXPECT_EQ(SMC::Fan::ramp().down, 3);
   EXPECT_EQ(SMC::Fan::ramp().glide_up_ms, 200);
   EXPECT_EQ(SMC::Fan::ramp().glide_down_ms, 500);
-  EXPECT_TRUE(fake::logged("  > fan-ramp up x2 down x3, glide-up 200 ms, glide-down 500 ms"));
+  EXPECT_TRUE(fake::logged("  > fan-ramp up 2 down 3 glide-up 200 glide-down 500"));
   EXPECT_TRUE(SMC::Fan::temperatureBypass());
-  EXPECT_TRUE(fake::logged("  > sensor-bypass=on"));
+  EXPECT_TRUE(fake::logged("  > sensor-bypass on"));
   EXPECT_FALSE(SMC::FrontPanelSW::powerButtonEnabled());
   EXPECT_FALSE(SMC::FrontPanelSW::ejectButtonEnabled());
   EXPECT_TRUE(SMC::FrontPanelSW::bootselPowerSetting());
-  EXPECT_TRUE(fake::logged("  > power-button=off, eject-button=off, bootsel-power=on"));
+  EXPECT_TRUE(fake::logged("  > power-button off"));
+  EXPECT_TRUE(fake::logged("  > eject-button off"));
+  EXPECT_TRUE(fake::logged("  > bootsel-power on"));
   EXPECT_EQ(SMC::Fan::bypassOffsets().cpu, 7);
   EXPECT_EQ(SMC::Fan::bypassOffsets().board, -12);
-  EXPECT_TRUE(fake::logged("offsets cpu +7 board -12"));
+  EXPECT_TRUE(fake::logged("  > bypass-offsets cpu 7 board -12"));
 }
 
 TEST_F(SettingsTest, NtcValuesAreChecked) {
@@ -291,8 +270,27 @@ TEST_F(SettingsTest, FadeIsSaved) {
   SMC::Led::setFade(SMC_LED_FADE);
   SMC::Settings::load();
   SMC::Settings::printSettings();
-  EXPECT_TRUE(fake::logged(SMC_LED_FADE ? "fade=off" : "fade=on"));
+  EXPECT_TRUE(fake::logged(SMC_LED_FADE ? "  > fade off" : "  > fade on"));
   EXPECT_EQ(SMC::Led::fadeEnabled(), !SMC_LED_FADE);
+}
+
+// The defaults are what the modules start with: after changing everything,
+// back to them there's nothing to save
+TEST_F(SettingsTest, DefaultsUndoEverything) {
+  SMC::Settings::load();
+  changeEverything();
+  changeSystemSettings();
+  SMC::Settings::resetToDefaults();
+  EXPECT_TRUE(SMC::Settings::saveNow());
+  EXPECT_TRUE(fake::logged("SETTINGS: Nothing changed, not saved"));
+  EXPECT_EQ(fake::flash_writes, 0);
+}
+
+// Long, and has the Wi-Fi password: not at the quieter log levels
+TEST_F(SettingsTest, SettingsSectionOnlyFromInfo) {
+  debug::setLevel(debug::Level::Warnings);
+  SMC::Settings::printSettings();
+  EXPECT_FALSE(fake::logged("Settings ("));
 }
 
 // Below min_threshold (40 °C) the Xbox would see an overheat at every start

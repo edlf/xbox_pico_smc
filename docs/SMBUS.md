@@ -156,8 +156,8 @@ The build sets the default with `SMC_REPORT_VERSION`: `AUTO` (the default)
 reports the `SMC_FIRMWARE` version. `P01`, `P11`, `D01`, `DXF` and `P2L` report
 that version whatever the behavior is: only the reported string changes, the
 behavior still follows `SMC_FIRMWARE`. The boot log's Settings section shows
-the reported version in use (`report-version=`, with `(the build's)` when it's
-the default).
+the reported version in use (`report-version auto default <name>` while it's
+the build's).
 
 The USB config (`set report-version`, or "Reported version" in the config GUI)
 can replace it with one of the same five, saved with the other settings.

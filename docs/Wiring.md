@@ -110,8 +110,8 @@ level) and in the web interface.
 - The PIC runs from the 3.3 V standby rail (pin 20). Wired to the Pico's 3V3
   pin, it powers the Pico whenever the Xbox is plugged in.
 - The standby rail is not strong enough for Wi-Fi: the Pico W / Pico 2 W need
-  external power if you use the web functionality (built with
-  `-DSMC_WEB_INTERFACE=ON`, then turned on with `set web on`).
+  external power if you use the web functionality (built in on the W
+  boards, then turned on with `set web on`).
 - Use a single supply for the Pico. If it's powered over USB or VSYS, the
   standby rail and the Pico's own 3.3 V regulator both drive the 3V3 net; leave
   pin 20 unconnected (or disable the regulator) in that case. All grounds must

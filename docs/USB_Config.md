@@ -68,14 +68,13 @@ the settings. The header shows the firmware and its build: the short git hash
 it was built from (`-dirty` if it had uncommitted changes), also printed as
 `GIT_HASH` in the boot log.
 
-The boot log has two sections. "Build options"
-is what's fixed in the firmware: `GIT_HASH`, `PICO_BOARD`, `SMC_FIRMWARE`,
-`SMC_RGB_LED` and `SMC_WEB_INTERFACE`. "Settings" follows once the saved
-settings are loaded, `(saved)` or `(none saved, the defaults)`, and lists every
-setting in use under its `set` name, e.g. `brightness=100%, fade=on`. The
-Wi-Fi password is the one the access point uses, with `(from the board ID)`
-when no password is set.
-The other CMake options are only the defaults of those settings.
+The boot log has two sections. "Build options" is what's fixed in the
+firmware: `GIT_HASH`, `PICO_BOARD`, `SMC_FIRMWARE`, `SMC_RGB_LED` and
+`SMC_WEB_INTERFACE_SUPPORT`. "Settings" follows once the saved settings are
+loaded, `(saved)` or `(none saved, the defaults)`, with the same lines as the `get`
+reply below (e.g. `> brightness 100`), the Wi-Fi password included
+(`password`, or only `board-password` when none is set), but without the fan
+thresholds. It's left out below log level INFO. The other CMake options are only the defaults of those settings.
 
 The settings are in cards, in three columns:
 
@@ -143,7 +142,7 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | `set threshold <index> <value>` | A fan threshold, between the minimum and the firmware's default |
 | `set ssid <name>` | Wi-Fi access point name, 1-32 printable characters (spaces allowed) |
 | `set password [<password>]` | Wi-Fi password, 8-63 printable characters. Without one: made from the board's unique ID (`get` shows it as `board-password`) |
-| `set web on`, `set web off` | Start the web interface at power-up (default off, `SMC_WEB_START`). Kept on builds without one, but ignored there |
+| `set web on`, `set web off` | Start the web interface at power-up (default off, `SMC_WEB_INTERFACE_DEFAULT`). Kept on builds without one, but ignored there |
 | `set boot-challenge <on\|off>` | Enforce the boot challenge: a failed RAM test or challenge resets the Xbox (default `SMC_BOOT_CHALLENGE`). Off, failures are only logged |
 | `set av-pack <detect\|0-6>` | Read the AV connector, or report this AV pack code (SMBus 0x04: 0 SCART, 1 HD AV pack, 2 VGA, 3 RF, 4 Advanced AV, 5 none known, 6 Standard AV). Default `SMC_AV_PACK_OVERRIDE` / `SMC_AV_PACK_MODE` |
 | `set no-dvd <on\|off>` | No DVD drive, for drive-less systems. On: the tray is reported closed and empty. Off (the default, `SMC_NO_DVD=OFF`): the drive is used |
@@ -157,7 +156,7 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | `set sensor-bypass <on\|off>` | For a bad ADM1032: CPU temperature from the NTC, board temperature from the Pico, the ADM1032 not read (default off). Needs the NTC on and fitted, otherwise the fan control sees a dead sensor and forces an overheat |
 | `set ntc-beta <1000-10000>`, `set ntc-r25 <100-1000000>`, `set ntc-series <100-1000000>` | The NTC's beta (K), resistance at 25 °C and the series resistor from 3.3 V (ohms) |
 | `set report-version <auto\|P01\|P11\|D01\|DXF\|P2L>` | Version reported on SMBus 0x01. `auto`: the build's (`SMC_REPORT_VERSION`). Only what the Xbox is told changes, the SMC still behaves as the firmware it was built for |
-| `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, fade to `SMC_LED_FADE`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD`, web interface off (`SMC_WEB_START`), reported version `auto`, the fan ramp to 1/1 and no glide, the sensor bypass off with +10 offsets, both buttons on and BOOTSEL unused (`SMC_BOOTSEL_POWER`), and the settings above back to their CMake defaults |
+| `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, fade to `SMC_LED_FADE`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD`, web interface off (`SMC_WEB_INTERFACE_DEFAULT`), reported version `auto`, the fan ramp to 1/1 and no glide, the sensor bypass off with +10 offsets, both buttons on and BOOTSEL unused (`SMC_BOOTSEL_POWER`), and the settings above back to their CMake defaults |
 | `save` | Writes the settings to flash (`SETTINGS: Saved`) |
 | `reboot` | Restarts the Pico |
 | `bootloader` | Restarts the Pico into the USB bootloader (BOOTSEL) for a firmware update. Only in config mode: the SMBus and the web interface have no way to do this |
