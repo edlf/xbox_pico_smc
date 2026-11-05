@@ -4,8 +4,6 @@ Original XBOX SMC implemented with a Rapsberry Pico.
 
 Experimental, currently only confirmed to work on 1.0 boards, it should work for any rev up to 1.4.
 
-![Pico SMC](/images/test_board.jpg)
-
 ## Whats working
 - Power ON/OFF
 - LED control
@@ -18,6 +16,16 @@ Experimental, currently only confirmed to work on 1.0 boards, it should work for
 - Logging via uart
 - Experimental (optional) WiFi control, requires external power to the pico (the 3.3v standby rail is not strong enough)
 - Python GUI to configure the smc, requires python tk and sv-ttk
+
+
+## Pictures/Screenshots
+
+### Dev board
+![Pico SMC](/images/test_board.jpg)
+
+### Config tool
+![Config Tool](/images/config_tool.png)
+
 
 ## Notes
 - *Heavily* based on the work Prehistoricman did. [Xbox_SMC](https://github.com/Prehistoricman/Xbox_SMC)
