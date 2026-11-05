@@ -16,6 +16,9 @@ bool smbusMasterReadByte(uint8_t address, uint8_t reg, uint8_t& value);
 void applySMBusWrites();
 void printSMBusLog();
 void resetSMBusRegisters();
+// The last error code the BIOS or kernel wrote to SMBus 0x0E since the Pico
+// started, kept across power off (0x0F itself is cleared then). False if none.
+bool lastBiosErrorCode(uint8_t& code);
 
 }  // namespace SMC
 

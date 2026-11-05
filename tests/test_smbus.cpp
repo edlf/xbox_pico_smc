@@ -245,6 +245,20 @@ TEST_F(SmbusTest, RegisterWritesReadBackAtOnce) {
   EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_passed);
 }
 
+// Logged and kept for the web interface, also once 0x0F is cleared
+TEST_F(SmbusTest, BiosErrorCodeIsLoggedAndKept) {
+  uint8_t code;
+  receive(0x0E, 0x10);
+  SMC::applySMBusWrites();
+  EXPECT_TRUE(fake::logged("BIOS: Error code 0x10 (16) written (SMBus 0x0E)"));
+  ASSERT_TRUE(SMC::lastBiosErrorCode(code));
+  EXPECT_EQ(code, 0x10);
+  SMC::resetSMBusRegisters();  // Power off
+  EXPECT_EQ(read(0x0F), 0x00);
+  ASSERT_TRUE(SMC::lastBiosErrorCode(code));
+  EXPECT_EQ(code, 0x10);
+}
+
 TEST_F(SmbusTest, QueuedWritesAreAppliedInOrder) {
   receive(0x20, 0x11);  // Challenge response, low byte first
   receive(0x21, 0x22);

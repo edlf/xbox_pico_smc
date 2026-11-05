@@ -77,6 +77,8 @@ struct WebStatus {
   bool     rgb_override;
   uint8_t  rgb_colour[3];
   uint8_t  interrupt_reason;
+  bool     bios_error_seen;  // SMBus 0x0E written since the Pico started
+  uint8_t  bios_error_code;
   uint8_t  thresholds[Fan::max_thresholds];
 };
 
@@ -170,7 +172,7 @@ async function tick(){
     const s=await(await fetch("/status.json")).json();
     $("conn").textContent="Connected, up "+Math.floor(s.uptime/60)+" min";
     $("power").textContent=s.powered?"On":"Off";
-    $("extra").innerHTML=(s.overheated?'<span class="bad">Overheated</span> ':'')+"Interrupt reasons 0x"+s.irq.toString(16).padStart(2,"0");
+    $("extra").innerHTML=(s.overheated?'<span class="bad">Overheated</span> ':'')+"Interrupt reasons 0x"+s.irq.toString(16).padStart(2,"0")+(s.biosError===null?"":'<br><span class="warn">BIOS error code 0x'+hex2(s.biosError)+" ("+s.biosError+")</span>");
     $("cpu").textContent=s.powered?s.cpu+" \u00b0C":"-";
     $("board").textContent=s.powered?s.board+" \u00b0C":"-";
     $("pico").textContent=(s.pico/10).toFixed(1)+" \u00b0C";
@@ -219,18 +221,22 @@ int statusJson(char* out, size_t size) {
   if (s.ntc_connected) {
     snprintf(ntc, sizeof(ntc), "%d", s.ntc_temperature);
   }
+  char bios_error[8] = "null";
+  if (s.bios_error_seen) {
+    snprintf(bios_error, sizeof(bios_error), "%u", s.bios_error_code);
+  }
 
   return snprintf(out, size,
                   "{\"uptime\":%lu,\"powered\":%s,\"cpu\":%u,\"board\":%u,\"pico\":%d,\"ntc\":%s,\"ntcEnabled\":%s,"
                   "\"fan\":%u,\"fanOverride\":%s,"
                   "\"dvd\":%s,\"tray\":%u,\"trayClosed\":%s,\"av\":%u,\"avMissing\":%s,\"overheated\":%s,"
                   "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,"
-                  "\"rgb\":%s,\"rgbMode\":%u,\"rgbBrightness\":%u,\"rgbOverride\":%s,\"rgbRed\":%u,\"rgbGreen\":%u,\"rgbBlue\":%u,\"irq\":%u}",
+                  "\"rgb\":%s,\"rgbMode\":%u,\"rgbBrightness\":%u,\"rgbOverride\":%s,\"rgbRed\":%u,\"rgbGreen\":%u,\"rgbBlue\":%u,\"irq\":%u,\"biosError\":%s}",
                   static_cast<unsigned long>(s.uptime_s), s.powered ? "true" : "false", s.cpu_temperature, s.board_temperature, s.pico_temperature, ntc,
                   ExtraTemp::ntcConfig().enabled ? "true" : "false", s.fan_speed, s.fan_override ? "true" : "false", Dvd::supported() ? "true" : "false",
                   s.tray_state, s.tray_closed ? "true" : "false", s.av_pack, s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
                   s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness, SMC_RGB_LED ? "true" : "false", s.rgb_mode, s.rgb_brightness,
-                  s.rgb_override ? "true" : "false", s.rgb_colour[0], s.rgb_colour[1], s.rgb_colour[2], s.interrupt_reason);
+                  s.rgb_override ? "true" : "false", s.rgb_colour[0], s.rgb_colour[1], s.rgb_colour[2], s.interrupt_reason, bios_error);
 }
 
 // Labels and defaults are constant, the values come from the core 0 snapshot
@@ -639,6 +645,7 @@ void publishStatus() {
     s.rgb_colour[i] = RgbLed::smbusColour(i);
   }
   s.interrupt_reason = SMI::flags.interrupt_reason;
+  s.bios_error_seen = lastBiosErrorCode(s.bios_error_code);
   for (uint8_t i = 0; i < Fan::max_thresholds; i++) {
     s.thresholds[i] = Fan::getThreshold(i);
   }

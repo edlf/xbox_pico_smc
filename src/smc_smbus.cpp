@@ -109,6 +109,15 @@ struct PendingWrite {
 };
 static RingBuffer<PendingWrite, 32> pending_writes;  // Pushed by the IRQ, popped by the main loop
 
+// Main loop only (applyWrite())
+static bool    bios_error_seen = false;
+static uint8_t bios_error_code = 0;
+
+bool lastBiosErrorCode(uint8_t& code) {
+  code = bios_error_code;
+  return bios_error_seen;
+}
+
 void resetSMBusRegisters() {
   regs = {};
   bios_response_byte0 = 0;  // Error code, SMBus 0x0E/0x0F
@@ -281,9 +290,10 @@ static bool storeRegister(uint8_t command, uint8_t data) {
       return true;
 
     case Command::WRITE_ERROR_CODE:  // 0x0E
-      // Error code from the BIOS (not used in normal operation), read by 0x0F
+      // Error code from the BIOS (not used in normal operation), read by 0x0F.
+      // Logged by applyWrite().
       bios_response_byte0 = data;
-      return true;
+      return false;
 
     case Command::WRITE_RAM_TYPE:  // 0x13
       // RAM type, read by 0x15
@@ -497,6 +507,13 @@ static void applyWrite(uint8_t command, uint8_t data) {
       // OS instead of cutting power right away. Writing 0 clears it, as P2L;
       // the PIC only ever sets it
       SMI::flags.os_ready = data & 0x01;
+      break;
+
+    case Command::WRITE_ERROR_CODE:  // 0x0E
+      // Stored for 0x0F by storeRegister(), kept here for the web interface
+      bios_error_seen = true;
+      bios_error_code = data;
+      debug::print(debug::Level::Info, "BIOS: Error code 0x%02X (%u) written (SMBus 0x0E)", data, data);
       break;
 
     default:  // storeRegister() did all there was

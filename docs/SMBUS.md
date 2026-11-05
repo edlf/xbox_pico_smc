@@ -290,6 +290,10 @@ the Xbox (eject/tray) or powers it off (power button).
 Error code from the BIOS or kernel, read back with 0x0F. The boot challenge
 also sets it: 0x01 challenge failed, 0x04 RAM test failed. Cleared at power off.
 
+Each write is logged (`BIOS: Error code 0x10 (16) written (SMBus 0x0E)`), and
+the web interface's Power card shows the last one written since the Pico
+started, also after a power off.
+
 ### 0x10 Fan speed (read)
 
 Current fan speed, 10-50 while on, 0 while off.
