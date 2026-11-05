@@ -28,6 +28,7 @@ add_executable(og_smc_tests
   test_ring_buffer.cpp
   test_settings.cpp
   test_i2c_decoder.cpp
+  test_reset_on_eject.cpp
   # Fakes
   fake_hal.cpp
   fake_debug.cpp
