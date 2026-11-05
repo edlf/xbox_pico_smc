@@ -42,6 +42,10 @@ void    setAvMissing(const bool);
 void    setPowerOff(const bool);
 // SMC_LED_FADE: the LEDs are still fading out after power down started
 bool isFadingOut();
+
+// The front panel LEDs lit right now (blinking patterns change it each phase)
+bool redLit();
+bool greenLit();
 void setQuickGreenBlink(const bool);
 // Boot failure (FRAG) error code, shown above every other pattern
 void setBootFailure(const bool);

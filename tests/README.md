@@ -49,6 +49,8 @@ They build with the default settings from `src/config.hpp` (P11).
   writes.
 - `test_ring_buffer.cpp`: the log buffer's order, wrap-around and drops.
 - `test_reset_on_eject.cpp`: reset-on-eject (SMBus 0x19) across power cycles.
+- `test_rgb_led.cpp`: the RGB LED through a boot in the simulator: the phases
+  in order, the modes (off, boot, mirror), brightness and the SMBus colour.
 - `test_scenarios.cpp`: whole-Xbox scenarios in the simulator (below): boot,
   power off through the OS (answering, hung, busy), the tray, reset-on-eject,
   reset and power cycle requests, a PSU dropout, and the eject storm after a

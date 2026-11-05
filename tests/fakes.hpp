@@ -32,6 +32,7 @@ struct Hal {
   bool    rtc_dump = false;
   uint8_t fan_speed = 0;  // 0: pin low
   int     smi_pulses = 0;
+  uint8_t rgb[3] = {};  // RGB LED red, green, blue
 
   // SMBus master transfers (temperature sensor, encoder)
   struct Transfer {

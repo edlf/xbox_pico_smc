@@ -1,6 +1,6 @@
 # USB configuration
 
-The saved settings (LED brightness, fan thresholds, Wi-Fi access point name
+The saved settings (LED brightness, RGB LED mode and brightness, fan thresholds, Wi-Fi access point name
 and password, web interface on or off) can be changed over USB
 serial, with `tools/og_smc_config.py`. This only works with the Pico **out of
 the Xbox**, powered from USB alone.
@@ -54,8 +54,10 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | Command | Reply |
 |---------|-------|
 | `help` | The commands |
-| `get` | `firmware <name>`, `brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `web on` or `web off` (with a note on builds without a web interface), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
+| `get` | `firmware <name>`, `brightness <percent>`, `rgb-mode <mode>`, `rgb-brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `web on` or `web off` (with a note on builds without a web interface), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
 | `set brightness <1-100>` | LED brightness in percent |
+| `set rgb-mode <off\|boot\|mirror>` | RGB LED: `off` (dark, even while booting), `boot` (the boot phases, then dark), `mirror` (the boot phases, then what the front panel LEDs show) |
+| `set rgb-brightness <1-100>` | RGB LED brightness in percent |
 | `set threshold <index> <value>` | A fan threshold, between the minimum and the firmware's default |
 | `set ssid <name>` | Wi-Fi access point name, 1-32 printable characters (spaces allowed) |
 | `set password [<password>]` | Wi-Fi password, 8-63 printable characters. Without one: made from the board's unique ID |

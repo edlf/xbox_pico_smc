@@ -107,6 +107,14 @@ static_assert(SMC_LED_BRIGHTNESS >= 1 && SMC_LED_BRIGHTNESS <= 100, "SMC_LED_BRI
 #define SMC_RGB_LED 1
 #endif
 
+// RGB LED at start-up, until changed (USB config, web interface, SMBus 0x36)
+// and saved: brightness in percent (1-100), and what it shows: 0 off (even while
+// booting), 1 the boot phases, 2 the boot phases then the front panel LEDs
+#define SMC_RGB_BRIGHTNESS 100
+#define SMC_RGB_MODE 1
+static_assert(SMC_RGB_BRIGHTNESS >= 1 && SMC_RGB_BRIGHTNESS <= 100, "SMC_RGB_BRIGHTNESS must be 1-100");
+static_assert(SMC_RGB_MODE >= 0 && SMC_RGB_MODE <= 2, "SMC_RGB_MODE must be 0-2");
+
 // Wi-Fi access point with a status and control page, served from core 1
 // (W boards only)
 #ifndef SMC_WEB_INTERFACE

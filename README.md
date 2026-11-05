@@ -21,7 +21,7 @@ Experimental, currently only confirmed to work on 1.0 boards, it should work for
 ## Notes
 - *Heavily* based on the work Prehistoricman did. [Xbox_SMC](https://github.com/Prehistoricman/Xbox_SMC)
 - By default it mimics the P2L SMC behavior, except for the fan control/thermal sensor management and the boot challenge is made optional.
-- Some AI assistance was used (claude), mostly for the web interface and documentation.
+- Some AI assistance was used (claude), mostly for the web interface, documentation and tests.
 - For the stock behavior, check the stock_smc branch.
 - It uses X-HD Redux as its reference to decode video modes.
 - All the new SMC commands are introduced from 0x30 onwards

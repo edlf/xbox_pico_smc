@@ -7,6 +7,7 @@ starts in config mode instead of running the SMC (see src/usb_config.hpp).
     pip install pyserial
     python tools/og_smc_config.py get
     python tools/og_smc_config.py set-brightness 40
+    python tools/og_smc_config.py set-rgb-mode mirror set-rgb-brightness 30 save
     python tools/og_smc_config.py set-threshold 2 65
     python tools/og_smc_config.py set-ssid "My Xbox" set-password secret123 save
     python tools/og_smc_config.py set-password "" save   (back to the board ID one)
@@ -74,6 +75,10 @@ def print_settings(lines):
             print(f"Firmware:        {words[1]}")
         elif words[0] == "brightness":
             print(f"LED brightness:  {words[1]}%")
+        elif words[0] == "rgb-mode":
+            print(f"RGB LED:         {line[9:]}")
+        elif words[0] == "rgb-brightness":
+            print(f"RGB brightness:  {words[1]}%")
         elif words[0] == "ssid":
             print(f"Wi-Fi name:      {line[5:]}")
         elif words[0] == "password":
@@ -92,7 +97,7 @@ def print_settings(lines):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--port", help="serial port (default: the one Pico found)")
-    parser.add_argument("commands", nargs="+", help="get | set-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | defaults | save | reboot")
+    parser.add_argument("commands", nargs="+", help="get | set-brightness N | set-rgb-mode off|boot|mirror | set-rgb-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | defaults | save | reboot")
     args = parser.parse_args()
 
     smc = Smc(args.port or find_port())
@@ -105,6 +110,13 @@ def main():
             elif name == "set-brightness":
                 smc.command(f"set brightness {words.pop(0)}")
                 print("LED brightness set")
+            elif name == "set-rgb-mode":
+                mode = words.pop(0)
+                smc.command(f"set rgb-mode {mode}")
+                print(f"RGB LED mode {mode}")
+            elif name == "set-rgb-brightness":
+                smc.command(f"set rgb-brightness {words.pop(0)}")
+                print("RGB LED brightness set")
             elif name == "set-threshold":
                 index, value = words.pop(0), words.pop(0)
                 smc.command(f"set threshold {index} {value}")

@@ -142,7 +142,11 @@ bool system_reset_asserted() {
 }
 
 void rgb_led_init() {}
-void set_rgb_led(uint8_t, uint8_t, uint8_t) {}
+void set_rgb_led(uint8_t red, uint8_t green, uint8_t blue) {
+  fake::hal.rgb[0] = red;
+  fake::hal.rgb[1] = green;
+  fake::hal.rgb[2] = blue;
+}
 
 void enableWatchdog() {
   fake::watchdog.enabled = true;

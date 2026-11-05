@@ -13,7 +13,7 @@ namespace SMC {
 namespace Settings {
 
 constexpr uint32_t magic = 0x534D4353;  // "SCMS"
-constexpr uint16_t version = 0;         // Bump when the layout changes, older records are ignored
+constexpr uint16_t version = 1;         // Bump when the layout changes, older records are ignored
 constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 
 // The settings kept here rather than by their module, stored as they are.
@@ -33,7 +33,9 @@ struct Record {
   uint8_t  threshold_count;
   uint8_t  thresholds[Fan::max_thresholds];
   Values   values;
-  uint32_t checksum;  // FNV-1a over everything above
+  uint8_t  rgb_brightness;  // Percent
+  uint8_t  rgb_mode;        // RgbLed::Mode
+  uint32_t checksum;        // FNV-1a over everything above
 };
 static_assert(sizeof(Record) <= FLASH_PAGE_SIZE, "One flash page");
 
@@ -68,6 +70,8 @@ static Record current() {
   r.size = sizeof(Record);
   firmwareName(r.firmware);
   r.led_brightness = hal::get_led_brightness();
+  r.rgb_brightness = RgbLed::brightness();
+  r.rgb_mode = static_cast<uint8_t>(RgbLed::mode());
   r.threshold_count = Fan::thresholdCount();
   for (uint8_t i = 0; i < r.threshold_count && i < Fan::max_thresholds; i++) {
     r.thresholds[i] = Fan::getThreshold(i);
@@ -147,7 +151,7 @@ void load() {
     debug::print(debug::Level::Info, "SETTINGS: None saved, using the defaults");
   } else {
     hal::set_led_brightness(stored->led_brightness);
-    Text<128> msg;
+    Text<224> msg;
     msg.append("SETTINGS: Loaded, LED brightness %u%%", stored->led_brightness);
     // Thresholds only from the same firmware, setThreshold() checks each range
     if (memcmp(stored->firmware, firmware, sizeof(firmware)) == 0 && stored->threshold_count == Fan::thresholdCount()) {
@@ -172,6 +176,12 @@ void load() {
     }
     setWebEnabled(stored->values.web_enabled != 0);
     msg += webEnabled() ? ", web interface on" : ", web interface off";
+    // Checked too: an invalid value leaves the default
+    RgbLed::setBrightness(stored->rgb_brightness);
+    if (stored->rgb_mode < RgbLed::mode_count) {
+      RgbLed::setMode(static_cast<RgbLed::Mode>(stored->rgb_mode));
+    }
+    msg.append(", RGB LED %s %u%%", RgbLed::modeName(RgbLed::mode()), RgbLed::brightness());
     debug::print(debug::Level::Info, "%s", msg.c_str());
   }
   saved = current();  // What's applied now, so only real changes are written

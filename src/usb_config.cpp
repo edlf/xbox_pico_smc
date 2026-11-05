@@ -81,6 +81,9 @@ static void error(const char* reason) {
 static void printSettings() {
   printf("firmware %s\n", SMC_FIRMWARE_NAME);
   printf("brightness %u\n", hal::get_led_brightness());
+  // Kept on builds without the RGB LED too, ignored there
+  printf("rgb-mode %s%s\n", SMC::RgbLed::modeName(SMC::RgbLed::mode()), SMC_RGB_LED ? "" : " (no RGB LED in this build, ignored)");
+  printf("rgb-brightness %u\n", SMC::RgbLed::brightness());
   printf("ssid %s\n", SMC::Settings::wifiSsid());
   printf("password %s\n", SMC::Settings::wifiPassword());  // Empty: made from the board ID
   // The setting is kept on builds without a web interface, it's ignored there
@@ -135,6 +138,8 @@ static void command(char* line) {
     printf(
         "get                          settings\n"
         "set brightness <1-100>       LED brightness, percent\n"
+        "set rgb-mode <off|boot|mirror>  RGB LED: off, boot phases, or boot then the front panel\n"
+        "set rgb-brightness <1-100>   RGB LED brightness, percent\n"
         "set threshold <index> <C>    fan threshold, min to default\n"
         "set ssid <name>              Wi-Fi access point name, 1-32 characters\n"
         "set password [<password>]    Wi-Fi password, 8-63 characters, none: from the board ID\n"
@@ -160,6 +165,21 @@ static void command(char* line) {
     }
     hal::set_led_brightness(static_cast<uint8_t>(a));
     ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "rgb-mode") == 0) {
+    SMC::RgbLed::Mode mode;
+    if (!SMC::RgbLed::parseMode(words[2], mode)) {
+      error("rgb-mode must be off, boot or mirror");
+      return;
+    }
+    SMC::RgbLed::setMode(mode);
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "rgb-brightness") == 0) {
+    if (!parseNumber(words[2], a) || a < 1 || a > 100) {
+      error("rgb-brightness must be 1-100");
+      return;
+    }
+    SMC::RgbLed::setBrightness(static_cast<uint8_t>(a));
+    ok();
   } else if (strcmp(words[0], "set") == 0 && count == 4 && strcmp(words[1], "threshold") == 0) {
     if (!parseNumber(words[2], a) || !parseNumber(words[3], b) || a < 0 || a > 255 || b < 0 || b > 255 ||
         !SMC::Fan::setThreshold(static_cast<uint8_t>(a), static_cast<uint8_t>(b))) {
@@ -169,6 +189,8 @@ static void command(char* line) {
     ok();
   } else if (strcmp(words[0], "defaults") == 0) {
     hal::set_led_brightness(SMC_LED_BRIGHTNESS);
+    SMC::RgbLed::setMode(static_cast<SMC::RgbLed::Mode>(SMC_RGB_MODE));
+    SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
     SMC::Settings::setWebEnabled(true);

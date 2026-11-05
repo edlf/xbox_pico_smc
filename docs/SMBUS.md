@@ -65,6 +65,10 @@ PIC or Xcylops.
 | 0x32      | NTC temperature      |  R  | °C, 0xFF without one |
 | 0x33      | LED brightness       |  R  | Front panel LED brightness, percent |
 | 0x34      | LED brightness       |  W  | Set it, 1-100 percent |
+| 0x35      | RGB LED brightness   |  R  | RGB LED brightness, percent |
+| 0x36      | RGB LED brightness   |  W  | Set it, 1-100 percent |
+| 0x37      | RGB LED colour on    | R/W | Show the colour from 0x38-0x3A |
+| 0x38-0x3A | RGB LED colour       | R/W | Red, green, blue, 0-255 |
 
 ## Video encoder writes (sniffer)
 
@@ -376,4 +380,31 @@ Not on the PIC. The front panel LED brightness in percent (1-100), as set by
 Not on the PIC. Sets the front panel LED brightness, 1-100 percent; other
 values are ignored. Applied on the next tick (logged as `LED: Brightness n%
 (SMBus 0x34)`), and kept until the Pico restarts: it isn't saved to flash.
+
+### 0x35 RGB LED brightness (read)
+
+Not on the PIC. The RGB LED's brightness in percent (1-100), separate from
+the front panel's: `SMC_RGB_BRIGHTNESS`, the saved settings, 0x36 or the web
+interface. Builds without the RGB LED (`SMC_RGB_LED=OFF`) still answer.
+
+### 0x36 RGB LED brightness (write)
+
+Not on the PIC. Sets the RGB LED brightness, 1-100 percent; other values are
+ignored. Applied on the next tick (logged as `RGB: Brightness n% (SMBus
+0x36)`), and kept until the Pico restarts: it isn't saved to flash.
+
+### 0x37 RGB LED colour on (read/write)
+
+Not on the PIC. Bit 0 = 1: the RGB LED shows the colour from 0x38-0x3A
+instead of its automatic colours (boot phases, front panel mirror). Bit 0 = 0:
+back to automatic. Like the front panel's override (0x07) it goes back to
+automatic at every reset and power off. The LED's mode `off` wins: then it
+stays dark. Write the colour first, then 0x37 = 0x01.
+
+### 0x38-0x3A RGB LED colour (read/write)
+
+Not on the PIC. Red (0x38), green (0x39) and blue (0x3A), 0-255 each, shown
+while 0x37 bit 0 is set, scaled by the brightness (0x35). The Xbox only writes
+one byte per command, so the colour takes three writes. Writes take effect on
+the next tick, so a read straight after returns the old value.
 

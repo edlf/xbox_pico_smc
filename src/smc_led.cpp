@@ -85,6 +85,36 @@ void clearPhases() {
   pattern = dark_pattern;
 }
 
+// The front panel LEDs, and what they show now (for the RGB LED's mirror mode)
+static bool red_lit = false;
+static bool green_lit = false;
+
+static void showRed(const bool on) {
+  red_lit = on;
+  if (on) {
+    hal::led_red_on();
+  } else {
+    hal::led_red_off();
+  }
+}
+
+static void showGreen(const bool on) {
+  green_lit = on;
+  if (on) {
+    hal::led_green_on();
+  } else {
+    hal::led_green_off();
+  }
+}
+
+bool redLit() {
+  return red_lit;
+}
+
+bool greenLit() {
+  return green_lit;
+}
+
 // Brightness for a fade step out of ticks: squared, so the change looks even
 static uint8_t fadeLevel(uint8_t step, uint8_t ticks) {
   return static_cast<uint8_t>(uint32_t{255} * step * step / (ticks * ticks));
@@ -110,8 +140,8 @@ static void stepFade() {
         // Dark: switch off, then back to full brightness for what comes next
         fade.direction = fade_direction::none;
         fade.dark_until_power_off = true;
-        hal::led_red_off();
-        hal::led_green_off();
+        showRed(false);
+        showGreen(false);
         hal::set_led_fade(255);
       } else {
         hal::set_led_fade(fadeLevel(fade.step, fade_out_ticks));
@@ -283,16 +313,8 @@ void update() {
       break;
 
     case led_state::set_gpios:  // 7
-      if (pattern.red & (1 << led_phase)) {
-        hal::led_red_on();
-      } else {
-        hal::led_red_off();
-      }
-      if (pattern.green & (1 << led_phase)) {
-        hal::led_green_on();
-      } else {
-        hal::led_green_off();
-      }
+      showRed((pattern.red & (1 << led_phase)) != 0);
+      showGreen((pattern.green & (1 << led_phase)) != 0);
 
       if (led_phase-- == 0) {
         state = led_state::resetPhaseCounter;

@@ -36,13 +36,18 @@ enum class Command : uint8_t {
   led_auto,            // Back to the normal LED patterns
   threshold,           // Fan temperature threshold index = arg (°C)
   thresholds_default,  // All fan temperature thresholds back to the defaults
-  led_brightness       // Front panel LED brightness, arg = 1-100 %
+  led_brightness,      // Front panel LED brightness, arg = 1-100 %
+  rgb_mode,            // RGB LED mode, arg = RgbLed::Mode
+  rgb_brightness,      // RGB LED brightness, arg = 1-100 %
+  rgb_colour,          // RGB LED colour (as SMBus 0x37-0x3A), arg/index/arg2 = red/green/blue
+  rgb_auto             // RGB LED back to its automatic colours
 };
 
 struct CommandMessage {
   Command command;
   uint8_t arg = 0;
   uint8_t index = 0;
+  uint8_t arg2 = 0;
 };
 
 struct LogMessage {
@@ -68,6 +73,10 @@ struct WebStatus {
   uint8_t  led_red;
   uint8_t  led_green;
   uint8_t  led_brightness;
+  uint8_t  rgb_mode;
+  uint8_t  rgb_brightness;
+  bool     rgb_override;
+  uint8_t  rgb_colour[3];
   uint8_t  interrupt_reason;
   uint8_t  thresholds[Fan::max_thresholds];
 };
@@ -131,6 +140,12 @@ input[type=number]{width:64px;background:#2a362a;color:var(--fg);border:1px soli
 <option value="5,10">Red / green</option><option value="0,0">Off</option></select></div>
 <div class="row"><button onclick="setLed()">Set pattern</button><button onclick="act('led_auto')">Auto</button></div>
 <div class="row"><span>Brightness</span><input type="range" id="ledBright" min="1" max="100" value="100" oninput="brightTouched=true;ledBrightValue.textContent=this.value+'%'" onchange="brightTouched=false;act('led_brightness&percent='+this.value)"><span id="ledBrightValue">-</span></div></div>
+<div class="card" id="rgbCard" hidden><h2>RGB LED</h2><div class="value" id="rgb">-</div>
+<div class="row"><select id="rgbMode" onchange="act('rgb_mode&mode='+this.value)">
+<option value="0">Off</option><option value="1">Boot phases</option><option value="2">Boot, then the front panel</option></select></div>
+<div class="row"><input type="color" id="rgbColour" value="#5fbf3f"><button onclick="setRgb()">Set colour</button><button onclick="act('rgb_auto')">Auto</button></div>
+<div class="row"><span>Brightness</span><input type="range" id="rgbBright" min="1" max="100" value="100" oninput="rgbTouched=true;rgbBrightValue.textContent=this.value+'%'" onchange="rgbTouched=false;act('rgb_brightness&percent='+this.value)"><span id="rgbBrightValue">-</span></div>
+<div class="note">Kept until the Pico restarts, USB config saves them.</div></div>
 <div class="card wide"><h2>Fan thresholds (&deg;C)</h2><div class="note">Can only be lowered below the firmware's defaults. Kept until the Pico restarts.</div>
 <div id="thr"></div>
 <div class="row"><button onclick="act('thresholds_default').then(loadThresholds)">Defaults</button></div></div>
@@ -141,12 +156,16 @@ const TRAY=["Closed","Open","Unloading","Opening","No disc","Closing","Disc dete
 const $=id=>document.getElementById(id);
 let fanTouched=false; // The slider follows the fan speed until it's moved
 let brightTouched=false; // Same for the LED brightness, until it's released
+let rgbTouched=false;    // And the RGB LED brightness
+const RGBMODE=["Off","Boot phases","Boot, then the front panel"];
 async function act(cmd){
   if(cmd=="reset"&&!confirm("Reset the Xbox?"))return;
   try{const r=await fetch("/action?cmd="+cmd,{method:"POST"});if(!r.ok)alert(await r.text());}catch(e){alert("Not connected");}
   tick();
 }
 function setLed(){const [r,g]=$("ledPattern").value.split(",");act("led&red="+r+"&green="+g);}
+function setRgb(){const c=$("rgbColour").value;act("rgb_colour&red="+parseInt(c.substr(1,2),16)+"&green="+parseInt(c.substr(3,2),16)+"&blue="+parseInt(c.substr(5,2),16));}
+const hex2=v=>v.toString(16).padStart(2,"0");
 async function tick(){
   try{
     const s=await(await fetch("/status.json")).json();
@@ -165,6 +184,12 @@ async function tick(){
     $("fanNote").innerHTML=s.fanOverride?'<span class="warn">Manual</span>':"Automatic";
     $("led").innerHTML=s.ledOverride?'<span class="warn">Manual</span> (red '+s.ledRed+', green '+s.ledGreen+')':"Automatic";
     if(!brightTouched){$("ledBright").value=s.ledBrightness;$("ledBrightValue").textContent=s.ledBrightness+"%";}
+    $("rgbCard").hidden=!s.rgb;
+    if(s.rgb){
+      $("rgb").innerHTML=s.rgbOverride?'<span class="warn">Colour</span> #'+hex2(s.rgbRed)+hex2(s.rgbGreen)+hex2(s.rgbBlue):RGBMODE[s.rgbMode];
+      if(document.activeElement!==$("rgbMode"))$("rgbMode").value=s.rgbMode;
+      if(!rgbTouched){$("rgbBright").value=s.rgbBrightness;$("rgbBrightValue").textContent=s.rgbBrightness+"%";}
+    }
   }catch(e){$("conn").textContent="Disconnected";}
 }
 async function loadThresholds(){
@@ -200,11 +225,13 @@ int statusJson(char* out, size_t size) {
                   "{\"uptime\":%lu,\"powered\":%s,\"cpu\":%u,\"board\":%u,\"pico\":%d,\"ntc\":%s,\"ntcEnabled\":%s,"
                   "\"fan\":%u,\"fanOverride\":%s,"
                   "\"dvd\":%s,\"tray\":%u,\"trayClosed\":%s,\"av\":%u,\"avMissing\":%s,\"overheated\":%s,"
-                  "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,\"irq\":%u}",
+                  "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,"
+                  "\"rgb\":%s,\"rgbMode\":%u,\"rgbBrightness\":%u,\"rgbOverride\":%s,\"rgbRed\":%u,\"rgbGreen\":%u,\"rgbBlue\":%u,\"irq\":%u}",
                   static_cast<unsigned long>(s.uptime_s), s.powered ? "true" : "false", s.cpu_temperature, s.board_temperature, s.pico_temperature, ntc,
                   SMC_NTC_SENSOR ? "true" : "false", s.fan_speed, s.fan_override ? "true" : "false", SMC_DVD_SUPPORT ? "true" : "false", s.tray_state,
                   s.tray_closed ? "true" : "false", s.av_pack, s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
-                  s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness, s.interrupt_reason);
+                  s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness, SMC_RGB_LED ? "true" : "false", s.rgb_mode, s.rgb_brightness,
+                  s.rgb_override ? "true" : "false", s.rgb_colour[0], s.rgb_colour[1], s.rgb_colour[2], s.interrupt_reason);
 }
 
 // Labels and defaults are constant, the values come from the core 0 snapshot
@@ -308,6 +335,28 @@ const char* queueCommand(const char* query) {
       return "percent must be 1-100";
     }
     message = {Command::led_brightness, static_cast<uint8_t>(percent)};
+  } else if (queryIs(query, "cmd", "rgb_mode")) {
+    const long mode = queryNumber(query, "mode");
+    if (mode < 0 || mode >= RgbLed::mode_count) {
+      return "mode must be 0-2";
+    }
+    message = {Command::rgb_mode, static_cast<uint8_t>(mode)};
+  } else if (queryIs(query, "cmd", "rgb_brightness")) {
+    const long percent = queryNumber(query, "percent");
+    if (percent < 1 || percent > 100) {
+      return "percent must be 1-100";
+    }
+    message = {Command::rgb_brightness, static_cast<uint8_t>(percent)};
+  } else if (queryIs(query, "cmd", "rgb_colour")) {
+    const long red = queryNumber(query, "red");
+    const long green = queryNumber(query, "green");
+    const long blue = queryNumber(query, "blue");
+    if (red < 0 || red > 255 || green < 0 || green > 255 || blue < 0 || blue > 255) {
+      return "red, green and blue must be 0-255";
+    }
+    message = {Command::rgb_colour, static_cast<uint8_t>(red), static_cast<uint8_t>(green), static_cast<uint8_t>(blue)};
+  } else if (queryIs(query, "cmd", "rgb_auto")) {
+    message.command = Command::rgb_auto;
   } else {
     return "unknown command";
   }
@@ -331,7 +380,7 @@ void handleRequest(tcp_pcb* pcb, const char* request) {
   if (strncmp(request, "GET / ", 6) == 0 || strncmp(request, "GET /index.html ", 16) == 0) {
     respond(pcb, "200 OK", "text/html; charset=utf-8", page, sizeof(page) - 1, true);
   } else if (strncmp(request, "GET /status.json ", 17) == 0) {
-    char      json[512];
+    char      json[640];
     const int len = statusJson(json, sizeof(json));
     respond(pcb, "200 OK", "application/json", json, len, false);
   } else if (strncmp(request, "GET /thresholds.json ", 21) == 0) {
@@ -546,6 +595,29 @@ void runCommand(const CommandMessage& message) {
       debug::print(debug::Level::Info, "WEB: LED brightness %u%%", message.arg);
       hal::set_led_brightness(message.arg);
       break;
+
+    case Command::rgb_mode:
+      RgbLed::setMode(static_cast<RgbLed::Mode>(message.arg));
+      debug::print(debug::Level::Info, "WEB: RGB LED %s", RgbLed::modeName(RgbLed::mode()));
+      break;
+
+    case Command::rgb_brightness:
+      debug::print(debug::Level::Info, "WEB: RGB LED brightness %u%%", message.arg);
+      RgbLed::setBrightness(message.arg);
+      break;
+
+    case Command::rgb_colour:
+      debug::print(debug::Level::Info, "WEB: RGB LED colour #%02X%02X%02X", message.arg, message.index, message.arg2);
+      RgbLed::setSmbusColour(0, message.arg);
+      RgbLed::setSmbusColour(1, message.index);
+      RgbLed::setSmbusColour(2, message.arg2);
+      RgbLed::showSmbusColour(true);
+      break;
+
+    case Command::rgb_auto:
+      debug::print(debug::Level::Info, "WEB: RGB LED automatic");
+      RgbLed::showSmbusColour(false);
+      break;
   }
 }
 
@@ -569,6 +641,12 @@ void publishStatus() {
   s.led_red = Led::getRedPhases();
   s.led_green = Led::getGreenPhases();
   s.led_brightness = hal::get_led_brightness();
+  s.rgb_mode = static_cast<uint8_t>(RgbLed::mode());
+  s.rgb_brightness = RgbLed::brightness();
+  s.rgb_override = RgbLed::smbusColourShown();
+  for (uint8_t i = 0; i < 3; i++) {
+    s.rgb_colour[i] = RgbLed::smbusColour(i);
+  }
   s.interrupt_reason = SMI::flags.interrupt_reason;
   for (uint8_t i = 0; i < Fan::max_thresholds; i++) {
     s.thresholds[i] = Fan::getThreshold(i);

@@ -66,6 +66,7 @@ add_executable(og_smc_tests
   test_i2c_decoder.cpp
   test_reset_on_eject.cpp
   test_scenarios.cpp
+  test_rgb_led.cpp
 )
 target_link_libraries(og_smc_tests PRIVATE og_smc_host GTest::gtest_main)
 

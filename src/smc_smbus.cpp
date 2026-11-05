@@ -47,6 +47,12 @@ constexpr uint8_t PICO_TEMPERATURE = 0x31;
 constexpr uint8_t NTC_TEMPERATURE = 0x32;
 constexpr uint8_t READ_LED_BRIGHTNESS = 0x33;
 constexpr uint8_t WRITE_LED_BRIGHTNESS = 0x34;
+constexpr uint8_t READ_RGB_BRIGHTNESS = 0x35;
+constexpr uint8_t WRITE_RGB_BRIGHTNESS = 0x36;
+constexpr uint8_t RGB_COLOUR_SHOWN = 0x37;  // Bit 0: show the colour below
+constexpr uint8_t RGB_RED = 0x38;
+constexpr uint8_t RGB_GREEN = 0x39;
+constexpr uint8_t RGB_BLUE = 0x3A;
 };  // namespace Command
 
 // ExtraTemp's tenths of °C as a byte of whole °C, like 0x09/0x0A. 0xFF means
@@ -174,6 +180,20 @@ static uint8_t readRegister(uint8_t command) {
       response = hal::get_led_brightness();
       break;
 
+    case Command::READ_RGB_BRIGHTNESS:  // 0x35
+      response = RgbLed::brightness();
+      break;
+
+    case Command::RGB_COLOUR_SHOWN:  // 0x37
+      response = RgbLed::smbusColourShown() ? 0x01 : 0x00;
+      break;
+
+    case Command::RGB_RED:    // 0x38
+    case Command::RGB_GREEN:  // 0x39
+    case Command::RGB_BLUE:   // 0x3A
+      response = RgbLed::smbusColour(static_cast<uint8_t>(command - Command::RGB_RED));
+      break;
+
     case Command::READ_FAN_SPEED:  // 0x10
       response = Fan::getFanSpeed();
       break;
@@ -242,6 +262,7 @@ static uint8_t readRegister(uint8_t command) {
     case Command::OVERRIDE_RESET_ON_TRAY_OPEN:  // 0x19
     case Command::OS_READY:                     // 0x1A
     case Command::WRITE_LED_BRIGHTNESS:         // 0x34
+    case Command::WRITE_RGB_BRIGHTNESS:         // 0x36
     default:
       break;
   }
@@ -295,6 +316,11 @@ static bool storeRegister(uint8_t command, uint8_t data) {
     case Command::CHALLENGE_RESPONSE1:          // 0x21
     case Command::POWER_CYCLE_DELAY:            // 0x22
     case Command::WRITE_LED_BRIGHTNESS:         // 0x34
+    case Command::WRITE_RGB_BRIGHTNESS:         // 0x36
+    case Command::RGB_COLOUR_SHOWN:             // 0x37
+    case Command::RGB_RED:                      // 0x38
+    case Command::RGB_GREEN:                    // 0x39
+    case Command::RGB_BLUE:                     // 0x3A
       return false;
 
     // The rest do nothing: read-only commands, unknown ones, and 0x04 (video
@@ -366,6 +392,25 @@ static void applyWrite(uint8_t command, uint8_t data) {
         hal::set_led_brightness(data);
         debug::print(debug::Level::Info, "LED: Brightness %u%% (SMBus 0x34)", data);
       }
+      break;
+
+    case Command::WRITE_RGB_BRIGHTNESS:  // 0x36
+      // RGB LED brightness, percent, 1-100, anything else is ignored. Not saved.
+      if (data != RgbLed::brightness() && RgbLed::setBrightness(data)) {
+        debug::print(debug::Level::Info, "RGB: Brightness %u%% (SMBus 0x36)", data);
+      }
+      break;
+
+    case Command::RGB_COLOUR_SHOWN:  // 0x37
+      // Bit 0: show the colour from 0x38-0x3A instead of the automatic ones.
+      // Back to automatic at a reset or power off.
+      RgbLed::showSmbusColour((data & 0x01) != 0);
+      break;
+
+    case Command::RGB_RED:    // 0x38
+    case Command::RGB_GREEN:  // 0x39
+    case Command::RGB_BLUE:   // 0x3A
+      RgbLed::setSmbusColour(static_cast<uint8_t>(command - Command::RGB_RED), data);
       break;
 
     case Command::AUDIO_CLAMP:  // 0x0B

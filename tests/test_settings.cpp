@@ -28,6 +28,12 @@ class SettingsTest : public ::testing::Test {
     SMC::Settings::setWebEnabled(true);
   }
 
+  // The RGB settings live in the module, back to the defaults for the next test
+  void TearDown() override {
+    SMC::RgbLed::setMode(static_cast<SMC::RgbLed::Mode>(SMC_RGB_MODE));
+    SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
+  }
+
   static uint8_t* record() {
     return fake::flash() + record_offset;
   }
@@ -53,9 +59,13 @@ class SettingsTest : public ::testing::Test {
     ASSERT_TRUE(SMC::Settings::setWifiSsid("Living room"));
     ASSERT_TRUE(SMC::Settings::setWifiPassword("correct horse"));
     SMC::Settings::setWebEnabled(false);
+    SMC::RgbLed::setMode(SMC::RgbLed::Mode::mirror);
+    ASSERT_TRUE(SMC::RgbLed::setBrightness(30));
   }
 
   static void backToDefaults() {
+    SMC::RgbLed::setMode(static_cast<SMC::RgbLed::Mode>(SMC_RGB_MODE));
+    SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
     hal::set_led_brightness(100);
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
@@ -80,12 +90,14 @@ TEST_F(SettingsTest, SavedSettingsLoadBack) {
 
   backToDefaults();
   SMC::Settings::load();
-  EXPECT_TRUE(fake::logged("SETTINGS: Loaded, LED brightness 40%, fan thresholds, Wi-Fi name, Wi-Fi password, web interface off"));
+  EXPECT_TRUE(fake::logged("SETTINGS: Loaded, LED brightness 40%, fan thresholds, Wi-Fi name, Wi-Fi password, web interface off, RGB LED mirror 30%"));
   EXPECT_EQ(hal::get_led_brightness(), 40);
   EXPECT_EQ(SMC::Fan::getThreshold(0), threshold);
   EXPECT_STREQ(SMC::Settings::wifiSsid(), "Living room");
   EXPECT_STREQ(SMC::Settings::wifiPassword(), "correct horse");
   EXPECT_FALSE(SMC::Settings::webEnabled());
+  EXPECT_EQ(SMC::RgbLed::mode(), SMC::RgbLed::Mode::mirror);
+  EXPECT_EQ(SMC::RgbLed::brightness(), 30);
 }
 
 TEST_F(SettingsTest, UnchangedSettingsAreNotWritten) {

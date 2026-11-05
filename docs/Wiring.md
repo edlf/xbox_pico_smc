@@ -55,8 +55,15 @@ would feed it through its pins.
 
 A WS2812 (NeoPixel) on GP27 (Pico pin 32) shows how far the Xbox got in
 booting (`SMC_RGB_LED`, on by default). Wire its data input to GP27, power it
-from 3.3 V (or 5 V with a level shifter on the data line) and ground. It uses
-the front panel LED brightness.
+from 3.3 V (or 5 V with a level shifter on the data line) and ground.
+
+Its brightness (1-100 %) is its own, separate from the front panel's, and it
+has three modes: `off` (dark, even while booting), `boot` (the phases below,
+then dark; the default) and `mirror` (the phases below, then green, red or
+orange as the front panel LEDs show). Both are set with the USB config
+(`set rgb-mode`, `set rgb-brightness`, saved with `save`), the web interface,
+or SMBus 0x36 for the brightness. Software can also show its own colour with
+SMBus 0x37-0x3A, see `docs/SMBUS.md`.
 
 | Colour | Phase |
 |--------|-------|
@@ -64,7 +71,7 @@ the front panel LED brightness.
 | Magenta | Powered, held in reset (also after a reset from the dashboard) |
 | Blue | Out of reset, BIOS running (waiting for the RAM test) |
 | Cyan | RAM test passed, waiting for the kernel (boot challenge answer or SMBus 0x1A) |
-| Green, for 5 s | Booted (challenge passed or SMBus 0x1A written), then off |
+| Green, for 5 s | Booted (challenge passed or SMBus 0x1A written), then off (or the front panel in `mirror` mode) |
 | Red | The boot challenge gave up (FRAG), or a RAM test failed with no bank flagged |
 | Yellow / orange / purple / white | RAM test failed in bank 0 / 1 / 2 / 3 (bits 0-3 of SMBus 0x12, assumed one per bank). Several failed banks: their colours in turn, 1 s each |
 

@@ -2,6 +2,8 @@
 #include "smc.hpp"
 #include "hal.hpp"
 
+#include <cstring>
+
 namespace SMC {
 namespace RgbLed {
 
@@ -9,6 +11,50 @@ constexpr uint16_t done_ticks = 250;  // 5 s of green
 
 static rgb_phase phase = rgb_phase::off;
 static uint16_t  done_timer = 0;
+
+// Settings: kept over resets and power offs, until the Pico restarts (or saved)
+static Mode    current_mode = static_cast<Mode>(SMC_RGB_MODE);
+static uint8_t brightness_percent = SMC_RGB_BRIGHTNESS;
+
+static const char* const mode_names[] = {"off", "boot", "mirror"};
+static_assert(sizeof(mode_names) / sizeof(mode_names[0]) == mode_count, "One name per Mode");
+
+const char* modeName(const Mode m) {
+  const uint8_t i = static_cast<uint8_t>(m);
+  return i < mode_count ? mode_names[i] : "?";
+}
+
+bool parseMode(const char* name, Mode& m) {
+  for (uint8_t i = 0; i < mode_count; i++) {
+    if (strcmp(name, mode_names[i]) == 0) {
+      m = static_cast<Mode>(i);
+      return true;
+    }
+  }
+  return false;
+}
+
+Mode mode() {
+  return current_mode;
+}
+
+void setMode(const Mode m) {
+  if (static_cast<uint8_t>(m) < mode_count) {
+    current_mode = m;
+  }
+}
+
+uint8_t brightness() {
+  return brightness_percent;
+}
+
+bool setBrightness(const uint8_t percent) {
+  if (percent < 1 || percent > 100) {
+    return false;
+  }
+  brightness_percent = percent;
+  return true;
+}
 
 struct Colour {
   uint8_t red;
@@ -59,6 +105,47 @@ static Colour failedColour() {
   return bank_colours[bank_shown];
 }
 
+// The colour set over SMBus 0x37-0x3A
+struct SmbusColour {
+  bool    shown = false;
+  uint8_t value[3] = {};  // Red, green, blue
+};
+static SmbusColour smbus;
+
+void showSmbusColour(const bool show) {
+  smbus.shown = show;
+}
+
+bool smbusColourShown() {
+  return smbus.shown;
+}
+
+void setSmbusColour(const uint8_t channel, const uint8_t value) {
+  if (channel < 3) {
+    smbus.value[channel] = value;
+  }
+}
+
+uint8_t smbusColour(const uint8_t channel) {
+  return channel < 3 ? smbus.value[channel] : 0;
+}
+
+// Mirror mode after booting: what the front panel LEDs show
+static Colour frontPanelColour() {
+  const bool red = Led::redLit();
+  const bool green = Led::greenLit();
+  if (red && green) {
+    return {255, 80, 0};  // Orange
+  }
+  if (red) {
+    return {255, 0, 0};
+  }
+  if (green) {
+    return {0, 255, 0};
+  }
+  return {0, 0, 0};
+}
+
 static const char* const phase_names[] = {"Off", "Power on", "BIOS", "Kernel", "Booted", "Idle", "Failed"};
 
 static void setPhase(const rgb_phase next) {
@@ -75,6 +162,7 @@ static void setPhase(const rgb_phase next) {
 static void nextPhase() {
   if (!SMI::flags.system_running) {
     setPhase(rgb_phase::off);
+    smbus.shown = false;  // Like the front panel's SMBus override (0x07)
     return;
   }
   if (BootChallenge::ramTestFailed() || BootChallenge::flags.frag_power_off) {
@@ -83,6 +171,7 @@ static void nextPhase() {
   }
   if (hal::system_reset_asserted()) {
     setPhase(rgb_phase::power_on);  // Also a reset from the dashboard: start over
+    smbus.shown = false;
     return;
   }
 
@@ -124,7 +213,12 @@ void init() {
   done_timer = 0;
   bank_timer = 0;
   bank_shown = 0;
+  smbus = {};
   hal::set_rgb_led(0, 0, 0);
+}
+
+static uint8_t scaled(const uint8_t value) {
+  return static_cast<uint8_t>(value * brightness_percent / 100);
 }
 
 void update() {
@@ -132,8 +226,20 @@ void update() {
     return;
   }
   nextPhase();
-  const Colour c = phase == rgb_phase::failed ? failedColour() : colours[static_cast<uint8_t>(phase)];
-  hal::set_rgb_led(c.red, c.green, c.blue);
+
+  Colour c = {0, 0, 0};
+  if (current_mode == Mode::off) {
+    // Dark, whatever else asks for a colour
+  } else if (smbus.shown) {
+    c = {smbus.value[0], smbus.value[1], smbus.value[2]};
+  } else if (phase == rgb_phase::failed) {
+    c = failedColour();
+  } else if (phase == rgb_phase::idle && current_mode == Mode::mirror) {
+    c = frontPanelColour();
+  } else {
+    c = colours[static_cast<uint8_t>(phase)];
+  }
+  hal::set_rgb_led(scaled(c.red), scaled(c.green), scaled(c.blue));
 }
 
 }  // namespace RgbLed
