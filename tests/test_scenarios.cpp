@@ -36,7 +36,8 @@ class ScenarioTest : public ::testing::Test {
 TEST_F(ScenarioTest, PowerButtonBootsToTheDashboard) {
   boot();
   EXPECT_TRUE(sim->xboxOn());
-  EXPECT_TRUE(fake::logged("BOOT: RAM test passed"));
+  EXPECT_TRUE(fake::logged("BOOT: RAM test passed, result 0xF0 type 0x0F"));
+  EXPECT_TRUE(fake::logged("BOOT: RAM found: 64 MB (4 x 16 MB)"));
   EXPECT_TRUE(fake::logged("BOOT: Challenge passed"));
   EXPECT_EQ(sim->resets(), 0);
 }
@@ -46,8 +47,19 @@ TEST_F(ScenarioTest, RamTestFailureOnlyLoggedWhenNotEnforced) {
   SMC::BootChallenge::setEnforced(false);
   sim->os.ram_test_passes = false;
   boot();
-  EXPECT_TRUE(fake::logged("BOOT: RAM test failed"));
+  EXPECT_TRUE(fake::logged("BOOT: RAM test failed, result 0xF1 type 0x0E, 64 MB board, chip(s) 0 failed or missing"));
+  EXPECT_TRUE(fake::logged("BOOT: RAM found: 48 MB of a 64 MB board (3 x 16 MB)"));
   EXPECT_EQ(sim->resets(), 0);
+}
+
+// A 128 MB board with chip 5 dead and chip 7 aliasing as an 8 MB part
+TEST_F(ScenarioTest, RamTestFailureOn128MbNamesTheChips) {
+  sim->os.ram_test_passes = false;
+  sim->os.ram_type = 0x5F;
+  sim->os.ram_result = 0x20;
+  boot();
+  EXPECT_TRUE(fake::logged("BOOT: RAM test failed, result 0x20 type 0x5F, 128 MB board, chip(s) 5 failed or missing, chip(s) 7 read as 8 MB"));
+  EXPECT_TRUE(fake::logged("BOOT: RAM found: 104 MB of a 128 MB board (6 x 16 MB, 1 x 8 MB)"));
 }
 
 // Enforced (the setting): the same failure resets the Xbox

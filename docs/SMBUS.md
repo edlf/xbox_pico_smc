@@ -39,8 +39,8 @@ Commands available on the stock PIC/Xyclops firmware.
 | 0x0F      | Error code           |  R  | Error code (0x0E or boot challenge) |
 | 0x10      | Fan speed            |  R  | Current fan speed |
 | 0x11      | Interrupt reason     |  R  | Why the SMI was raised, cleared on read |
-| 0x12      | RAM test result      |  W  | Result of the BIOS RAM test |
-| 0x13      | RAM type             |  W  | RAM type / second result byte |
+| 0x12      | RAM test result      |  W  | Chips that failed the BIOS RAM test, one bit each |
+| 0x13      | RAM type             |  W  | Chips that are 16 MB parts, one bit each |
 | 0x14      | RAM test result      |  R  | Value written to 0x12 |
 | 0x15      | RAM type             |  R  | Value written to 0x13 |
 | 0x16      | Last command written |  R  | Command of the last write |
@@ -314,10 +314,48 @@ Why the SMI line was pulsed. Cleared by reading it.
 
 ### 0x12 RAM test result (write) / 0x13 RAM type (write)
 
-Written by the BIOS after its RAM test, 0x13 first. The test counts as passed
-when 0x13 is 0x0F and 0x12 is 0xF0, or when 0x13 is 0x00 or 0xFF and 0x12 is
-0x00 (as P2L; the original P01/P11 pass 0x13 = 0x00 or 0xFF whatever 0x12
-holds).
+Written by the BIOS after its RAM test (the MCPX init table), 0x13 first. One
+bit per RAM chip (DRAM partition): bits 0-3 the four chips every board has,
+4-7 the second four of a 128 MB board (external bank 1). For each chip the BIOS
+writes `AAAAAAAA` at an address and `5A5A5A5A` at the same address with row bit
+R11 set, then reads both back and writes `55555555`:
+
+- **0x13, type:** the chip is a 16 MB (4Mx32) part. The R11 write didn't alias
+  onto the first address, so the chip has 12 row bits. Clear: an 8 MB (2Mx32)
+  part, or a chip that didn't answer.
+- **0x12, result:** the chip failed. The R11 address didn't read back
+  `5A5A5A5A` (missing or dead), or `55555555` didn't read back. Chips that
+  aren't fitted fail too.
+
+It only checks two addresses per chip: missing chips, dead chips, stuck data
+lines and the R11 address line, not every cell. The BIOS sets up 128 MB when
+0x13 is 0xFF, 64 MB otherwise.
+
+| 0x13 | 0x12 | Board |
+|------|------|-------|
+| 0x0F | 0xF0 | 64 MB: chips 0-3 are 16 MB, 4-7 aren't fitted (retail) |
+| 0xFF | 0x00 | 128 MB: eight 16 MB chips (debug kit, or an upgraded board) |
+| 0x00 | 0x00 | 64 MB: eight 8 MB chips (early boards) |
+
+The boot log shows the RAM found, from the working chips: `BOOT: RAM found: 64
+MB (4 x 16 MB)`, or with faults `BOOT: RAM found: 48 MB of a 64 MB board (3 x
+16 MB)` (a chip read as 8 MB counts as 8 MB).
+
+The test counts as passed for exactly those (as P2L; the original P01/P11 pass
+0x13 = 0x00 or 0xFF whatever 0x12 holds). Anything else is logged per chip,
+for example `BOOT: RAM test failed, result 0xF1 type 0x0E, 64 MB board, chip(s)
+0 failed or missing`:
+
+- A board counts as 128 MB when any of chips 4-7 is a 16 MB part or answers.
+  A 128 MB board whose chips 4-7 all fail reads as a healthy 64 MB one, and
+  boots with 64 MB.
+- Failed or missing: the chip's bit is set in 0x12.
+- Read as 8 MB (address line R11): on a board of 16 MB chips, a chip that
+  answers but has its 0x13 bit clear, e.g. 0x13 = 0x0B with 0x12 = 0xF0 for
+  chip 2. Or an 8 MB part fitted next to 16 MB ones.
+
+The RGB LED shows the chips at fault (see [Wiring.md](Wiring.md)). Which chip
+number is which chip on the board isn't known yet.
 Without a passed test the SMC doesn't wait for the OS at power off.
 Read back with 0x14 and 0x15.
 

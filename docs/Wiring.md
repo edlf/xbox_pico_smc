@@ -75,8 +75,8 @@ SMBus 0x37-0x3A, see `docs/SMBUS.md`.
 | Blue | Out of reset, BIOS running (waiting for the RAM test) |
 | Cyan | RAM test passed, waiting for the kernel (boot challenge answer or SMBus 0x1A) |
 | Green, for 5 s | Booted (challenge passed or SMBus 0x1A written), then off (or the front panel in `mirror` mode) |
-| Red | The boot challenge gave up (FRAG), or a RAM test failed with no bank flagged |
-| Yellow / orange / purple / white | RAM test failed in bank 0 / 1 / 2 / 3 (bits 0-3 of SMBus 0x12, assumed one per bank). Several failed banks: their colours in turn, 1 s each |
+| Red | The boot challenge gave up (FRAG), or a RAM test failed with no chip flagged |
+| Yellow / orange / purple / white | RAM test failed on chip 0 / 1 / 2 / 3 (see SMBus 0x12 in [SMBUS.md](SMBUS.md)). Blinking: chip 4 / 5 / 6 / 7, the second set of a 128 MB board. Several chips: their colours in turn, 1 s each |
 
 `RGB:` lines at DEBUG level log each change.
 

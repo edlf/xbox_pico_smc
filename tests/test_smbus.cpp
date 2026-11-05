@@ -126,7 +126,8 @@ TEST_F(SmbusTest, InterruptReasonIsClearedByReadingIt) {
   EXPECT_EQ(read(0x11), 0x00);
 }
 
-TEST_F(SmbusTest, RamTestPassed128Mb) {
+// A retail board: chips 0-3 are 16 MB, 4-7 aren't fitted (so they "fail")
+TEST_F(SmbusTest, RamTestPassed64Mb) {
   write(0x13, 0x0F);
   write(0x12, 0xF0);
   EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_submitted);
@@ -135,15 +136,23 @@ TEST_F(SmbusTest, RamTestPassed128Mb) {
   EXPECT_EQ(read(0x15), 0x0F);
 }
 
-TEST_F(SmbusTest, RamTestPassed64Mb) {
+// A debug kit or an upgraded board: eight 16 MB chips
+TEST_F(SmbusTest, RamTestPassed128Mb) {
+  write(0x13, 0xFF);
+  write(0x12, 0x00);
+  EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_passed);
+}
+
+// Eight 8 MB chips (early boards)
+TEST_F(SmbusTest, RamTestPassed64MbOf8MbChips) {
   write(0x13, 0x00);
   write(0x12, 0x00);
   EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_passed);
 }
 
 TEST_F(SmbusTest, RamTestFailed) {
-  write(0x13, 0x00);
-  write(0x12, 0x05);  // Banks 0 and 2 flagged
+  write(0x13, 0x0A);
+  write(0x12, 0xF5);  // A 64 MB board, chips 0 and 2 dead
   EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_submitted);
   EXPECT_FALSE(SMC::BootChallenge::flags.ram_test_passed);
 }
@@ -152,6 +161,55 @@ TEST_F(SmbusTest, RamTestType0xFFAlsoNeedsAZeroResult) {
   write(0x13, 0xFF);  // P2L rule, for every firmware
   write(0x12, 0x01);
   EXPECT_FALSE(SMC::BootChallenge::flags.ram_test_passed);
+}
+
+// SMBus 0x13 and 0x12 decoded per chip
+TEST_F(SmbusTest, RamTestDecoding) {
+  using SMC::BootChallenge::decodeRamTest;
+  SMC::BootChallenge::RamTest t = decodeRamTest(0xF0, 0x0F);  // Retail, passed
+  EXPECT_EQ(t.fitted, 0x0F);
+  EXPECT_EQ(t.failed, 0x00);
+  EXPECT_EQ(t.wrong_size, 0x00);
+  EXPECT_EQ(t.megabytes, 64);
+
+  t = decodeRamTest(0xF1, 0x0E);  // Retail, chip 0 doesn't answer
+  EXPECT_EQ(t.fitted, 0x0F);
+  EXPECT_EQ(t.failed, 0x01);
+  EXPECT_EQ(t.wrong_size, 0x00);
+
+  t = decodeRamTest(0xF0, 0x0B);  // Retail, chip 2 answers but aliases at R11
+  EXPECT_EQ(t.failed, 0x00);
+  EXPECT_EQ(t.wrong_size, 0x04);
+
+  t = decodeRamTest(0x00, 0xFF);  // 128 MB, passed
+  EXPECT_EQ(t.fitted, 0xFF);
+  EXPECT_EQ(t.megabytes, 128);
+  EXPECT_EQ(t.board_mb, 128);
+  EXPECT_EQ(t.found_mb, 128);
+
+  t = decodeRamTest(0x20, 0xDF);  // 128 MB, chip 5 failed
+  EXPECT_EQ(t.fitted, 0xFF);
+  EXPECT_EQ(t.failed, 0x20);
+  EXPECT_EQ(t.wrong_size, 0x00);
+  EXPECT_EQ(t.megabytes, 64);  // The BIOS falls back to 64 MB
+
+  t = decodeRamTest(0x00, 0x7F);  // 128 MB, chip 7 reads as 8 MB
+  EXPECT_EQ(t.failed, 0x00);
+  EXPECT_EQ(t.wrong_size, 0x80);
+
+  t = decodeRamTest(0x08, 0x00);  // Eight 8 MB chips, chip 3 failed
+  EXPECT_EQ(t.fitted, 0xFF);
+  EXPECT_EQ(t.failed, 0x08);
+  EXPECT_EQ(t.wrong_size, 0x00);  // No 16 MB chips to compare with
+  EXPECT_EQ(t.board_mb, 64);
+  EXPECT_EQ(t.chips_8mb, 7);
+  EXPECT_EQ(t.found_mb, 56);
+
+  t = decodeRamTest(0xF0, 0x0F);  // Retail, passed: 4 x 16 MB
+  EXPECT_EQ(t.chips_16mb, 4);
+  EXPECT_EQ(t.chips_8mb, 0);
+  EXPECT_EQ(t.found_mb, 64);
+  EXPECT_EQ(t.board_mb, 64);
 }
 
 TEST_F(SmbusTest, LastCommandAndByteWritten) {

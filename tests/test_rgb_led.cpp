@@ -47,6 +47,35 @@ class RgbLedTest : public ::testing::Test {
 constexpr Colour dark = {0, 0, 0};
 constexpr Colour green = {0, 255, 0};
 
+// A failed RAM test shows the chip's colour: chips 0-3 steady, 4-7 blinking
+TEST_F(RgbLedTest, FailedRamChipColours) {
+  sim->os.ram_test_passes = false;  // Chip 0 of a 64 MB board: yellow, steady
+  boot();
+  for (int i = 0; i < 10; i++) {
+    sim->run(50);
+    EXPECT_EQ(colour(), (Colour{255, 255, 0}));
+  }
+}
+
+TEST_F(RgbLedTest, FailedRamChipOnTheSecondSetBlinks) {
+  sim->os.ram_test_passes = false;
+  sim->os.ram_type = 0xDF;  // 128 MB, chip 5 failed: orange, blinking
+  sim->os.ram_result = 0x20;
+  boot();
+  int on = 0, off = 0;
+  for (int i = 0; i < 40; i++) {
+    sim->run(25);
+    if (colour() == Colour{255, 64, 0}) {
+      on++;
+    } else if (colour() == dark) {
+      off++;
+    }
+  }
+  EXPECT_GT(on, 5);
+  EXPECT_GT(off, 5);
+  EXPECT_EQ(on + off, 40);
+}
+
 TEST_F(RgbLedTest, BootModeIsGreenThenDark) {
   EXPECT_EQ(colour(), dark);  // Xbox off
   boot();

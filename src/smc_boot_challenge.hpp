@@ -55,9 +55,25 @@ void init();
 // The last RAM test failed (blinking red LEDs, enforced or not). Cleared by a
 // passed RAM test and at power off.
 bool ramTestFailed();
-// Banks flagged by the failed RAM test (bits 0-3 of SMBus 0x12, assumed one
-// per bank), 0 when it passed or no bank was flagged
-uint8_t failedRamBanks();
+// The BIOS's RAM test (SMBus 0x13 type, sent first, and 0x12 result), one bit
+// per RAM chip: 0-3 the four every board has, 4-7 the second four of a 128 MB
+// board. Type: the chip is a 16 MB (4Mx32) part. Result: the chip failed the
+// pattern check, or doesn't answer at all (so 4-7 are set on a 64 MB board).
+struct RamTest {
+  uint8_t  fitted;      // The chips the board has: 0x0F, or 0xFF on a 128 MB board
+  uint8_t  failed;      // Fitted chips that failed or don't answer
+  uint8_t  wrong_size;  // Fitted chips that answer but read as 8 MB next to 16 MB ones: an address line (R11)
+  uint16_t megabytes;   // What the BIOS sets up: 128 with eight 16 MB chips, 64 otherwise
+  uint16_t board_mb;    // What the board has when it's all working: 128 or 64
+  uint8_t  chips_16mb;  // Working chips: 16 MB ones
+  uint8_t  chips_8mb;   // and 8 MB ones (wrong size included: 8 MB is what answers)
+  uint16_t found_mb;    // Their total
+};
+RamTest decodeRamTest(uint8_t result, uint8_t type);
+
+// The chips at fault in the failed RAM test (failed or wrong size, as
+// decodeRamTest()), 0 when it passed or none was flagged
+uint8_t failedRamChips();
 
 // The CPU answered this boot's challenge correctly. Cleared by a reset.
 bool challengePassed();

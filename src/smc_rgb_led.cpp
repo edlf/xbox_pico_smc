@@ -73,36 +73,41 @@ constexpr Colour colours[] = {
     {255, 0,   0  }, // failed: red
 };
 
-// A failed RAM test shows the colour of the failed bank instead of red. With
-// several failed banks it steps through their colours, 1 s each.
-constexpr Colour bank_colours[] = {
-    {255, 255, 0  }, // Bank 0: yellow
-    {255, 64,  0  }, // Bank 1: orange
-    {128, 0,   255}, // Bank 2: purple
-    {255, 255, 255}, // Bank 3: white
+// A failed RAM test shows the colour of the chip at fault instead of red:
+// chips 0-3 steady, 4-7 (128 MB boards) the same colours blinking. With
+// several it steps through them, 1 s each.
+constexpr Colour chip_colours[] = {
+    {255, 255, 0  }, // Chip 0 / 4: yellow
+    {255, 64,  0  }, // Chip 1 / 5: orange
+    {128, 0,   255}, // Chip 2 / 6: purple
+    {255, 255, 255}, // Chip 3 / 7: white
 };
-constexpr uint8_t bank_ticks = 50;  // 1 s per bank
-static uint8_t    bank_timer = 0;
-static uint8_t    bank_shown = 0;
+constexpr uint8_t chip_ticks = 50;   // 1 s per chip
+constexpr uint8_t blink_ticks = 12;  // Chips 4-7: on and off ~4 times a second
+static uint8_t    chip_timer = 0;
+static uint8_t    chip_shown = 0;
 
 static Colour failedColour() {
-  const uint8_t banks = BootChallenge::failedRamBanks();
-  if (banks == 0) {
-    return colours[static_cast<uint8_t>(rgb_phase::failed)];  // FRAG, or no bank flagged
+  const uint8_t chips = BootChallenge::failedRamChips();
+  if (chips == 0) {
+    return colours[static_cast<uint8_t>(rgb_phase::failed)];  // FRAG, or no chip flagged
   }
-  if (bank_timer == 0 || !(banks & (1u << bank_shown))) {
-    // Next failed bank
-    for (uint8_t i = 1; i <= 4; i++) {
-      const uint8_t bank = (bank_shown + i) % 4;
-      if (banks & (1u << bank)) {
-        bank_shown = bank;
+  if (chip_timer == 0 || !(chips & (1u << chip_shown))) {
+    // Next chip at fault
+    for (uint8_t i = 1; i <= 8; i++) {
+      const uint8_t chip = (chip_shown + i) % 8;
+      if (chips & (1u << chip)) {
+        chip_shown = chip;
         break;
       }
     }
-    bank_timer = bank_ticks;
+    chip_timer = chip_ticks;
   }
-  bank_timer--;
-  return bank_colours[bank_shown];
+  chip_timer--;
+  if (chip_shown >= 4 && (chip_timer / (blink_ticks / 2)) % 2 != 0) {
+    return Colour{0, 0, 0};
+  }
+  return chip_colours[chip_shown % 4];
 }
 
 // The colour set over SMBus 0x37-0x3A
@@ -211,8 +216,8 @@ static void nextPhase() {
 void init() {
   phase = rgb_phase::off;
   done_timer = 0;
-  bank_timer = 0;
-  bank_shown = 0;
+  chip_timer = 0;
+  chip_shown = 0;
   smbus = {};
   hal::set_rgb_led(0, 0, 0);
 }

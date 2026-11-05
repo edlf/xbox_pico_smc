@@ -344,8 +344,8 @@ void Simulator::bootSequence() {
     smbusWrite(0x13, 0x0F);  // RAM test passed
     smbusWrite(0x12, 0xF0);
   } else {
-    smbusWrite(0x13, 0x01);  // Failed, bank 0
-    smbusWrite(0x12, 0x01);
+    smbusWrite(0x13, os.ram_type);  // Failed
+    smbusWrite(0x12, os.ram_result);
   }
 
   // Boot challenge: the BIOS's answer, the same formula as the SMC checks

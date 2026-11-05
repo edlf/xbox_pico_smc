@@ -29,7 +29,7 @@ static uint8_t              rtc_dump_time;
 // As P2L: the answer is only checked after a passed RAM test
 static bool    challenge_check_pending;
 static bool    ram_test_failed_shown = false;  // Blinking red LEDs
-static uint8_t failed_ram_banks = 0;           // Bits 0-3 of the failed result (SMBus 0x12)
+static uint8_t failed_ram_chips = 0;           // decodeRamTest() of the failed test: failed or wrong size
 static bool    challenge_passed = false;
 
 void init() {
@@ -42,7 +42,7 @@ void init() {
   rtc_dump_time = 0;
   challenge_check_pending = false;
   ram_test_failed_shown = false;
-  failed_ram_banks = 0;
+  failed_ram_chips = 0;
   challenge_passed = false;
 }
 
@@ -50,8 +50,59 @@ bool ramTestFailed() {
   return ram_test_failed_shown;
 }
 
-uint8_t failedRamBanks() {
-  return ram_test_failed_shown ? failed_ram_banks : 0;
+uint8_t failedRamChips() {
+  return ram_test_failed_shown ? failed_ram_chips : 0;
+}
+
+RamTest decodeRamTest(const uint8_t result, const uint8_t type) {
+  RamTest test;
+  // A 64 MB board has no chips 4-7: they don't answer, so all four fail. A
+  // 16 MB chip or one that answers among them is a 128 MB board's.
+  test.fitted = (type & 0xF0) != 0 || (result & 0xF0) != 0xF0 ? 0xFF : 0x0F;
+  test.failed = result & test.fitted;
+  // On a board of 16 MB chips, one that answers but aliases at R11 as an 8 MB
+  // part would (none of them do on a board of 8 MB chips, type 0x00)
+  test.wrong_size = type != 0x00 ? test.fitted & ~type & ~result : 0;
+  test.megabytes = type == 0xFF ? 128 : 64;
+  test.board_mb = test.fitted == 0xFF && type != 0x00 ? 128 : 64;  // Eight 8 MB chips make 64 MB
+  test.chips_16mb = 0;
+  test.chips_8mb = 0;
+  for (uint8_t chip = 0; chip < 8; chip++) {
+    const uint8_t bit = 1u << chip;
+    if ((test.fitted & bit) && !(test.failed & bit)) {
+      (type & bit ? test.chips_16mb : test.chips_8mb)++;
+    }
+  }
+  test.found_mb = static_cast<uint16_t>(test.chips_16mb * 16 + test.chips_8mb * 8);
+  return test;
+}
+
+// "BOOT: RAM found: 64 MB (4 x 16 MB)", "... 48 MB of a 64 MB board (3 x 16 MB)"
+static void logRamFound(const RamTest& test) {
+  Text<32> chips;
+  if (test.chips_16mb != 0) {
+    chips.append("%u x 16 MB", test.chips_16mb);
+  }
+  if (test.chips_8mb != 0) {
+    chips.append(chips.empty() ? "%u x 8 MB" : ", %u x 8 MB", test.chips_8mb);
+  }
+  if (test.found_mb == test.board_mb) {
+    debug::print(debug::Level::Info, "BOOT: RAM found: %u MB (%s)", test.found_mb, chips.c_str());
+  } else {
+    debug::print(debug::Level::Warnings, "BOOT: RAM found: %u MB of a %u MB board (%s)", test.found_mb, test.board_mb,
+                 chips.empty() ? "no chip working" : chips.c_str());
+  }
+}
+
+// "0 2" for chips 0 and 2
+static Text<24> chipList(const uint8_t chips) {
+  Text<24> list;
+  for (uint8_t chip = 0; chip < 8; chip++) {
+    if (chips & (1u << chip)) {
+      list.append(list.empty() ? "%u" : " %u", chip);
+    }
+  }
+  return list;
 }
 
 bool challengePassed() {
@@ -219,24 +270,27 @@ void update() {
 
     case boot_challenge_state::ram_test_ok:
       debug::print(debug::Level::Info, "BOOT: RAM test passed, result 0x%02X type 0x%02X", ram_test_response0, ram_test_response1);
+      logRamFound(decodeRamTest(ram_test_response0, ram_test_response1));
       ram_test_failed_shown = false;
-      failed_ram_banks = 0;
+      failed_ram_chips = 0;
       challenge_check_pending = !SMC_FIRMWARE_NO_CHALLENGE;  // D01/DXF only check the RAM test
       state = boot_challenge_state::challenge_wait_for_reply;
       break;
 
     case boot_challenge_state::ram_test_failed: {
-      // Assumed: bits 0-3 of SMBus 0x12 flag the four RAM banks that failed
-      // (0x00 is a pass with 64 MB). Kept, as a retry clears the result.
-      failed_ram_banks = ram_test_response0 & 0x0F;
-      Text<24> banks;
-      for (uint8_t bank = 0; bank < 4; bank++) {
-        if (failed_ram_banks & (1u << bank)) {
-          banks.append(" %u", bank);
-        }
+      // Which chips, see decodeRamTest(). Kept, as a retry clears the result.
+      const RamTest test = decodeRamTest(ram_test_response0, ram_test_response1);
+      failed_ram_chips = test.failed | test.wrong_size;
+      Text<96> chips;
+      if (test.failed != 0) {
+        chips.append(", chip(s) %s failed or missing", chipList(test.failed).c_str());
       }
-      debug::print(debug::Level::Warnings, "BOOT: RAM test failed, result 0x%02X type 0x%02X, %s%s", ram_test_response0, ram_test_response1,
-                   banks.empty() ? "no bank flagged" : "bank(s)", banks.c_str());
+      if (test.wrong_size != 0) {
+        chips.append(", chip(s) %s read as 8 MB (address line R11)", chipList(test.wrong_size).c_str());
+      }
+      debug::print(debug::Level::Warnings, "BOOT: RAM test failed, result 0x%02X type 0x%02X, %s board%s", ram_test_response0, ram_test_response1,
+                   test.board_mb == 128 ? "128 MB" : "64 MB", chips.empty() ? ", no chip flagged" : chips.c_str());
+      logRamFound(test);
 
       // Blinking red, only for a failed RAM test (the PIC shows red/orange, 0x0F
       // red and 0x05 green, and only when it enforces the boot challenge). Shown
