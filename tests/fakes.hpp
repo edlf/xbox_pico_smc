@@ -51,6 +51,36 @@ bool                            logged(const std::string& text);  // A line cont
 
 void reset();
 
+// Time (fake_sdk.cpp): starts at 0, moved on by the busy waits and the simulator
+uint64_t now_us();
+void     advance_us(uint64_t us);
+
+// For the simulator (tests/sim). Left empty, the fakes behave as before.
+
+// Called by the fake hal::timer1_wait(), once per main loop tick
+extern void (*tick_hook)();
+
+// Watchdog: once enabled, time moving on 1 s past the last pet throws
+// WatchdogReboot (from a busy wait or timer1_wait()), as the Pico would reboot
+struct WatchdogReboot {};
+struct Watchdog {
+  bool     enabled = false;
+  uint64_t last_pet_us = 0;
+};
+extern Watchdog watchdog;
+void            checkWatchdog();
+
+// The GPIO interrupt the firmware set up (POWER_OK falling edge)
+struct GpioIrq {
+  bool enabled = false;
+  void (*callback)(unsigned int gpio, uint32_t events) = nullptr;
+};
+extern GpioIrq power_ok_irq;
+
+// Also print each log line, with the time, as the serial console would
+extern bool echo_log;
+extern bool echo_debug;  // DEBUG lines too
+
 // Fake flash (fake_flash.cpp), PICO_FLASH_SIZE_BYTES of it
 uint8_t*   flash();
 void       eraseFlash();  // All 0xFF, writes counted from 0

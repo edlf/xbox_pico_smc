@@ -48,6 +48,66 @@ They build with the default settings from `src/config.hpp` (P11).
   devices and our own transfers not logged, and a video mode decoded from bus
   writes.
 - `test_ring_buffer.cpp`: the log buffer's order, wrap-around and drops.
+- `test_reset_on_eject.cpp`: reset-on-eject (SMBus 0x19) across power cycles.
+- `test_scenarios.cpp`: whole-Xbox scenarios in the simulator (below): boot,
+  power off through the OS (answering, hung, busy), the tray, reset-on-eject,
+  reset and power cycle requests, a PSU dropout, and the eject storm after a
+  power cycle that used to reset the Xbox.
+
+## Simulator
+
+`sim/` runs the firmware's real `main_loop()` on the PC, with simple models of
+the Xbox around it:
+
+- **PSU**: POWER_OK 60 ms after POWON, off at once, and dropouts on request
+  (which fire the firmware's POWER_OK interrupt).
+- **DVD drive**: the eject line toggles the tray (opening and closing take
+  1.2 s, a moving tray reverses, a spinning disc unloads first), and a closed
+  tray reports a disc (0x60) or none (0x40) a second later. 0x70 while unpowered.
+- **BIOS and OS**: once the CPU runs (power, PLL, no reset) the BIOS does what a
+  real one does over SMBus (version, RAM test, boot challenge answer), and a
+  second later the dashboard writes 0x1A and answers SMIs: it reads 0x11,
+  answers 0x0D, and on an eject press asks for the tray with 0x0C and writes
+  0x19 = 0x01, as seen in real logs.
+
+Time is simulated: `hal::timer1_wait()` hands each tick to the simulator,
+which moves the clock on 20 ms and runs the models. A minute of Xbox time takes
+milliseconds. The watchdog works too: 1 s without a pet reboots the "Pico"
+(`main_loop()` starts again).
+
+### Console
+
+`build-tests/og_smc_sim` takes commands typed in, or a script file:
+
+```
+build-tests/og_smc_sim tests/sim/eject_storm.txt
+```
+
+It prints the firmware's log as the serial console would, with the models'
+lines tagged `(SIM  )`. `help` lists the commands: `power`, `eject`,
+`run 2s`, `push`, `disc on|off`, `av 0x0E`, `psu-drop 200ms`, `os hang`,
+`os busy`, `write 0x19 0x00`, `read 0x03`, `status`, `debug on`, ...
+
+### Scenario tests
+
+`test_scenarios.cpp` uses the same `sim::Simulator` (`sim/simulator.hpp`):
+
+```cpp
+TEST_F(ScenarioTest, EjectOpensAndClosesTheTray) {
+  boot();               // Power button, then until the dashboard runs
+  sim->pressEject();
+  sim->run(3000);
+  EXPECT_EQ(sim->trayPins(), 0x10);
+}
+```
+
+`sim->os` and `sim->drive` change how the OS and the drive behave, and
+`resets()`, `powerOns()`, `watchdogReboots()` and `fake::logged()` say what
+happened. A log from the real Xbox is usually easy to turn into one.
+
+The models are simple. They're for the SMC's side of things and will miss
+anything that depends on how the real kernel or drive behave beyond what's
+modelled.
 
 ## Adding tests
 
@@ -74,7 +134,7 @@ TEST_F(FrontPanelTest, EjectPressCountsAfterTwoReadings) {
 
 Each `update()` call is one 20 ms tick. Inputs and outputs are in
 `fake::hal` (`fakes.hpp`), log lines in `fake::log` (`fake::logged(text)`).
-New test files go in `add_executable()` in `CMakeLists.txt`.
+New test files go in `add_executable(og_smc_tests ...)` in `CMakeLists.txt`.
 
 Not covered: anything that only runs on the Pico itself (`hal*.cpp`, the web
 interface, USB config, the sniffer's PIO/DMA capture, real flash), and real timing.

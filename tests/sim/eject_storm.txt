@@ -1,0 +1,30 @@
+# The eject bug seen on hardware: power the Xbox on, off and on again, then
+# press eject repeatedly in the dashboard. Before the fix it reset.
+#   build-tests/og_smc_sim tests/sim/eject_storm.txt
+power
+run 3s
+power
+run 4s
+power
+run 3s
+eject
+run 150ms
+eject
+run 150ms
+eject
+run 150ms
+eject
+run 150ms
+eject
+run 150ms
+eject
+run 150ms
+eject
+run 150ms
+eject
+run 150ms
+eject
+run 150ms
+eject
+run 5s
+status

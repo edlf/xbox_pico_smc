@@ -21,6 +21,8 @@ bool logged(const std::string& text) {
 void reset() {
   hal = Hal{};
   log.clear();
+  watchdog = Watchdog{};
+  power_ok_irq = GpioIrq{};
 }
 
 }  // namespace fake
@@ -142,11 +144,20 @@ bool system_reset_asserted() {
 void rgb_led_init() {}
 void set_rgb_led(uint8_t, uint8_t, uint8_t) {}
 
-void enableWatchdog() {}
-void petWatchdog() {}
+void enableWatchdog() {
+  fake::watchdog.enabled = true;
+  fake::watchdog.last_pet_us = fake::now_us();
+}
+void petWatchdog() {
+  fake::watchdog.last_pet_us = fake::now_us();
+}
 
 void timer1_init(uint32_t) {}
-void timer1_wait() {}
+void timer1_wait() {
+  if (fake::tick_hook != nullptr) {
+    fake::tick_hook();
+  }
+}
 void disable_and_discard_interrupts() {}
 
 }  // namespace hal

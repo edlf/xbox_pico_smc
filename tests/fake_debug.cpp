@@ -36,6 +36,9 @@ void print(Level level, const char* format, ...) {
   vsnprintf(line, sizeof(line), format, args);
   va_end(args);
   fake::log.push_back(std::string(tag(level)) + line);
+  if (fake::echo_log && (level != Level::Debug || fake::echo_debug)) {
+    printf("[%012llu] %s\n", static_cast<unsigned long long>(fake::now_us()), fake::log.back().c_str());
+  }
 }
 
 const char* level_name() {
