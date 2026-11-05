@@ -49,3 +49,4 @@ Experimental, currently only confirmed to work on 1.0 boards, it should work for
 - [SMBUS commands](/docs/SMBUS.md)
 - [State Machines](/docs/StateMachines.md)
 - [Wiring](/docs/Wiring.md)
+- [Tests](/tests/README.md) (`python tools/check.py` runs the builds, tests and lint checks CI runs)

@@ -16,7 +16,7 @@ namespace SMC {
 namespace Settings {
 
 constexpr uint32_t magic = 0x534D4353;  // "SCMS"
-constexpr uint16_t version = 1;         // Bump when the layout changes: other versions are ignored
+constexpr uint16_t version = 1;         // Bump when the layout changes: other versions are ignored (see reserved)
 constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 
 // The settings kept here rather than by their module, stored as they are.
@@ -59,9 +59,16 @@ struct Record {
   uint8_t  bootsel_power;        // As set: FrontPanelSW::bootselPowerSetting()
   int8_t   bypass_cpu_offset;    // Fan::bypassOffsets()
   int8_t   bypass_board_offset;  //
-  uint32_t checksum;             // FNV-1a over everything above
+  // Room for new settings without a new version, so a firmware update keeps
+  // the saved ones: take the bytes from the start of this, with 0 meaning the
+  // default (records saved before the setting existed have 0 there), and
+  // shrink it by as much. Firmware that doesn't know them ignores them.
+  uint8_t  reserved[32];
+  uint32_t checksum;  // FNV-1a over everything above
 };
 static_assert(sizeof(Record) <= FLASH_PAGE_SIZE, "One flash page");
+static_assert(offsetof(Record, reserved) + sizeof(Record::reserved) == offsetof(Record, checksum),
+              "No padding before the checksum: the reserved bytes end where it starts");
 
 // The reported versions, besides the build's
 static const char* const report_versions[] = {"P01", "P11", "D01", "DXF", "P2L"};

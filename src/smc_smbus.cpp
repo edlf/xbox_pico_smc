@@ -112,6 +112,7 @@ static RingBuffer<PendingWrite, 32> pending_writes;  // Pushed by the IRQ, poppe
 // Main loop only (applyWrite())
 static bool    bios_error_seen = false;
 static uint8_t bios_error_code = 0;
+static uint8_t scratch_logged = 0;  // Scratch (0x1B) as last logged: only changes are
 
 bool lastBiosErrorCode(uint8_t& code) {
   code = bios_error_code;
@@ -121,6 +122,7 @@ bool lastBiosErrorCode(uint8_t& code) {
 void resetSMBusRegisters() {
   regs = {};
   bios_response_byte0 = 0;  // Error code, SMBus 0x0E/0x0F
+  scratch_logged = 0;       // As regs.scratch
   // Nothing from before the reset: a power off request still waiting would
   // turn the Xbox back on
   pending_writes.clear();
@@ -307,9 +309,9 @@ static bool storeRegister(uint8_t command, uint8_t data) {
 
     case Command::SCRATCH:  // 0x1B
       // Plain storage for the kernel (bit 1 = display fatal error after the
-      // reboot, bit 3 = boot to dashboard, ...)
+      // reboot, bit 3 = boot to dashboard, ...). Logged by applyWrite().
       regs.scratch = data;
-      return true;
+      return false;
 
     // Applied by applyWrite()
     case Command::RESET:                        // 0x02
@@ -514,6 +516,15 @@ static void applyWrite(uint8_t command, uint8_t data) {
       bios_error_seen = true;
       bios_error_code = data;
       debug::print(debug::Level::Info, "BIOS: Error code 0x%02X (%u) written (SMBus 0x0E)", data, data);
+      break;
+
+    case Command::SCRATCH:  // 0x1B
+      // The kernel's boot flags (a fatal error to show after the reboot, ...):
+      // logged when they change, rewriting the same value is common
+      if (data != scratch_logged) {
+        debug::print(debug::Level::Info, "BIOS: Scratch 0x%02X -> 0x%02X (SMBus 0x1B)", scratch_logged, data);
+        scratch_logged = data;
+      }
       break;
 
     default:  // storeRegister() did all there was

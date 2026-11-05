@@ -12,14 +12,16 @@ docs/USB_Config.md).
 saved settings are kept when the Pico restarts.
 """
 
+import copy
+import json
 import queue
 import subprocess
 import sys
 import threading
 import tkinter as tk
 from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
-from tkinter import messagebox, ttk
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import smcx_config as cli
@@ -89,10 +91,6 @@ COLOURS = {
         "log_pico": "#9d9d9d",
     },
 }
-
-
-def printable(text):
-    return all(0x20 <= ord(c) <= 0x7E for c in text)
 
 
 def system_dark():
@@ -491,6 +489,8 @@ class App(ttk.Frame):
         self.defaults_button = ttk.Button(actions, text="Defaults", command=self.defaults)
         self.reboot_button = ttk.Button(actions, text="Reboot Pico", command=self.reboot)
         self.bootloader_button = ttk.Button(actions, text="Firmware update", command=self.bootloader)
+        self.export_button = ttk.Button(actions, text="Export...", command=self.export)
+        self.import_button = ttk.Button(actions, text="Import...", command=self.import_)
         self.save_button = ttk.Button(
             actions,
             text="Save to flash",
@@ -498,7 +498,14 @@ class App(ttk.Frame):
             style="Accent.TButton" if sv_ttk else "TButton",
         )
         self.apply_button = ttk.Button(actions, text="Apply", command=lambda: self.apply(save=False))
-        for button in (self.read_button, self.defaults_button, self.reboot_button, self.bootloader_button):
+        for button in (
+            self.read_button,
+            self.defaults_button,
+            self.reboot_button,
+            self.bootloader_button,
+            self.export_button,
+            self.import_button,
+        ):
             button.pack(side="left", padx=(0, 6))
         self.save_button.pack(side="right")
         self.apply_button.pack(side="right", padx=6)
@@ -509,6 +516,8 @@ class App(ttk.Frame):
             self.defaults_button,
             self.reboot_button,
             self.bootloader_button,
+            self.export_button,
+            self.import_button,
         )
 
         # Status line
@@ -870,129 +879,129 @@ class App(ttk.Frame):
         for label, whole_row in self.fan_labels:
             label.configure(wraplength=max(width if whole_row else width - others - 4, 80))
 
-    def changes(self):
-        """The commands for what differs from the last read, or raises ValueError."""
-        s = self.settings
-        commands = []
-        if self.brightness.get() != s.get("brightness"):
-            commands.append(f"set brightness {self.brightness.get()}")
-        if "fade" in s and self.fade.get() != s["fade"]:
-            commands.append(f"set fade {'on' if self.fade.get() else 'off'}")
+    def form(self):
+        """The settings as the window shows them, in parse_settings()'s shape
+        (the last read, with the boxes' values). Raises ValueError for a box
+        that isn't a number; cli.commands_for() checks the rest."""
 
-        mode = next((key for key, name in RGB_MODE_NAMES.items() if name == self.rgb_mode.get()), None)
-        if mode and mode != s.get("rgb_mode"):
-            commands.append(f"set rgb-mode {mode}")
-        if self.rgb_brightness.get() != s.get("rgb_brightness"):
-            commands.append(f"set rgb-brightness {self.rgb_brightness.get()}")
-
-        for index, var, low, high, old in self.thresholds:
+        def number(var, what):
             try:
-                value = var.get()
+                return var.get()
             except tk.TclError:
-                raise ValueError(f"Fan threshold {index} must be a number")
-            if not low <= value <= high:
-                raise ValueError(f"Fan threshold {index} must be {low}-{high}")
-            if value != old:
-                commands.append(f"set threshold {index} {value}")
+                raise ValueError(f"{what} must be a number")
 
-        ssid = self.ssid.get()
-        if ssid != s.get("ssid"):
-            if not 1 <= len(ssid) <= 32 or not printable(ssid):
-                raise ValueError("The Wi-Fi name must be 1-32 printable characters")
-            commands.append(f"set ssid {ssid}")
-
-        password = "" if self.board_password.get() else self.password.get()
-        if password != s.get("password"):
-            if password and (not 8 <= len(password) <= 63 or not printable(password)):
-                raise ValueError("The Wi-Fi password must be 8-63 printable characters")
-            commands.append(f"set password {password}" if password else "set password")
-
+        s = copy.deepcopy(self.settings)
+        s["brightness"] = self.brightness.get()
+        if "fade" in s:
+            s["fade"] = self.fade.get()
+        s["rgb_mode"] = next(
+            (key for key, name in RGB_MODE_NAMES.items() if name == self.rgb_mode.get()), s.get("rgb_mode")
+        )
+        s["rgb_brightness"] = self.rgb_brightness.get()
+        values = {index: number(var, f"Fan threshold {index}") for index, var, *_ in self.thresholds}
+        for t in s["thresholds"]:
+            t["value"] = values.get(t["index"], t["value"])
+        s["ssid"] = self.ssid.get()
+        s["password"] = "" if self.board_password.get() else self.password.get()
         if "fan_ramp" in s:
-            ramp = s["fan_ramp"]
-            up = RAMP_UP_NAMES.index(self.ramp_up.get()) + 1
-            down = RAMP_DOWN_NAMES.index(self.ramp_down.get()) + 1
-            if up != ramp["up"]:
-                commands.append(f"set fan-ramp-up {up}")
-            if down != ramp["down"]:
-                commands.append(f"set fan-ramp-down {down}")
-            for name, key, var in (
-                ("fan-glide-up", "glide_up", self.glide_up),
-                ("fan-glide-down", "glide_down", self.glide_down),
-            ):
-                try:
-                    ms = var.get()
-                except tk.TclError:
-                    raise ValueError("The fan glide must be a number")
-                if not 0 <= ms <= 1000:
-                    raise ValueError("The fan glide must be 0-1000 ms")
-                if ms != ramp[key]:
-                    commands.append(f"set {name} {ms}")
+            s["fan_ramp"] = {
+                "up": RAMP_UP_NAMES.index(self.ramp_up.get()) + 1,
+                "down": RAMP_DOWN_NAMES.index(self.ramp_down.get()) + 1,
+                "glide_up": number(self.glide_up, "The fan glide"),
+                "glide_down": number(self.glide_down, "The fan glide"),
+            }
         if "av_pack" in s:
             choice = self.av_pack.get()
-            code = None if choice == AV_PACK_DETECT else AV_PACK_NAMES.index(choice) - 1
-            if code != s["av_pack"]:
-                commands.append(f"set av-pack {'detect' if code is None else code}")
-        for key, var, name in (
-            ("no_dvd", self.no_dvd, "no-dvd"),
-            ("boot_challenge", self.boot_challenge, "boot-challenge"),
-            ("sniffer", self.sniffer, "sniffer"),
-            ("sensor_bypass", self.sensor_bypass, "sensor-bypass"),
-            ("eject_button", self.eject_button, "eject-button"),
+            s["av_pack"] = None if choice == AV_PACK_DETECT else AV_PACK_NAMES.index(choice) - 1
+        for key, var in (
+            ("no_dvd", self.no_dvd),
+            ("boot_challenge", self.boot_challenge),
+            ("sniffer", self.sniffer),
+            ("sensor_bypass", self.sensor_bypass),
+            ("eject_button", self.eject_button),
+            ("power_button", self.power_button),
         ):
-            if key in s and var.get() != s[key]:
-                commands.append(f"set {name} {'on' if var.get() else 'off'}")
-        if "power_button" in s:
-            # BOOTSEL as picked (the firmware keeps it in use without the power
-            # button anyway). It can only be turned off with the power button
-            # on, so that one goes first when it's turned on.
-            power = self.power_button.get()
-            bootsel = self.bootsel_choice
-            power_command = [f"set power-button {'on' if power else 'off'}"] if power != s["power_button"] else []
-            bootsel_command = (
-                [f"set bootsel-power {'on' if bootsel else 'off'}"] if bootsel != s["bootsel_power"] else []
-            )
-            commands += power_command + bootsel_command if power else bootsel_command + power_command
-        if "log_level" in s and self.log_level.get().lower() != s["log_level"]:
-            commands.append(f"set log-level {self.log_level.get().lower()}")
+            if key in s:
+                s[key] = var.get()
+        if "bootsel_power" in s:
+            s["bootsel_power"] = self.bootsel_choice  # As picked: shown on anyway while the power button is off
+        if "log_level" in s:
+            s["log_level"] = self.log_level.get().lower()
         if "ntc" in s:
-            # The values first: they're checked even with the NTC off
-            for name, key in (("ntc-beta", "beta"), ("ntc-r25", "r25"), ("ntc-series", "series")):
-                var, low, high = self.ntc_values[name]
-                try:
-                    value = var.get()
-                except tk.TclError:
-                    raise ValueError(f"The NTC {key} must be a number")
-                if not low <= value <= high:
-                    raise ValueError(f"The NTC {key} must be {low}-{high}")
-                if value != s["ntc"][key]:
-                    commands.append(f"set {name} {value}")
-            if "bypass_offsets" in s:
-                for key, var, name in (
-                    ("cpu", self.cpu_offset, "bypass-cpu-offset"),
-                    ("board", self.board_offset, "bypass-board-offset"),
-                ):
-                    try:
-                        offset = var.get()
-                    except tk.TclError:
-                        raise ValueError(f"The {key} offset must be a number")
-                    if not -30 <= offset <= 30:
-                        raise ValueError(f"The {key} offset must be -30 to 30 °C")
-                    if offset != s["bypass_offsets"][key]:
-                        commands.append(f"set {name} {offset}")
-            if self.sensor_bypass.get() and not self.ntc.get():
-                raise ValueError("The sensor bypass needs the NTC on: it takes the CPU temperature from it")
-            if self.ntc.get() != s["ntc"]["enabled"]:
-                commands.append(f"set ntc {'on' if self.ntc.get() else 'off'}")
-
+            s["ntc"] = {"enabled": self.ntc.get()}
+            for key in ("beta", "r25", "series"):
+                s["ntc"][key] = number(self.ntc_values[f"ntc-{key}"][0], f"The NTC {key}")
+        if "bypass_offsets" in s:
+            s["bypass_offsets"] = {
+                "cpu": number(self.cpu_offset, "The cpu offset"),
+                "board": number(self.board_offset, "The board offset"),
+            }
         if "report_version" in s:
             choice = self.report_version.get()
-            version = "auto" if choice.startswith("Same as the build") else choice
-            if version and version != s["report_version"]:
-                commands.append(f"set report-version {version}")
+            s["report_version"] = "auto" if choice.startswith("Same as the build") else choice
+        s["web"] = self.web.get()
+        return s
 
-        if self.web.get() != s.get("web"):
-            commands.append(f"set web {'on' if self.web.get() else 'off'}")
-        return commands
+    def changes(self):
+        """The commands for what differs from the last read, or raises ValueError."""
+        return cli.commands_for(self.settings, self.form())
+
+    def export(self):
+        """The settings as shown (applied or not) to a JSON file."""
+        try:
+            form = self.form()
+            cli.commands_for(self.settings, form)  # Refuses what the firmware would
+        except ValueError as e:
+            messagebox.showerror(TITLE, str(e))
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self.root,
+            title="Export the settings",
+            defaultextension=".json",
+            filetypes=[("SMCX settings", "*.json"), ("All files", "*.*")],
+            initialfile=f"smcx-{self.settings.get('firmware', 'settings')}.json",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(cli.export_settings(form), f, indent=2)
+                f.write("\n")
+        except OSError as e:
+            messagebox.showerror(TITLE, f"Couldn't write {path}: {e}")
+            return
+        self.write_log(f"Settings exported to {path}")
+        self.set_status(f"Exported to {Path(path).name}")
+
+    def import_(self):
+        """A JSON file's settings into the window, to Apply or Save from there."""
+        path = filedialog.askopenfilename(
+            parent=self.root,
+            title="Import settings",
+            filetypes=[("SMCX settings", "*.json"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            wanted, notes = cli.import_settings(self.settings, data)
+            cli.commands_for(self.settings, wanted)  # Refuses what the firmware would
+        except (OSError, ValueError) as e:  # ValueError: json too
+            messagebox.showerror(TITLE, f"Couldn't import {Path(path).name}: {e}")
+            return
+        self.load_form(wanted)
+        self.write_log(f"Settings imported from {path}")
+        for note in notes:
+            self.write_log(note, "error")
+        self.set_status(f"Imported {Path(path).name}: Apply or Save to flash to send it to the Pico", "warn")
+
+    def load_form(self, s):
+        """Shows settings in the window without taking them as the Pico's:
+        Apply then sends what differs from the last read."""
+        read = self.settings
+        self.show_settings(s)
+        self.settings = read
 
     def apply(self, save):
         try:

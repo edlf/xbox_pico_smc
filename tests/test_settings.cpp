@@ -169,6 +169,24 @@ TEST_F(SettingsTest, OtherVersionIsIgnored) {
   EXPECT_EQ(hal::get_led_brightness(), 70);
 }
 
+// The reserved bytes before the checksum are for later settings: a record with
+// them set (by newer firmware) still loads
+TEST_F(SettingsTest, ReservedBytesAreIgnored) {
+  SMC::Settings::load();
+  changeEverything();
+  ASSERT_TRUE(SMC::Settings::saveNow());
+  for (uint16_t i = recordSize() - 4 - 32; i < recordSize() - 4; i++) {
+    ASSERT_EQ(record()[i], 0) << "Saved as 0";
+    record()[i] = 0xA5;
+  }
+  fixChecksum();
+
+  backToDefaults();
+  SMC::Settings::load();
+  EXPECT_TRUE(fake::logged("SETTINGS: Loaded"));
+  EXPECT_EQ(hal::get_led_brightness(), 40);
+}
+
 TEST_F(SettingsTest, ThresholdsFromAnotherFirmwareAreIgnored) {
   SMC::Settings::load();
   changeEverything();

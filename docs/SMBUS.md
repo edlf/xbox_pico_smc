@@ -350,7 +350,8 @@ it). Also cleared at every reset.
 
 One byte of storage for the kernel that survives reboots (cleared at power
 off). The kernel uses it for boot flags, such as showing a fatal error or
-booting to the dashboard after the reboot.
+booting to the dashboard after the reboot. Each change is logged
+(`BIOS: Scratch 0x00 -> 0x08 (SMBus 0x1B)`).
 
 ### 0x1C-0x1F Challenge (read) / 0x20-0x21 Challenge response (write)
 

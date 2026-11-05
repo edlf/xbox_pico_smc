@@ -96,6 +96,17 @@ Change the settings, then:
   up as an `RPI-RP2` (Pico, Pico W) or `RP2350` (Pico 2, Pico 2 W) drive, and
   copying `SMCX.uf2` onto it installs the new firmware. Same as holding BOOTSEL
   while plugging it in.
+- **Export...** writes the settings as the window shows them (applied or not)
+  to a JSON file, **Import...** reads one into the window. An import only fills
+  in the fields: Apply or Save to flash sends it, as if you'd typed it.
+
+The exported file (`"format": "smcx-settings"`) has every setting by the names
+in the `get` reply, and the firmware it came from. It has the Wi-Fi password
+in it as it is (empty: the board ID one), so keep the file to yourself. An
+import is checked like typed values; settings the Pico's firmware doesn't have
+are left out (listed in the log), and so are the fan thresholds when it's for
+another firmware (P01, P11 and P2L thresholds differ). A file with only some
+settings changes only those.
 
 While no Wi-Fi password is saved, the access point uses one made from the
 board's unique ID (`smcx-<id>`, different for every Pico). With "Use the
@@ -117,7 +128,12 @@ python tools/smcx_config.py set-brightness 40 set-threshold 2 65 save
 python tools/smcx_config.py defaults save
 python tools/smcx_config.py reboot
 python tools/smcx_config.py bootloader
+python tools/smcx_config.py export smcx.json
+python tools/smcx_config.py import smcx.json save
 ```
+
+`export` and `import` are the GUI's: `import` sends only what differs from the
+Pico's settings, then `save` keeps it.
 
 It finds the Pico by its USB name (`--port` to pick a port yourself). Changes only
 apply to the settings in flash after `save`; they're loaded the next time the

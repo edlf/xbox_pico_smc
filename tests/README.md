@@ -8,6 +8,20 @@ records every line (`fake_debug.cpp`). The tests use GoogleTest fixtures
 
 ## Running them
 
+Everything CI runs (lint, these tests, the config tool tests below and the
+firmware for the four boards), in one go:
+
+```
+python tools/check.py              # all of it
+python tools/check.py lint tests   # some steps: lint, tests, tools, firmware
+python tools/check.py --fix lint   # reformat instead of checking
+```
+
+It builds in `build-check/` and finds MSYS2 (C:/msys64 or D:/msys64, or
+`--msys <folder>`) for these tests on Windows, and cmake/ninja from the Pico
+VS Code extension for the firmware. The lint tools run at CI's pinned versions
+through uvx when it's installed. Or by hand:
+
 Any GCC or Clang with C++17 and GoogleTest works. With MSYS2, install
 GoogleTest once (`pacman -S gtest` in the MSYS shell), then from the MSYS shell,
 or with `D:\msys64\usr\bin` first on `PATH`:
@@ -22,6 +36,21 @@ Or run `build-tests/smcx_tests.exe` directly to see every test by name;
 `--gtest_filter=SmbusTest.*` runs one fixture.
 
 They build with the default settings from `src/config.hpp` (P11).
+
+### The config tools
+
+`tests/tools/` tests the Python tools with pytest, without a Pico: the `get`
+reply parser, the commands the CLI and the GUI's Apply send, the JSON export
+and import, and the serial
+handshake against a fake Pico. A sample `get` reply (`conftest.py`) is
+checked against the keys `Settings::describe()` sends, so renaming or adding a
+setting in the firmware fails here until the tools follow. Needs pyserial and
+Tk (the GUI tests skip without a display; the window is never shown):
+
+```
+pip install pytest pyserial
+python -m pytest tests/tools
+```
 
 ## What's covered
 

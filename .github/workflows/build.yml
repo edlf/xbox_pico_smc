@@ -1,5 +1,6 @@
 # Builds the firmware for the four supported boards, runs the host tests and
-# checks the formatting (clang-format, ruff) on every push and pull request.
+# the config tool tests, and checks the formatting (clang-format, ruff) on
+# every push and pull request.
 # The .uf2 files are kept as build artifacts.
 name: Build
 
@@ -78,6 +79,23 @@ jobs:
 
       - name: Run
         run: ctest --test-dir build-tests --output-on-failure
+
+  tools:
+    name: Config tool tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      # The system Python, for its Tk (python3-tk); Xvfb gives the GUI tests a
+      # display (the window stays hidden)
+      - name: Install Python, Tk, pytest and pyserial
+        run: sudo apt-get update && sudo apt-get install -y python3-tk python3-pytest python3-serial xvfb
+
+      # -rs lists skipped tests: the GUI ones skip if Tk can't start
+      - name: Run
+        run: xvfb-run -a python3 -m pytest tests/tools -rs -p no:cacheprovider
 
   lint:
     name: Formatting and lint

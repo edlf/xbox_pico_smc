@@ -245,6 +245,16 @@ TEST_F(SmbusTest, RegisterWritesReadBackAtOnce) {
   EXPECT_TRUE(SMC::BootChallenge::flags.ram_test_passed);
 }
 
+// The kernel's boot flags: only changes are logged
+TEST_F(SmbusTest, ScratchChangesAreLogged) {
+  write(0x1B, 0x08);
+  EXPECT_TRUE(fake::logged("BIOS: Scratch 0x00 -> 0x08 (SMBus 0x1B)"));
+  fake::log.clear();
+  write(0x1B, 0x08);
+  EXPECT_FALSE(fake::logged("BIOS: Scratch"));
+  EXPECT_EQ(read(0x1B), 0x08);
+}
+
 // Logged and kept for the web interface, also once 0x0F is cleared
 TEST_F(SmbusTest, BiosErrorCodeIsLoggedAndKept) {
   uint8_t code;
