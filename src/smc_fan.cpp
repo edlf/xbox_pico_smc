@@ -20,10 +20,66 @@ uint8_t cpu_temperature_increase;
 uint8_t cpu_temperature_predicted;
 
 static uint8_t previous_cpu_temperature;
+static Ramp    ramp_setting = default_ramp;
+static uint8_t output_speed = 0;  // What the fan is at, 0: no speed set since power on
+static uint8_t glide_ticks = 0;   // Since the last glide step
+static bool    sensor_bypass = false;
+
+bool temperatureBypass() {
+  return sensor_bypass;
+}
+
+void setTemperatureBypass(const bool on) {
+  sensor_bypass = on;
+}
 static uint8_t raise_to_speed;  // P2L: SMBus 0x05 off, applied on the next tick
+
+const Ramp& ramp() {
+  return ramp_setting;
+}
+
+bool setRamp(const Ramp& r) {
+  if (r.up < 1 || r.up > max_ramp_step || r.down < 1 || r.down > max_ramp_step || r.glide_up_ms > max_glide_ms || r.glide_down_ms > max_glide_ms) {
+    return false;
+  }
+  ramp_setting = r;
+  return true;
+}
+
+uint8_t getOutputSpeed() {
+  return output_speed;
+}
+
+static void output(const uint8_t speed) {
+  output_speed = speed;
+  glide_ticks = 0;
+  hal::set_fan_speed(speed);
+}
+
+void updateGlide() {
+  if (output_speed == 0 || output_speed == fan_speed) {
+    return;
+  }
+  const bool     up = fan_speed > output_speed;
+  const uint16_t ms = up ? ramp_setting.glide_up_ms : ramp_setting.glide_down_ms;
+  if (++glide_ticks < (ms + 19) / 20) {  // One tick is 20 ms
+    return;
+  }
+  output(static_cast<uint8_t>(up ? output_speed + 1 : output_speed - 1));
+}
+
+uint8_t rampedUp(const uint8_t steps) {
+  const unsigned speed = fan_speed + static_cast<unsigned>(steps) * ramp_setting.up;
+  return static_cast<uint8_t>(speed > max_fan_speed ? max_fan_speed : speed);
+}
+
+uint8_t rampedDown() {
+  return static_cast<uint8_t>(fan_speed > min_fan_speed + ramp_setting.down ? fan_speed - ramp_setting.down : min_fan_speed);
+}
 
 void initShared(const uint8_t custom_speed) {
   fan_speed = 0;
+  output_speed = 0;
   custom_fan_speed = custom_speed;
   raise_to_speed = 0;
   previous_cpu_temperature = 0x17;
@@ -57,7 +113,17 @@ void setSpeed(const uint8_t speed) {
     msg += flags.fan_override ? ", manual)" : ")";
     debug::print(debug::Level::Info, "%s", msg.c_str());
   }
-  hal::set_fan_speed(fan_speed);
+
+  // At once the first time after power on, or without a glide that way
+  const uint16_t glide_ms = fan_speed > output_speed ? ramp_setting.glide_up_ms : ramp_setting.glide_down_ms;
+  if (output_speed == 0 || glide_ms == 0) {
+    output(fan_speed);
+  }
+}
+
+void setSpeedNow(const uint8_t speed) {
+  setSpeed(speed);
+  output(fan_speed);
 }
 
 void applyRaisedSpeed() {
@@ -109,6 +175,7 @@ void printReadings() {
 // Called by the main loop once the Xbox is off
 void powerOff() {
   fan_speed = 0;  // No power to the fan
+  output_speed = 0;
   hal::fan_pin_low();
 }
 

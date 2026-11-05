@@ -8,7 +8,18 @@ namespace Dvd {
 flags_struct   flags;
 sensors_struct sensors;
 
-#if SMC_DVD_SUPPORT
+static bool support = SMC_DVD_SUPPORT;
+
+// Without a drive: closed and empty
+constexpr drive_tray_state no_drive_tray_state = drive_tray_state::no_disc;
+
+bool supported() {
+  return support;
+}
+
+void setSupported(const bool on) {
+  support = on;
+}
 
 // updateTrayDebounce(): debounces the drive's tray state
 struct Debounce {
@@ -50,14 +61,21 @@ void initTrayDebounce() {
 }
 
 bool isTrayClosing() {
-  return tray_position_state == tray_position::closed;
+  return !support || tray_position_state == tray_position::closed;
 }
 
 drive_tray_state readTrayState() {
+  if (!support) {
+    return no_drive_tray_state;
+  }
   return static_cast<drive_tray_state>(hal::get_tray_state() & 0x70);
 }
 
 void updateTrayDebounce() {
+  if (!support) {
+    sensors.tray_status = no_drive_tray_state;
+    return;
+  }
   // Debounces the tray state and raises tray interrupts
   switch (debounce.state) {
     case tray_debounce_state::initial:
@@ -117,18 +135,27 @@ void updateTrayDebounce() {
 }
 
 void restartTrayDebounce() {
+  if (!support) {
+    return;
+  }
   // Same as P11: back to the start-up delay without reloading the timer,
   // which is already 0, so it counts 256 ticks
   debounce.state = tray_debounce_state::startup_delay;
 }
 
 void restartTrayTracking() {
+  if (!support) {
+    return;
+  }
   // Boot challenge start restarts the debounce and tray moving (P2L)
   debounce.state = tray_debounce_state::initial;
   moving.state = tray_moving_state::initial;
 }
 
 void updateEjectPulse() {
+  if (!support) {
+    return;
+  }
   // Pulses the drive's eject line for 5 ticks when eject_pulse is set
   switch (eject.state) {
     case eject_pulse_state::initial:
@@ -179,6 +206,9 @@ static bool nowOpen() {
 }
 
 void updateEjectRequests() {
+  if (!support) {
+    return;
+  }
   // Decides when to pulse eject. While the tray is open the SMC closes
   // it on its own; while closed, the eject button only raises an SMI (via
   // eject_change_requested) and the OS opens the tray with SMBus 0x0C.
@@ -248,6 +278,9 @@ void updateEjectRequests() {
 }
 
 void updateTrayMoving() {
+  if (!support) {
+    return;
+  }
   // Tracks whether the tray is moving, reported in SMBus 0x03 bit 0
   switch (moving.state) {
     case tray_moving_state::initial:
@@ -292,40 +325,6 @@ void updateTrayMoving() {
       break;
   }
 }
-
-#else  // !SMC_DVD_SUPPORT
-
-// No drive: the tray reads as closed and empty, so the OS doesn't wait for
-// media and shutdown doesn't wait for the tray. The eject button still
-// raises an SMI (handled by the SMI state machine).
-constexpr drive_tray_state no_drive_tray_state = drive_tray_state::no_disc;
-
-void init() {}
-
-void initTrayDebounce() {}
-
-bool isTrayClosing() {
-  return true;
-}
-
-drive_tray_state readTrayState() {
-  return no_drive_tray_state;
-}
-
-void updateTrayDebounce() {
-  sensors.tray_status = no_drive_tray_state;
-}
-
-void restartTrayDebounce() {}
-void restartTrayTracking() {}
-
-void updateEjectPulse() {}
-
-void updateEjectRequests() {}
-
-void updateTrayMoving() {}
-
-#endif  // SMC_DVD_SUPPORT
 
 }  // namespace Dvd
 }  // namespace SMC

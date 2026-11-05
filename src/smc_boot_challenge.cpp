@@ -178,7 +178,17 @@ static bool powerCycleWithRtcDump() {
 }
 #endif
 
-// Follows P2L for every firmware. Without SMC_BOOT_CHALLENGE the state machine
+static bool enforce = SMC_BOOT_CHALLENGE;
+
+bool enforced() {
+  return enforce;
+}
+
+void setEnforced(const bool on) {
+  enforce = on;
+}
+
+// Follows P2L for every firmware. Not enforced, the state machine
 // still runs to log the results, but a failure never resets the Xbox or locks
 // it up: it carries on, then waits in challenge_wait_for_reply for the next
 // reset
@@ -203,11 +213,7 @@ void update() {
         }
       } else if (--boot_response_timeout == 0) {
         debug::print(debug::Level::Warnings, "BOOT: No RAM test result");
-#if SMC_BOOT_CHALLENGE
-        state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
-#else
-        state = boot_challenge_state::challenge_wait_for_reply;
-#endif
+        state = enforce ? boot_challenge_state::challenge_failed_or_no_ram_test_result : boot_challenge_state::challenge_wait_for_reply;
       }
       break;
 
@@ -237,14 +243,14 @@ void update() {
       // on top of everything until a RAM test passes or the Xbox powers off.
       Led::setBootFailurePattern(0x0A, 0x00);
       ram_test_failed_shown = true;
-#if SMC_BOOT_CHALLENGE
-      Led::setRedPhases(0x0A);
-      Led::setGreenPhases(0x00);
-      bios_response_byte0 = ERROR_RAM_TEST_FAILED;
-      state = boot_challenge_state::boot_failed;
-#else
-      state = boot_challenge_state::challenge_wait_for_reply;
-#endif
+      if (enforce) {
+        Led::setRedPhases(0x0A);
+        Led::setGreenPhases(0x00);
+        bios_response_byte0 = ERROR_RAM_TEST_FAILED;
+        state = boot_challenge_state::boot_failed;
+      } else {
+        state = boot_challenge_state::challenge_wait_for_reply;
+      }
       break;
     }
 
@@ -329,14 +335,14 @@ void update() {
         debug::print(debug::Level::Warnings, "BOOT: No challenge answer");
       }
 
-#if SMC_BOOT_CHALLENGE
-      // Wrong answer or timeout: go straight to a power cycle
-      failure_count = 4;
-      state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
-#else
-      challenge_check_pending = false;
-      state = boot_challenge_state::challenge_wait_for_reply;
-#endif
+      if (enforce) {
+        // Wrong answer or timeout: go straight to a power cycle
+        failure_count = 4;
+        state = boot_challenge_state::challenge_failed_or_no_ram_test_result;
+      } else {
+        challenge_check_pending = false;
+        state = boot_challenge_state::challenge_wait_for_reply;
+      }
       break;
 
     case boot_challenge_state::reboot:

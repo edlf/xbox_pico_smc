@@ -73,7 +73,7 @@
 #define SMC_LED_BRIGHTNESS 100
 static_assert(SMC_LED_BRIGHTNESS >= 1 && SMC_LED_BRIGHTNESS <= 100, "SMC_LED_BRIGHTNESS must be 1-100");
 
-// Fade the LEDs at power up and down
+// Fade the LEDs at power up and down, unless the saved settings say otherwise
 #ifndef SMC_LED_FADE
 #define SMC_LED_FADE 1
 #endif

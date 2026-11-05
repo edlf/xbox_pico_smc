@@ -14,7 +14,15 @@
 namespace SMC {
 namespace I2CSniffer {
 
-#if SMC_I2C_SNIFFER
+static bool enable = SMC_I2C_SNIFFER;
+
+bool enabled() {
+  return enable;
+}
+
+void setEnabled(const bool on) {
+  enable = on;
+}
 
 // Capture: a PIO state machine watches SDA and SCL (it only reads the pins,
 // they stay with the I2C slave) and records their levels each time either
@@ -80,6 +88,10 @@ static void flush() {
 }
 
 void init() {
+  if (!enable) {
+    debug::print(debug::Level::Info, "SNIFFER: Off in the settings, not started");
+    return;  // dma_channel stays -1: update() and the rest do nothing
+  }
   sniff_program.instructions = sniff_instructions;
   sniff_program.length = std::size(sniff_instructions);
   sniff_program.origin = -1;  // Anywhere, the jmp is relocated
@@ -155,16 +167,6 @@ void endOwnTransfer() {
   decodeCaptured();  // Ours, not logged
   I2CDecoder::setIgnoring(false);
 }
-
-#else
-
-void init() {}
-void update() {}
-void resetFound() {}
-void beginOwnTransfer() {}
-void endOwnTransfer() {}
-
-#endif  // SMC_I2C_SNIFFER
 
 }  // namespace I2CSniffer
 }  // namespace SMC

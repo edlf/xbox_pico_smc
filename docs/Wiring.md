@@ -85,16 +85,21 @@ level) and in the web interface.
 
 - **Pico temperature:** the RP2040/RP2350's own sensor, always read. It
   measures the chip, so it reads a few degrees above the air around it.
-- **NTC thermistor (optional, `-DSMC_NTC_SENSOR=ON`):** on GP28 (ADC2, Pico
-  pin 34), wired as a divider:
+- **NTC thermistor (optional, the NTC setting):** on GP28 (ADC2, Pico pin
+  34), wired as a divider:
 
   ```
-  3V3 ── SMC_NTC_SERIES_R ──┬── GP28
-                            └── NTC ── GND (pin 33, AGND)
+  3V3 ── series resistor ──┬── GP28
+                           └── NTC ── GND (pin 33, AGND)
   ```
 
-  Defaults: 10k NTC with beta 3950, 10k series resistor. Set `SMC_NTC_BETA`,
-  `SMC_NTC_R25` and `SMC_NTC_SERIES_R` for other parts. A reading at either end
+  Turn it on, and set the parts' values, in the config GUI's Diagnostics card
+  or with the USB config (`set ntc on`, `set ntc-beta`, `set ntc-r25`,
+  `set ntc-series`). Defaults: off, 10k NTC with beta 3950, 10k series
+  resistor; `-DSMC_NTC_SENSOR=ON`, `SMC_NTC_BETA`, `SMC_NTC_R25` and
+  `SMC_NTC_SERIES_R` change those defaults. With a bad ADM1032 the sensor
+  bypass takes the CPU temperature from the NTC instead (place it on or
+  near the CPU heatsink), see `docs/state-machines/fan_control.md`. A reading at either end
   of the ADC range (open or shorted NTC) shows as not connected.
 
 ## Power

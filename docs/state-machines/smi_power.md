@@ -73,7 +73,7 @@ stateDiagram-v2
 | 13 | `os_busy_limit` | Allows "busy" at most 3 times |
 | 14 | `delay` | Waits for the PLL state machine to hold the system in reset, then stops watching POWOK |
 | 15 | `wait_for_tray_stable` | Waits for a closed tray state, up to 255 ticks |
-| 16 | `delayed_turning_off` | PSU off after 2 ticks, and with `SMC_LED_FADE` not before the LEDs have faded out (at most 0.5 s from the start of the power off) |
+| 16 | `delayed_turning_off` | PSU off after 2 ticks, and with the LED fade on not before the LEDs have faded out (at most 0.5 s from the start of the power off) |
 | 17 | `wait_state_for_power_cycle` | Waits the power cycle delay (SMBus 0x22 minus 2, 23 ticks by default), then the main loop presses the power button |
 
 See [SMBUS.md](../../SMBUS.md) for 0x0D, 0x19 and 0x1A.

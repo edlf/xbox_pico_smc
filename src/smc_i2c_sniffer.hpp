@@ -9,8 +9,14 @@ namespace I2CSniffer {
 // Listens to the whole SMBus (not just our address 0x10) for the video
 // encoder (Conexant 0x45, Focus 0x6A, Xcalibur 0x70): logs which one answers
 // the CPU after power on, and at DEBUG level every write the CPU makes to it.
-// Nothing in the SMC acts on them. SMC_I2C_SNIFFER, see CMakeLists.txt.
+// Nothing in the SMC acts on them.
 
+// Saved setting, SMC_I2C_SNIFFER by default. Read by init() at boot: a change
+// takes effect after a restart.
+bool enabled();
+void setEnabled(bool on);
+
+// Starts it, if enabled(); the rest do nothing while it's not running
 void init();
 // Called once per tick: decodes what was captured and prints what was found
 void update();

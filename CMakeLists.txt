@@ -44,14 +44,18 @@ pico_sdk_init()
 
 # add_compile_definitions(SYS_CLK_MHZ=200)
 
-# Build without DVD drive support for drive-less systems: -DSMC_DVD_SUPPORT=OFF
-option(SMC_DVD_SUPPORT "Support a DVD drive (tray, eject)" ON)
+# The options from here to SMC_DEBUG_LEVEL only set the defaults of saved
+# settings: the firmware always has the code, and the USB config
+# (tools/smcx_config_gui.py) changes them without a rebuild.
 
-# Enforce the boot challenge like the original: reset, power cycle and FRAG
-# when the RAM test or the challenge fails. -DSMC_BOOT_CHALLENGE=ON
-option(SMC_BOOT_CHALLENGE "Reset the Xbox when the boot challenge fails" OFF)
+# No DVD drive by default, for drive-less systems: -DSMC_DVD_SUPPORT=OFF
+option(SMC_DVD_SUPPORT "Support a DVD drive (tray, eject), default" ON)
 
-# Report a fixed AV pack instead of reading the AV connector:
+# Enforce the boot challenge like the original by default: reset, power cycle
+# and FRAG when the RAM test or the challenge fails. -DSMC_BOOT_CHALLENGE=ON
+option(SMC_BOOT_CHALLENGE "Reset the Xbox when the boot challenge fails, default" OFF)
+
+# Report a fixed AV pack instead of reading the AV connector, by default:
 # -DSMC_AV_PACK_OVERRIDE=ON [-DSMC_AV_PACK_MODE=n]. Codes (SMBus 0x04): 0 SCART,
 # 1 High Definition AV Pack, 2 VGA, 3 RF, 4 Advanced AV (S-Video), 6 Standard AV
 option(SMC_AV_PACK_OVERRIDE "Report SMC_AV_PACK_MODE instead of the detected AV pack" OFF)
@@ -72,14 +76,14 @@ foreach(moved SMC_LED_BRIGHTNESS SMC_WIFI_SSID SMC_WIFI_PASSWORD)
 endforeach()
 
 # Fade the front panel LEDs in at power up and out at power down (~1 s) instead
-# of switching them like the PIC: -DSMC_LED_FADE=OFF to switch them
-option(SMC_LED_FADE "Fade the LEDs at power up and power down" ON)
+# of switching them like the PIC, by default: -DSMC_LED_FADE=OFF to switch them
+option(SMC_LED_FADE "Fade the LEDs at power up and power down, default" ON)
 
 # Read an NTC thermistor on GP28 (ADC2), wired from the pin to ground with
 # SMC_NTC_SERIES_R from 3.3 V to the pin. Shown in the log and the web
-# interface, not on SMBus. -DSMC_NTC_SENSOR=ON [-DSMC_NTC_BETA=3950
-# -DSMC_NTC_R25=10000 -DSMC_NTC_SERIES_R=10000]
-option(SMC_NTC_SENSOR "Read an NTC thermistor on GP28" OFF)
+# interface, not on SMBus. Defaults: -DSMC_NTC_SENSOR=ON [-DSMC_NTC_BETA=3950
+# (1000-10000) -DSMC_NTC_R25=10000 -DSMC_NTC_SERIES_R=10000 (100-1000000 ohms)]
+option(SMC_NTC_SENSOR "Read an NTC thermistor on GP28, default" OFF)
 set(SMC_NTC_BETA 3950 CACHE STRING "NTC beta value (K)")
 set(SMC_NTC_R25 10000 CACHE STRING "NTC resistance at 25 C (ohms)")
 set(SMC_NTC_SERIES_R 10000 CACHE STRING "Resistor from 3.3 V to the NTC pin (ohms)")
@@ -92,8 +96,8 @@ endforeach()
 # Listen to the whole SMBus (a PIO state machine and a DMA channel) for the
 # video encoder: logs which one the CPU finds after power on, and at DEBUG
 # level every write it makes to it ("ENCODER:" lines). -DSMC_I2C_SNIFFER=OFF
-# to leave it out
-option(SMC_I2C_SNIFFER "Log the video encoder found and the CPU's writes to it" ON)
+# to have it off by default
+option(SMC_I2C_SNIFFER "Log the video encoder found and the CPU's writes to it, default" ON)
 
 # WS2812 RGB LED on GP27 (Pico pin 32) showing the boot phases: magenta while
 # held in reset, blue in the BIOS, cyan after the RAM test, green for 5 s once
@@ -139,8 +143,8 @@ elseif(SMC_FIRMWARE_SETTING STREQUAL "P2L")
   set(SMC_FIRMWARE_P2L ON)
 endif()
 
-# Log verbosity on the USB/UART console: -DSMC_DEBUG_LEVEL=DEBUG adds the SMBus
-# transactions. SILENT, CRITICAL, WARNINGS, INFO or DEBUG.
+# Log verbosity on the USB/UART console, by default: -DSMC_DEBUG_LEVEL=DEBUG
+# adds the SMBus transactions. SILENT, CRITICAL, WARNINGS, INFO or DEBUG.
 set(SMC_DEBUG_LEVEL INFO CACHE STRING "Log level: SILENT, CRITICAL, WARNINGS, INFO or DEBUG")
 set(SMC_DEBUG_LEVELS SILENT CRITICAL WARNINGS INFO DEBUG)
 set_property(CACHE SMC_DEBUG_LEVEL PROPERTY STRINGS ${SMC_DEBUG_LEVELS})

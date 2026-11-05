@@ -86,5 +86,36 @@ stateDiagram-v2
 | 12 | `cpu_hot` | Speed +3 |
 | 13 | `start_sampling` | Starts a set of 3 readings (P2L: 128) |
 
+## Sensor bypass
+
+For a bad ADM1032 (USB config `set sensor-bypass on`, or the config GUI's
+Diagnostics card; off by default): the ADM1032 isn't touched at all (no reads,
+no P11 configuration write after reset, no bus recovery). The CPU temperature
+comes from the NTC thermistor on GP28 and the board temperature from the Pico's
+own sensor, both rounded to whole °C, so the fan control, SMBus 0x09/0x0A and
+the web interface all use them.
+
+It needs the NTC on (`set ntc on`) and fitted: without an NTC reading (off,
+open or shorted) a temperature read fails, and the fan control does what it
+does for a dead sensor: after its retries it forces an overheat
+(`FAN: No NTC reading (sensor bypass), forcing overheat`), so the Xbox shuts
+down rather than run without a temperature. The config GUI refuses the bypass
+without the NTC on, and the boot log warns about it.
+
+## Ramp and glide
+
+How quickly the speed follows the decisions is set separately for up and down
+(USB config or the config GUI's Fan card, saved; `src/smc_fan.cpp`):
+
+- **Ramp up** (1-5, default 1): multiplies the steps up, `cpu_hot` +3 and
+  `board_hot` +1 (x2: +6 and +2). **Ramp down** (1-5, default 1): the step of
+  `board_cool`. The speed stays within 10-50.
+- **Glide up / down** (0-1000 ms per speed step, default 0): instead of
+  jumping, the PWM moves one speed step at a time towards the new speed
+  (`Fan::updateGlide()`, every tick). 0 jumps at once, as the PIC. The speed
+  decided (SMBus 0x10) is the target; the fan follows it.
+- An overheat always goes straight to full speed, whatever the glide, and the
+  first speed after power on is set at once.
+
 Clearing `overheated` lets the SMI state machine finish the shutdown it started
 in `overheat_cooldown_wait`.

@@ -47,6 +47,35 @@ void    setCustomSpeed(const uint8_t);
 void    raiseSpeedTo(const uint8_t speed);
 uint8_t getCustomFanSpeed();
 
+// How quickly the fan follows the fan control (saved settings). The control
+// decides every 20 s; up multiplies its steps up (warm +1, hot +3), down is
+// its step down when cool: 1-5, 1 like the PIC. The glide is ms per speed
+// step while the fan speeds up or slows down, 0-1000: 0 (the default) changes
+// at once, like the PIC. An overheat always goes straight to full speed.
+constexpr uint8_t  max_ramp_step = 5;
+constexpr uint16_t max_glide_ms = 1000;
+struct Ramp {
+  uint8_t  up;
+  uint8_t  down;
+  uint16_t glide_up_ms;
+  uint16_t glide_down_ms;
+};
+constexpr Ramp default_ramp = {1, 1, 0, 0};
+const Ramp&    ramp();
+bool           setRamp(const Ramp& ramp);  // False (and unchanged) if out of range
+// Bypass for a bad ADM1032 (saved setting, off by default): the CPU
+// temperature comes from the NTC thermistor and the board temperature from
+// the Pico's own sensor, and the ADM1032 isn't touched. Only with the NTC on
+// and connected: without an NTC reading the temperature read fails, which the
+// fan control treats as a dead sensor (an overheat), as it would the ADM1032.
+bool temperatureBypass();
+void setTemperatureBypass(bool on);
+
+// Once per tick, after update_fan_temp(): moves the fan towards its speed
+void updateGlide();
+// The speed the fan is at now (gliding towards getFanSpeed())
+uint8_t getOutputSpeed();
+
 // Temperature thresholds (°C) of the fan control, adjustable from the web
 // interface and the USB config. They can only be lowered, between
 // min_threshold and the firmware's default. Not reset at power off; kept

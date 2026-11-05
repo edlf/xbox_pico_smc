@@ -172,7 +172,7 @@ static uint8_t readRegister(uint8_t command) {
       break;
 
     case Command::NTC_TEMPERATURE:  // 0x32
-      // 0xFF without an NTC (SMC_NTC_SENSOR off), or when it reads open or shorted
+      // 0xFF without an NTC (off in the settings), or when it reads open or shorted
       response = ExtraTemp::sensors.ntc_connected ? temperatureByte(ExtraTemp::sensors.ntc_temperature) : 0xFF;
       break;
 
@@ -579,9 +579,22 @@ bool smbusMasterReadByte(uint8_t address, uint8_t reg, uint8_t& value) {
 // Same as the PIC: CPU from register 0x01 and board from 0x00 of the
 // ADM1032 at 0x4C (1.0-1.4). temperature_read_failed is set when a read fails, and the values
 // that couldn't be read keep their previous value.
+// With the sensor bypass (Fan::temperatureBypass()) the ADM1032 isn't read:
+// the CPU temperature is the NTC's and the board's the Pico's, in whole °C. No
+// NTC reading (off, open or shorted) fails like a dead ADM1032.
 bool read_temperatures() {
   uint8_t value;
   Fan::flags.temperature_read_failed = false;
+
+  if (Fan::temperatureBypass()) {
+    if (!ExtraTemp::ntcConfig().enabled || !ExtraTemp::sensors.ntc_connected) {
+      Fan::flags.temperature_read_failed = true;
+      return false;
+    }
+    Fan::sensors.CPU_temperature = temperatureByte(ExtraTemp::sensors.ntc_temperature);
+    Fan::sensors.board_temperature = temperatureByte(ExtraTemp::sensors.pico_temperature);
+    return true;
+  }
 
   if (!smbusMasterReadByte(I2C_TEMP_SENSOR_ADDRESS, 0x01, value)) {
     Fan::flags.temperature_read_failed = true;

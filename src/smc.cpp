@@ -30,6 +30,9 @@ void configureConexantEncoder() {
 // P11: ADM1032 configuration register = 0x00, running (not standby)
 // with the ALERT output enabled
 void configureTemperatureSensor() {
+  if (Fan::temperatureBypass()) {
+    return;  // Not used: nothing to configure, and it may not answer
+  }
   constexpr size_t  len = 2;
   constexpr uint8_t config[len] = {0x09, 0x00};
 
@@ -90,9 +93,9 @@ void main_loop() {
   BootChallenge::init();
   PLL_Reset::init();
   ExtraTemp::init();
-  I2CSniffer::init();
   RgbLed::init();
-  Settings::load();  // After the modules it sets
+  Settings::load();    // After the modules it sets
+  I2CSniffer::init();  // After the settings: started only when it's on
 
   debug::print(debug::Level::Info, "MAIN: Set I2C interrupt");
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
@@ -135,6 +138,7 @@ void main_loop() {
         AudioClamp::update();
         update_LEDs();
         Fan::update_fan_temp();
+        Fan::updateGlide();
         ExtraTemp::update();
         I2CSniffer::update();
 

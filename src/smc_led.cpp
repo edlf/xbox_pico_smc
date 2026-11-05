@@ -40,8 +40,9 @@ struct Inputs {
 };
 static Inputs inputs;
 
-// With SMC_LED_FADE the LEDs fade in when the Xbox powers up and fade out the
-// last pattern when it powers down, instead of switching at once like the PIC
+// With the fade on (SMC_LED_FADE, or the saved setting) the LEDs fade in when
+// the Xbox powers up and fade out the last pattern when it powers down,
+// instead of switching at once like the PIC
 enum class fade_direction { none, in, out };
 constexpr uint8_t fade_in_ticks = 50;   // 1 s
 constexpr uint8_t fade_out_ticks = 25;  // 0.5 s, power off waits for it
@@ -54,6 +55,7 @@ struct Fade {
   bool dark_until_power_off = false;
 };
 static Fade fade;
+static bool fade_enabled = SMC_LED_FADE;  // A setting: init() leaves it
 
 constexpr const char* state_names[] = {"Initial",     "Overheat",    "Manual control", "Quick green blink",   "Solid green",
                                        "Off",         "Tick update", "Set GPIOs",      "Reset phase counter", "Quick green/orange (Missing AV)",
@@ -154,6 +156,20 @@ bool isFadingOut() {
   return fade.direction == fade_direction::out;
 }
 
+bool fadeEnabled() {
+  return fade_enabled;
+}
+
+void setFade(const bool on) {
+  fade_enabled = on;
+  if (!on && fade.direction != fade_direction::none) {
+    // One under way finishes at once: full brightness, or dark after a fade out
+    fade.dark_until_power_off = fade.direction == fade_direction::out;
+    fade.direction = fade_direction::none;
+    hal::set_led_fade(255);
+  }
+}
+
 void setGreenPhases(const uint8_t phase) {
   manual_pattern.green = phase;
 }
@@ -183,7 +199,7 @@ void setAvMissing(const bool i) {
 }
 
 void setPowerOff(const bool i) {
-  if (!SMC_LED_FADE) {
+  if (!fade_enabled) {
     // Switched at once, like the PIC
   } else if (i && !inputs.power_off) {
     // Powering down: keep showing the current pattern while it fades out,

@@ -9,8 +9,6 @@
 namespace SMC {
 namespace I2CDecoder {
 
-#if SMC_I2C_SNIFFER
-
 // Video encoders on the SMBus (7-bit addresses)
 struct Encoder {
   uint8_t     address;
@@ -198,15 +196,6 @@ void resetFound() {
 void setIgnoring(const bool ignore) {
   ignoring = ignore;
 }
-
-#else
-
-void sample(uint8_t) {}
-void report() {}
-void resetFound() {}
-void setIgnoring(bool) {}
-
-#endif  // SMC_I2C_SNIFFER
 
 }  // namespace I2CDecoder
 }  // namespace SMC

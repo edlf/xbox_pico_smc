@@ -16,6 +16,31 @@ constexpr float   adc_full_scale = 4096.0f;
 // Readings this close to either end are an open or shorted NTC
 constexpr uint16_t ntc_limit = 16;
 
+static NtcConfig ntc = {SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R};
+static bool      sample_soon = false;  // The NTC settings changed: read on the next update()
+static_assert(SMC_NTC_BETA >= min_ntc_beta && SMC_NTC_BETA <= max_ntc_beta, "SMC_NTC_BETA must be 1000-10000");
+static_assert(SMC_NTC_R25 >= min_ntc_ohms && SMC_NTC_R25 <= max_ntc_ohms, "SMC_NTC_R25 must be 100-1000000");
+static_assert(SMC_NTC_SERIES_R >= min_ntc_ohms && SMC_NTC_SERIES_R <= max_ntc_ohms, "SMC_NTC_SERIES_R must be 100-1000000");
+
+const NtcConfig& ntcConfig() {
+  return ntc;
+}
+
+bool setNtcConfig(const NtcConfig& config) {
+  if (config.beta < min_ntc_beta || config.beta > max_ntc_beta || config.r25 < min_ntc_ohms || config.r25 > max_ntc_ohms || config.series_r < min_ntc_ohms ||
+      config.series_r > max_ntc_ohms) {
+    return false;
+  }
+  ntc = config;
+  if (!ntc.enabled) {
+    sensors.ntc_connected = false;
+  }
+  // Read with the new values on the next tick, not up to a second later: the
+  // sensor bypass takes the CPU temperature from it from power on
+  sample_soon = true;
+  return true;
+}
+
 static uint8_t tick_counter = 0;
 static int16_t logged_pico = INT16_MIN;  // Whole °C last logged
 static int16_t logged_ntc = INT16_MIN;
@@ -26,11 +51,11 @@ static int16_t picoTemperature(const uint16_t raw) {
   return static_cast<int16_t>(lroundf((27.0f - (volts - 0.706f) / 0.001721f) * 10.0f));
 }
 
-// NTC from the pin to ground, SMC_NTC_SERIES_R from 3.3 V to the pin. Beta
+// NTC from the pin to ground, ntc.series_r from 3.3 V to the pin. Beta
 // equation from the resistance at 25 °C.
 static int16_t ntcTemperature(const uint16_t raw) {
-  const float resistance = static_cast<float>(SMC_NTC_SERIES_R) * raw / (adc_full_scale - raw);
-  const float kelvin = 1.0f / (1.0f / 298.15f + logf(resistance / SMC_NTC_R25) / SMC_NTC_BETA);
+  const float resistance = static_cast<float>(ntc.series_r) * raw / (adc_full_scale - raw);
+  const float kelvin = 1.0f / (1.0f / 298.15f + logf(resistance / static_cast<float>(ntc.r25)) / static_cast<float>(ntc.beta));
   return static_cast<int16_t>(lroundf((kelvin - 273.15f) * 10.0f));
 }
 
@@ -49,7 +74,7 @@ static void sample() {
   sensors.pico_temperature = picoTemperature(hal::read_pico_temperature_adc());
   logChange("Pico", sensors.pico_temperature, logged_pico);
 
-  if (!SMC_NTC_SENSOR) {
+  if (!ntc.enabled) {
     return;
   }
 
@@ -74,11 +99,12 @@ void init() {
 }
 
 void update() {
-  if (++tick_counter < sample_ticks) {
+  if (++tick_counter < sample_ticks && !sample_soon) {
     return;
   }
 
   tick_counter = 0;
+  sample_soon = false;
   sample();
 }
 

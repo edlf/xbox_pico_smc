@@ -40,8 +40,13 @@ void    setManualControl(const bool);
 void    setOverheat(const bool);
 void    setAvMissing(const bool);
 void    setPowerOff(const bool);
-// SMC_LED_FADE: the LEDs are still fading out after power down started
+// The LEDs are still fading out after power down started
 bool isFadingOut();
+
+// Fade in at power up and out at power down (saved setting, SMC_LED_FADE by
+// default). Off: they switch at once, like the PIC. Not reset by init().
+bool fadeEnabled();
+void setFade(bool on);
 
 // The front panel LEDs lit right now (blinking patterns change it each phase)
 bool redLit();

@@ -22,6 +22,7 @@ struct OsOptions {
   bool     answers = true;               // false: the OS hangs, SMIs go unanswered
   uint32_t answer_delay_ms = 20;         // From the SMI pulse to reading 0x11
   bool     write_19_after_eject = true;  // The kernel writes 0x19 = 0x01 after an eject request
+  bool     ram_test_passes = true;       // false: the BIOS reports a failed RAM test (banks 0)
   enum class PowerAnswer { power_off, busy, none } power_answer = PowerAnswer::power_off;
 };
 

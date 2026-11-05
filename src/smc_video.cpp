@@ -26,9 +26,9 @@ enum class video_state {
   special_done       // 7
 };
 
-// Fixed AV pack from CMake (SMC_AV_PACK_OVERRIDE), as mode pins: code << 1
-constexpr bool     override = SMC_AV_PACK_OVERRIDE;
-constexpr av_pack  override_mode = static_cast<av_pack>((SMC_AV_PACK_MODE & 0x07) << 1);
+// Fixed AV pack (saved setting, SMC_AV_PACK_OVERRIDE / SMC_AV_PACK_MODE by
+// default): -1 reads the connector, 0-6 the code reported instead
+static int8_t      override_code = SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1;
 static video_state state;
 static av_pack     vmode_raw = av_pack::scart;
 static av_pack     vmode_prev = av_pack::scart;
@@ -43,8 +43,20 @@ void init() {
   vmode_prev = av_pack::scart;
 }
 
+int8_t avPackOverride() {
+  return override_code;
+}
+
+bool setAvPackOverride(const int code) {
+  if (code < -1 || code > max_av_pack_code) {
+    return false;
+  }
+  override_code = static_cast<int8_t>(code);
+  return true;
+}
+
 static av_pack readMode() {
-  const av_pack mode = override ? override_mode : static_cast<av_pack>(hal::get_video_mode());
+  const av_pack mode = override_code >= 0 ? static_cast<av_pack>((override_code & 0x07) << 1) : static_cast<av_pack>(hal::get_video_mode());
 
   // Raw pin changes, to see what the AV port reads when a cable is swapped
   static uint8_t last_logged = 0xFF;

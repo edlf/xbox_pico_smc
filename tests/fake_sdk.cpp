@@ -7,6 +7,7 @@
 #include "pico/stdlib.h"
 #include "pico/unique_id.h"
 #include "fakes.hpp"
+#include "config.hpp"
 #include "smc_i2c_sniffer.hpp"
 
 i2c_inst_t fake_i2c0;
@@ -69,6 +70,13 @@ void gpio_set_irq_enabled_with_callback(uint, uint32_t, bool enabled, gpio_irq_c
 namespace SMC {
 
 namespace I2CSniffer {
+static bool enable = SMC_I2C_SNIFFER;
+bool        enabled() {
+  return enable;
+}
+void setEnabled(bool on) {
+  enable = on;
+}
 void init() {}
 void update() {}
 void beginOwnTransfer() {}

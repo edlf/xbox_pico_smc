@@ -334,8 +334,13 @@ void Simulator::bootSequence() {
   for (int i = 0; i < 3; i++) {
     smbusRead(0x01);
   }
-  smbusWrite(0x13, 0x0F);  // RAM test passed
-  smbusWrite(0x12, 0xF0);
+  if (os.ram_test_passes) {
+    smbusWrite(0x13, 0x0F);  // RAM test passed
+    smbusWrite(0x12, 0xF0);
+  } else {
+    smbusWrite(0x13, 0x01);  // Failed, bank 0
+    smbusWrite(0x12, 0x01);
+  }
 
   // Boot challenge: the BIOS's answer, the same formula as the SMC checks
   const uint8_t b0 = smbusRead(0x1C);

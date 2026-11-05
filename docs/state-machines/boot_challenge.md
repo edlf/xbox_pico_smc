@@ -4,10 +4,10 @@
 (SMBus 0x12/0x13) and the answer to the boot challenge (SMBus 0x1C-0x21) after
 every reset.
 
-By default (`SMC_BOOT_CHALLENGE=OFF`) failures are only logged: the dashed
-paths below are taken instead of the failure handling. With
-`SMC_BOOT_CHALLENGE=ON` the SMC resets, power cycles and finally locks up
-(FRAG) like the original.
+By default failures are only logged: the dashed paths below are taken
+instead of the failure handling. Enforced (the `boot-challenge` setting, USB
+config or the config GUI; `SMC_BOOT_CHALLENGE=ON` makes it the default) the SMC
+resets, power cycles and finally locks up (FRAG) like the original.
 
 Every firmware follows P2L (v1.6). Compared with the PIC (P01/P11):
 
@@ -26,7 +26,7 @@ The debug kit firmwares differ (`SMC_FIRMWARE=D01` or `DXF`):
 
 - **D01 and DXF** have no challenge. The challenge bytes are never filled in
   and nothing is computed, and a passed RAM test doesn't lead to
-  `check_response`. `SMC_BOOT_CHALLENGE=ON` then only enforces the RAM test.
+  `check_response`. Enforcing it then only enforces the RAM test.
 - **DXF** doesn't power cycle after repeated failures: `boot_failed` goes to
   `rtc_dump_start`, then `reboot` holds RTC dump high for 100 ticks (2 s) while
   the system is held in reset, and the boot is retried.

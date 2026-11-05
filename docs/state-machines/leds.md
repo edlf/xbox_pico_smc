@@ -53,7 +53,9 @@ restarts. `src/smc_settings.cpp` can save it to flash, but nothing asks it to
 yet.
 
 Unlike the PIC, which switches them on and off, the LEDs fade (squared so it
-looks even). On by default, `SMC_LED_FADE=OFF` switches them like the PIC:
+looks even). It's a saved setting (USB config `set fade on|off`, or the
+config GUI), on by default; `SMC_LED_FADE=OFF` makes off the build's default.
+Off, they switch at once like the PIC. On:
 
 - **Power up:** when the system starts running, the pattern fades in from dark
   over about 1 s (50 ticks).

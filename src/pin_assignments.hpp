@@ -30,7 +30,7 @@ constexpr uint8_t TRAY_STATE_2 = 22;
 constexpr uint8_t DVD_ACTIVE = 26;
 // WS2812 RGB LED (SMC_RGB_LED), shows the boot phases
 constexpr uint8_t RGB_LED = 27;
-// Optional NTC thermistor (SMC_NTC_SENSOR), ADC2
+// Optional NTC thermistor (the NTC setting), ADC2
 constexpr uint8_t NTC_ADC = 28;
 
 // Pico onboard LED: a GPIO on the Pico and Pico 2. On the W boards it's on the

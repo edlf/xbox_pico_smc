@@ -67,6 +67,7 @@ add_executable(smcx_tests
   test_reset_on_eject.cpp
   test_scenarios.cpp
   test_rgb_led.cpp
+  test_fan.cpp
 )
 target_link_libraries(smcx_tests PRIVATE smcx_host GTest::gtest_main)
 

@@ -45,6 +45,12 @@ struct flags_struct {
 };
 extern flags_struct flags;
 
+// Enforce the boot challenge (saved setting, SMC_BOOT_CHALLENGE by default):
+// a failed RAM test or challenge resets the Xbox. Off, the results are only
+// logged. Set only while the Xbox is off.
+bool enforced();
+void setEnforced(bool on);
+
 void init();
 // The last RAM test failed (blinking red LEDs, enforced or not). Cleared by a
 // passed RAM test and at power off.

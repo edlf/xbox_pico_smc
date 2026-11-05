@@ -72,7 +72,8 @@ PIC or Xcylops.
 
 ## Video encoder writes (sniffer)
 
-With `SMC_I2C_SNIFFER` (on by default) the Pico also listens to the rest of
+With the sniffer on (the default, `SMC_I2C_SNIFFER` or `set sniffer`) the Pico
+also listens to the rest of
 the bus for the video encoder (Conexant 0x45, Focus 0x6A, Xcalibur 0x70).
 The BIOS probes each address after power on and only the board's own encoder
 acknowledges, so the first time one does it's logged at INFO level (once per
@@ -190,8 +191,8 @@ The drive's tray state pins in bits 4-6, plus bit 0 while the tray is moving.
 | 0x70  | Drive off / reset |
 
 A new state is only reported after reading the same twice in a row, and the
-tray is ignored for 39 ticks after power on. Builds without `SMC_DVD_SUPPORT`
-always report 0x40.
+tray is ignored for 39 ticks after power on. With the DVD drive off
+(`set dvd off`, default `SMC_DVD_SUPPORT`) it always reports 0x40.
 
 ### 0x04 AV pack (read)
 
@@ -206,8 +207,8 @@ always report 0x40.
 |   6   | Standard AV (composite) |
 |   7   | No cable |
 
-`SMC_AV_PACK_OVERRIDE=ON` reports `SMC_AV_PACK_MODE` instead of the detected
-pack. Writes are ignored, as on the PIC.
+A fixed AV pack (`set av-pack <0-6>`, default `SMC_AV_PACK_OVERRIDE` /
+`SMC_AV_PACK_MODE`) is reported instead of the detected pack. Writes are ignored, as on the PIC.
 
 ### 0x05 Fan override (write)
 
@@ -251,11 +252,14 @@ about 180 ms each: 0xF = on, 0x0 = off, 0x5 or 0xA = blinking.
 ### 0x09 CPU temperature (read)
 
 In °C, read from the ADM1032 temperature sensor (address 0x4C, remote channel).
+With the sensor bypass (USB config `set sensor-bypass on`, for a bad ADM1032)
+it's the NTC thermistor's instead (0x32), rounded.
 
 ### 0x0A Board temperature (read)
 
 In °C, from the temperature sensor's internal probe.
-P2L has no board sensor and returns the CPU temperature.
+P2L has no board sensor and returns the CPU temperature. With the sensor
+bypass it's the Pico's own temperature (0x31), rounded.
 
 ### 0x0B Audio clamp (write)
 
@@ -347,7 +351,8 @@ booting to the dashboard after the reboot.
 
 At boot the BIOS reads the four challenge bytes, computes the answer and writes
 it to 0x20 and 0x21 (0x21 last). By default the result is only logged; with
-`SMC_BOOT_CHALLENGE=ON` a wrong or missing answer resets the Xbox and after
+the boot challenge enforced (`set boot-challenge on`, default
+`SMC_BOOT_CHALLENGE`) a wrong or missing answer resets the Xbox and after
 repeated failures shows the FRAG pattern, like the original.
 
 D01 and DXF (debug kits) have no challenge: the bytes stay 0x00 and the answer
@@ -373,8 +378,8 @@ few degrees above the air around it.
 
 ### 0x32 NTC temperature (read)
 
-Not on the PIC. The optional NTC thermistor on GP28 (`SMC_NTC_SENSOR`, see
-`docs/Wiring.md`), in whole °C, rounded, read once a second. 0xFF when there
+Not on the PIC. The optional NTC thermistor on GP28 (`set ntc on`, default
+`SMC_NTC_SENSOR`, see `docs/Wiring.md`), in whole °C, rounded, read once a second. 0xFF when there
 is no reading: the option is off, or the NTC reads open or shorted.
 
 ### 0x33 LED brightness (read)

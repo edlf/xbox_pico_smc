@@ -39,13 +39,19 @@ They build with the default settings from `src/config.hpp` (P11).
   (OS request, eject button, shutdown, the P2L "follow a tray pushed closed")
   and the tray moving bit.
 - `test_led.cpp`: which LED pattern wins (boot failure, overheat, AV missing,
-  SMBus override, power off, tray moving) and the power down fade.
+  SMBus override, power off, tray moving), the power down fade, and the fade
+  turned off (before and during one).
+- `test_fan.cpp`: the fan's ramp steps (multiplied, limited to 10-50) and the
+  glide between speeds (up and down separately, an overheat skips it), and
+  the temperatures from the ADM1032 or, with the sensor bypass, the NTC and
+  the Pico (failing without an NTC reading, never touching the bus).
 - `test_settings.cpp`: settings saved to and loaded from a fake flash
   (`fake_flash.cpp`): round trip, nothing written when unchanged, corrupt
   records, thresholds from another firmware, thresholds below the 40 °C
   minimum, invalid Wi-Fi values, the access point password (saved, or the
   board ID one), the reported version, and records from the previous layout
-  (version 1) still loading.
+  (versions 1 to 5) still loading, the fan ramp, and the settings that used to be build
+  options (boot challenge, AV pack, log level, DVD, sniffer, NTC).
 - `test_i2c_decoder.cpp`: the sniffer's SMBus decoder fed SDA/SCL levels:
   encoders found, writes logged (long, NACKed, two per tick), reads, other
   devices and our own transfers not logged, and a video mode decoded from bus
@@ -56,8 +62,10 @@ They build with the default settings from `src/config.hpp` (P11).
   in order, the modes (off, boot, mirror), brightness and the SMBus colour.
 - `test_scenarios.cpp`: whole-Xbox scenarios in the simulator (below): boot,
   power off through the OS (answering, hung, busy), the tray, reset-on-eject,
-  reset and power cycle requests, a PSU dropout, and the eject storm after a
-  power cycle that used to reset the Xbox.
+  reset and power cycle requests, a PSU dropout, the eject storm after a
+  power cycle that used to reset the Xbox, a failed RAM test with the boot
+  challenge enforced or not, a fixed AV pack, no DVD drive, and the sensor
+  bypass with and without the NTC.
 
 ## Simulator
 

@@ -86,6 +86,7 @@ static void printSettings() {
   // SMBus 0x01: "auto" while it's the build's, which follows
   printf("report-version %s default %s\n", SMC::Settings::reportedVersionIsDefault() ? "auto" : SMC::Settings::reportedVersion(), SMC_VERSION_STRING);
   printf("brightness %u\n", hal::get_led_brightness());
+  printf("fade %s\n", SMC::Led::fadeEnabled() ? "on" : "off");
   // Kept on builds without the RGB LED too, ignored there
   printf("rgb-mode %s%s\n", SMC::RgbLed::modeName(SMC::RgbLed::mode()), SMC_RGB_LED ? "" : " (no RGB LED in this build, ignored)");
   printf("rgb-brightness %u\n", SMC::RgbLed::brightness());
@@ -96,6 +97,21 @@ static void printSettings() {
   printf("board-password %s\n", board_password);  // Used while the password is empty
   // The setting is kept on builds without a web interface, it's ignored there
   printf("web %s%s\n", SMC::Settings::webEnabled() ? "on" : "off", SMC_WEB_INTERFACE ? "" : " (no web interface in this build, ignored)");
+  printf("boot-challenge %s\n", SMC::BootChallenge::enforced() ? "on" : "off");
+  if (SMC::Video::avPackOverride() >= 0) {
+    printf("av-pack %d\n", SMC::Video::avPackOverride());
+  } else {
+    printf("av-pack detect\n");
+  }
+  printf("log-level %s\n", debug::levelName(debug::level()));
+  printf("dvd %s\n", SMC::Dvd::supported() ? "on" : "off");
+  printf("sniffer %s\n", SMC::I2CSniffer::enabled() ? "on" : "off");
+  const SMC::ExtraTemp::NtcConfig& ntc = SMC::ExtraTemp::ntcConfig();
+  printf("ntc %s beta %u r25 %lu series %lu\n", ntc.enabled ? "on" : "off", ntc.beta, static_cast<unsigned long>(ntc.r25),
+         static_cast<unsigned long>(ntc.series_r));
+  const SMC::Fan::Ramp& ramp = SMC::Fan::ramp();
+  printf("fan-ramp up %u down %u glide-up %u glide-down %u\n", ramp.up, ramp.down, ramp.glide_up_ms, ramp.glide_down_ms);
+  printf("sensor-bypass %s\n", SMC::Fan::temperatureBypass() ? "on" : "off");
   for (uint8_t i = 0; i < SMC::Fan::thresholdCount(); i++) {
     printf("threshold %u %u default %u min %u label %s\n", i, SMC::Fan::getThreshold(i), SMC::Fan::thresholdDefault(i), SMC::Fan::min_threshold,
            SMC::Fan::thresholdLabel(i));
@@ -110,6 +126,15 @@ static bool parseNumber(const char* text, long& value) {
   char* end;
   value = strtol(text, &end, 10);
   return *end == '\0';
+}
+
+// "on" or "off"; false for anything else
+static bool parseOnOff(const char* text, bool& on) {
+  if (strcmp(text, "on") == 0 || strcmp(text, "off") == 0) {
+    on = strcmp(text, "on") == 0;
+    return true;
+  }
+  return false;
 }
 
 static void command(char* line) {
@@ -146,12 +171,27 @@ static void command(char* line) {
     printf(
         "get                          settings\n"
         "set brightness <1-100>       LED brightness, percent\n"
+        "set fade <on|off>            fade the LEDs at power up and down\n"
         "set rgb-mode <off|boot|mirror>  RGB LED: off, boot phases, or boot then the front panel\n"
         "set rgb-brightness <1-100>   RGB LED brightness, percent\n"
         "set threshold <index> <C>    fan threshold, min to default\n"
+        "set fan-ramp-up <1-5>        fan steps up per decision, times (warm +1, hot +3)\n"
+        "set fan-ramp-down <1-5>      fan steps down per cool decision\n"
+        "set fan-glide-up <0-1000>    ms per speed step while speeding up, 0: at once\n"
+        "set fan-glide-down <0-1000>  ms per speed step while slowing down, 0: at once\n"
+        "set sensor-bypass <on|off>   CPU temperature from the NTC, board from the Pico, no ADM1032\n"
         "set ssid <name>              Wi-Fi access point name, 1-32 characters\n"
         "set password [<password>]    Wi-Fi password, 8-63 characters, none: from the board ID\n"
         "set web <on|off>             start the web interface (W boards)\n"
+        "set boot-challenge <on|off>  reset the Xbox when the boot challenge fails\n"
+        "set av-pack <detect|0-6>     read the AV connector, or report this AV pack code\n"
+        "set log-level <silent|critical|warnings|info|debug>  console log level\n"
+        "set dvd <on|off>             DVD drive (off: tray closed and empty)\n"
+        "set sniffer <on|off>         log the video encoder the CPU talks to\n"
+        "set ntc <on|off>             NTC thermistor on GP28\n"
+        "set ntc-beta <1000-10000>    NTC beta (K)\n"
+        "set ntc-r25 <100-1000000>    NTC resistance at 25 C (ohms)\n"
+        "set ntc-series <100-1000000> series resistor from 3.3 V (ohms)\n"
         "set report-version <auto|P01|P11|D01|DXF|P2L>  version reported on SMBus 0x01\n"
         "defaults                     back to the firmware's defaults\n"
         "save                         write them to flash\n"
@@ -173,6 +213,102 @@ static void command(char* line) {
       error("report-version must be auto, P01, P11, D01, DXF or P2L");
       return;
     }
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "boot-challenge") == 0) {
+    bool on;
+    if (!parseOnOff(words[2], on)) {
+      error("boot-challenge must be on or off");
+      return;
+    }
+    SMC::BootChallenge::setEnforced(on);
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "av-pack") == 0) {
+    if (strcmp(words[2], "detect") == 0) {
+      SMC::Video::setAvPackOverride(-1);
+    } else if (!parseNumber(words[2], a) || !SMC::Video::setAvPackOverride(static_cast<int>(a))) {
+      error("av-pack must be detect or 0-6");
+      return;
+    }
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "log-level") == 0) {
+    debug::Level level;
+    if (!debug::parseLevel(words[2], level)) {
+      error("log-level must be silent, critical, warnings, info or debug");
+      return;
+    }
+    debug::setLevel(level);
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "sensor-bypass") == 0) {
+    bool on;
+    if (!parseOnOff(words[2], on)) {
+      error("sensor-bypass must be on or off");
+      return;
+    }
+    SMC::Fan::setTemperatureBypass(on);
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "dvd") == 0) {
+    bool on;
+    if (!parseOnOff(words[2], on)) {
+      error("dvd must be on or off");
+      return;
+    }
+    SMC::Dvd::setSupported(on);
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "sniffer") == 0) {
+    bool on;
+    if (!parseOnOff(words[2], on)) {
+      error("sniffer must be on or off");
+      return;
+    }
+    SMC::I2CSniffer::setEnabled(on);
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 &&
+             (strcmp(words[1], "ntc") == 0 || strcmp(words[1], "ntc-beta") == 0 || strcmp(words[1], "ntc-r25") == 0 || strcmp(words[1], "ntc-series") == 0)) {
+    SMC::ExtraTemp::NtcConfig ntc = SMC::ExtraTemp::ntcConfig();
+    bool                      valid;
+    if (strcmp(words[1], "ntc") == 0) {
+      valid = parseOnOff(words[2], ntc.enabled);
+    } else {
+      valid = parseNumber(words[2], a) && a > 0;
+      if (valid && strcmp(words[1], "ntc-beta") == 0) {
+        valid = a <= 0xFFFF;
+        ntc.beta = static_cast<uint16_t>(a);
+      } else if (valid && strcmp(words[1], "ntc-r25") == 0) {
+        ntc.r25 = static_cast<uint32_t>(a);
+      } else if (valid) {
+        ntc.series_r = static_cast<uint32_t>(a);
+      }
+    }
+    if (!valid || !SMC::ExtraTemp::setNtcConfig(ntc)) {
+      error("ntc must be on or off, ntc-beta 1000-10000, ntc-r25 and ntc-series 100-1000000");
+      return;
+    }
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strncmp(words[1], "fan-", 4) == 0) {
+    SMC::Fan::Ramp ramp = SMC::Fan::ramp();
+    bool           valid = parseNumber(words[2], a) && a >= 0 && a <= 0xFFFF;
+    if (strcmp(words[1], "fan-ramp-up") == 0) {
+      ramp.up = static_cast<uint8_t>(valid ? a : 0);
+    } else if (strcmp(words[1], "fan-ramp-down") == 0) {
+      ramp.down = static_cast<uint8_t>(valid ? a : 0);
+    } else if (strcmp(words[1], "fan-glide-up") == 0) {
+      ramp.glide_up_ms = static_cast<uint16_t>(valid ? a : 0xFFFF);
+    } else if (strcmp(words[1], "fan-glide-down") == 0) {
+      ramp.glide_down_ms = static_cast<uint16_t>(valid ? a : 0xFFFF);
+    } else {
+      valid = false;
+    }
+    if (!valid || !SMC::Fan::setRamp(ramp)) {
+      error("fan-ramp-up and fan-ramp-down must be 1-5, fan-glide-up and fan-glide-down 0-1000");
+      return;
+    }
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "fade") == 0) {
+    if (strcmp(words[2], "on") != 0 && strcmp(words[2], "off") != 0) {
+      error("fade must be on or off");
+      return;
+    }
+    SMC::Led::setFade(strcmp(words[2], "on") == 0);
     ok();
   } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "brightness") == 0) {
     if (!parseNumber(words[2], a) || a < 1 || a > 100) {
@@ -205,12 +341,21 @@ static void command(char* line) {
     ok();
   } else if (strcmp(words[0], "defaults") == 0) {
     hal::set_led_brightness(SMC_LED_BRIGHTNESS);
+    SMC::Led::setFade(SMC_LED_FADE);
     SMC::RgbLed::setMode(static_cast<SMC::RgbLed::Mode>(SMC_RGB_MODE));
     SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
     SMC::Settings::setWebEnabled(true);
     SMC::Settings::setReportedVersion("auto");
+    SMC::BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
+    SMC::Fan::setRamp(SMC::Fan::default_ramp);
+    SMC::Fan::setTemperatureBypass(false);
+    SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
+    debug::setLevel(static_cast<debug::Level>(SMC_DEBUG_LEVEL));
+    SMC::Dvd::setSupported(SMC_DVD_SUPPORT);
+    SMC::I2CSniffer::setEnabled(SMC_I2C_SNIFFER);
+    SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
     ok();
   } else if (strcmp(words[0], "save") == 0) {
     if (!SMC::Settings::saveNow()) {

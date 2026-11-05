@@ -227,8 +227,8 @@ int statusJson(char* out, size_t size) {
                   "\"ledOverride\":%s,\"ledRed\":%u,\"ledGreen\":%u,\"ledBrightness\":%u,"
                   "\"rgb\":%s,\"rgbMode\":%u,\"rgbBrightness\":%u,\"rgbOverride\":%s,\"rgbRed\":%u,\"rgbGreen\":%u,\"rgbBlue\":%u,\"irq\":%u}",
                   static_cast<unsigned long>(s.uptime_s), s.powered ? "true" : "false", s.cpu_temperature, s.board_temperature, s.pico_temperature, ntc,
-                  SMC_NTC_SENSOR ? "true" : "false", s.fan_speed, s.fan_override ? "true" : "false", SMC_DVD_SUPPORT ? "true" : "false", s.tray_state,
-                  s.tray_closed ? "true" : "false", s.av_pack, s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
+                  ExtraTemp::ntcConfig().enabled ? "true" : "false", s.fan_speed, s.fan_override ? "true" : "false", Dvd::supported() ? "true" : "false",
+                  s.tray_state, s.tray_closed ? "true" : "false", s.av_pack, s.av_missing ? "true" : "false", s.overheated ? "true" : "false",
                   s.led_override ? "true" : "false", s.led_red, s.led_green, s.led_brightness, SMC_RGB_LED ? "true" : "false", s.rgb_mode, s.rgb_brightness,
                   s.rgb_override ? "true" : "false", s.rgb_colour[0], s.rgb_colour[1], s.rgb_colour[2], s.interrupt_reason);
 }

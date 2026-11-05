@@ -32,6 +32,14 @@ struct flags_struct {
 };
 extern flags_struct flags;
 
+// Report a fixed AV pack instead of reading the connector (saved setting,
+// SMC_AV_PACK_OVERRIDE / SMC_AV_PACK_MODE by default): -1 reads the
+// connector, 0-6 is the code reported (SMBus 0x04: 0 SCART, 1 High
+// Definition AV Pack, 2 VGA, 3 RF, 4 Advanced AV, 5 none known, 6 Standard AV)
+constexpr int max_av_pack_code = 6;
+int8_t        avPackOverride();
+bool          setAvPackOverride(int code);  // False (and unchanged) outside -1 to 6
+
 void init();
 void update();
 void printMode(const av_pack vm);

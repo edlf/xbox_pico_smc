@@ -31,8 +31,14 @@ extern uint8_t cpu_temperature_predicted;  // CPU temperature plus a margin for 
 
 // Resets the shared values (RAM_init), custom_speed for SMBus 0x06
 void initShared(const uint8_t custom_speed);
-// Sets the fan speed, limited to 10-50
+// Sets the fan speed, limited to 10-50; the fan glides there (ramp())
 void setSpeed(const uint8_t speed);
+// The same, without the glide: an overheat
+void setSpeedNow(const uint8_t speed);
+// The speed after a decision's steps up (warm 1, hot 3), or one step down,
+// times ramp().up / ramp().down, limited to 10-50
+uint8_t rampedUp(uint8_t steps);
+uint8_t rampedDown();
 // Applies a raiseSpeedTo() request (SMBus 0x05)
 void applyRaisedSpeed();
 // Updates cpu_temperature_increase and cpu_temperature_predicted

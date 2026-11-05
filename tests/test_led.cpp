@@ -32,6 +32,11 @@ class LedTest : public ::testing::Test {
     SMC::Led::init();
   }
 
+  // The fade is a setting, init() leaves it
+  void TearDown() override {
+    SMC::Led::setFade(SMC_LED_FADE);
+  }
+
   static void ticks(int n) {
     for (int i = 0; i < n; i++) {
       SMC::Led::update();
@@ -127,6 +132,27 @@ TEST_F(LedTest, FadeOutKeepsPatternThenStaysDarkUntilOff) {
   ticks(40);
   EXPECT_FALSE(fake::hal.red_led);
   EXPECT_EQ(showPattern(), (Shown{0xF, 0x0}));  // resetPhaseCounter(): off
+}
+
+// Fade off (USB config): power down switches at once, like the PIC
+TEST_F(LedTest, FadeOffSwitchesAtOnce) {
+  SMC::Led::setFade(false);
+  powerOn();
+  showPattern();
+  SMC::Led::setPowerOff(true);
+  EXPECT_FALSE(SMC::Led::isFadingOut());  // The power can go off at once
+}
+
+// Turned off while one is under way: it ends there, nothing left waiting
+TEST_F(LedTest, FadeTurnedOffMidFade) {
+  powerOn();
+  showPattern();
+  SMC::Led::setPowerOff(true);
+  ASSERT_TRUE(SMC::Led::isFadingOut());
+  SMC::Led::setFade(false);
+  EXPECT_FALSE(SMC::Led::isFadingOut());
+  ticks(10);
+  EXPECT_FALSE(fake::hal.green_led);  // Dark until the Xbox is off
 }
 
 }  // namespace

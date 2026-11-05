@@ -33,7 +33,7 @@ void pico_led_off();
 void set_pico_led_level(uint8_t level);
 
 // Raw 12-bit ADC readings (0-4095 of 3.3 V), averaged: the chip's temperature
-// sensor, and the NTC divider on pins::NTC_ADC (only set up with SMC_NTC_SENSOR)
+// sensor, and the NTC divider on pins::NTC_ADC
 uint16_t read_pico_temperature_adc();
 uint16_t read_ntc_adc();
 

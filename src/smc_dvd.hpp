@@ -50,6 +50,13 @@ struct flags_struct {
 };
 extern flags_struct flags;
 
+// DVD drive support (saved setting, SMC_DVD_SUPPORT by default). Off, for
+// drive-less systems: the tray reads as closed and empty, so the OS doesn't
+// wait for media and shutdown doesn't wait for the tray; the eject button
+// still raises an SMI. Read each tick, set only while the Xbox is off.
+bool supported();
+void setSupported(bool on);
+
 void init();
 void initTrayDebounce();
 void updateEjectRequests();

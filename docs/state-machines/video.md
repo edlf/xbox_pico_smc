@@ -4,7 +4,8 @@
 connected cable (SMBus 0x04). Mode pins read 0x0E (all high) without a cable;
 0x0A while unplugged is a special mode that acts like the power button.
 
-`SMC_AV_PACK_OVERRIDE=ON` replaces the pins with `SMC_AV_PACK_MODE`.
+A fixed AV pack (the `av-pack` setting; `SMC_AV_PACK_OVERRIDE=ON` with
+`SMC_AV_PACK_MODE` makes one the default) replaces the pins.
 
 ```mermaid
 stateDiagram-v2

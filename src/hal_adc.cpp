@@ -22,9 +22,8 @@ static uint16_t readAdc(const uint channel) {
 void init_adc() {
   adc_init();
   adc_set_temp_sensor_enabled(true);
-  if (SMC_NTC_SENSOR) {
-    adc_gpio_init(pins::NTC_ADC);  // Digital input off, no pulls
-  }
+  // Always: the NTC is a setting. GP28 isn't used for anything else.
+  adc_gpio_init(pins::NTC_ADC);  // Digital input off, no pulls
 }
 
 uint16_t read_pico_temperature_adc() {

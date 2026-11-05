@@ -112,7 +112,7 @@ void update_fan_temp() {
 
     case fan_control_state::overheated:
       debug::print(debug::Level::Warnings, "FAN: Overheated, CPU %u board %u", sensors.CPU_temperature, sensors.board_temperature);
-      setSpeed(max_fan_speed);
+      setSpeedNow(max_fan_speed);  // No glide
       PLL_Reset::flags.cold_reset_request = true;
       PLL_Reset::flags.run_after_reset = false;
       flags.overheated = true;                       // SMI shuts the Xbox down once this clears
@@ -151,13 +151,13 @@ void update_fan_temp() {
       break;
 
     case fan_control_state::board_cool:
-      setSpeed(fan_speed - 1 < min_fan_speed ? min_fan_speed : fan_speed - 1);
+      setSpeed(rampedDown());  // -1, times ramp().down
       state = fan_control_state::wait;
       break;
 
     case fan_control_state::board_hot:
       if (fan_speed != max_fan_speed) {
-        setSpeed(fan_speed + 1);
+        setSpeed(rampedUp(1));  // +1, times ramp().up
       }
       state = fan_control_state::wait;
       break;
@@ -190,7 +190,8 @@ void update_fan_temp() {
           return;
         }
         // Sensor is gone (no bus recovery): treat it as an overheat
-        debug::print(debug::Level::Warnings, "FAN: Temperature sensor not responding, forcing overheat");
+        debug::print(debug::Level::Warnings, temperatureBypass() ? "FAN: No NTC reading (sensor bypass), forcing overheat"
+                                                                 : "FAN: Temperature sensor not responding, forcing overheat");
         sensors.CPU_temperature = failed_read_cpu_temp;
         sensors.board_temperature = failed_read_board_temp;
         state = fan_control_state::overheated;
@@ -213,7 +214,7 @@ void update_fan_temp() {
 
     case fan_control_state::cpu_hot:
       if (fan_speed != max_fan_speed) {
-        setSpeed(fan_speed + 3);
+        setSpeed(rampedUp(3));  // +3, times ramp().up
       }
       state = fan_control_state::wait;
       break;

@@ -7,6 +7,7 @@
 
 #include "fakes.hpp"
 #include "simulator.hpp"
+#include "smc.hpp"
 
 namespace {
 
@@ -17,6 +18,12 @@ class ScenarioTest : public ::testing::Test {
   }
   void TearDown() override {
     sim.reset();
+    // Settings outlive a simulator run, as on the Pico
+    SMC::BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
+    SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
+    SMC::Dvd::setSupported(SMC_DVD_SUPPORT);
+    SMC::Fan::setTemperatureBypass(false);
+    SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
   }
 
   // Power button, then until the dashboard runs
@@ -36,6 +43,66 @@ TEST_F(ScenarioTest, PowerButtonBootsToTheDashboard) {
   EXPECT_TRUE(fake::logged("BOOT: RAM test passed"));
   EXPECT_TRUE(fake::logged("BOOT: Challenge passed"));
   EXPECT_EQ(sim->resets(), 0);
+}
+
+// Boot challenge not enforced (the default): a failed RAM test is only logged
+TEST_F(ScenarioTest, RamTestFailureOnlyLoggedWhenNotEnforced) {
+  SMC::BootChallenge::setEnforced(false);
+  sim->os.ram_test_passes = false;
+  boot();
+  EXPECT_TRUE(fake::logged("BOOT: RAM test failed"));
+  EXPECT_EQ(sim->resets(), 0);
+}
+
+// Enforced (the setting): the same failure resets the Xbox
+TEST_F(ScenarioTest, RamTestFailureResetsWhenEnforced) {
+  SMC::BootChallenge::setEnforced(true);
+  sim->os.ram_test_passes = false;
+  sim->pressPower();
+  sim->run(6000);
+  EXPECT_TRUE(fake::logged("BOOT: RAM test failed"));
+  EXPECT_GT(sim->resets(), 0) << sim->status();
+}
+
+// AV pack setting: a fixed code on SMBus 0x04 whatever the cable (HDTV here)
+TEST_F(ScenarioTest, FixedAvPackIsReported) {
+  ASSERT_TRUE(SMC::Video::setAvPackOverride(4));  // Advanced AV
+  boot();
+  EXPECT_EQ(sim->smbusRead(0x04), 4);
+  EXPECT_FALSE(SMC::Video::setAvPackOverride(7));
+  EXPECT_FALSE(SMC::Video::setAvPackOverride(-2));
+}
+
+// DVD drive off (the setting): the tray reads as closed and empty, the disc in
+// the drive ignored
+TEST_F(ScenarioTest, NoDvdDriveReportsClosedAndEmpty) {
+  SMC::Dvd::setSupported(false);
+  boot();
+  EXPECT_EQ(sim->smbusRead(0x03) & 0x70, 0x40);
+}
+
+// Sensor bypass with a working NTC: the CPU temperature (SMBus 0x09) is the
+// NTC's, about 45 °C here, the ADM1032 (fake at 40 °C) isn't read
+TEST_F(ScenarioTest, SensorBypassUsesTheNtc) {
+  SMC::Fan::setTemperatureBypass(true);
+  SMC::ExtraTemp::NtcConfig ntc = SMC::ExtraTemp::ntcConfig();
+  ntc.enabled = true;
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcConfig(ntc));
+  fake::hal.ntc_adc = 1241;  // 10k B3950 with a 10k series resistor: ~45 °C
+  boot();
+  sim->run(3000);
+  EXPECT_GE(sim->smbusRead(0x09), 44);
+  EXPECT_LE(sim->smbusRead(0x09), 46);
+  EXPECT_FALSE(fake::logged("forcing overheat"));
+  EXPECT_TRUE(sim->osRunning());
+}
+
+// Sensor bypass without the NTC: a dead sensor, so an overheat
+TEST_F(ScenarioTest, SensorBypassWithoutTheNtcForcesAnOverheat) {
+  SMC::Fan::setTemperatureBypass(true);
+  sim->pressPower();
+  sim->run(4000);
+  EXPECT_TRUE(fake::logged("FAN: No NTC reading (sensor bypass), forcing overheat"));
 }
 
 TEST_F(ScenarioTest, PowerButtonShutsDownThroughTheOs) {

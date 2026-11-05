@@ -1,8 +1,9 @@
 # DVD tray
 
-`src/smc_dvd.cpp`. Four small state machines handle the DVD drive. Builds with
-`SMC_DVD_SUPPORT=OFF` replace them with stubs that report a closed, empty tray
-(0x40).
+`src/smc_dvd.cpp`. Four small state machines handle the DVD drive. With the
+DVD drive off (the `dvd` setting, USB config or the config GUI;
+`SMC_DVD_SUPPORT=OFF` makes off the default) they don't run, and the tray is
+reported closed and empty (0x40). Every build has them.
 
 Tray states (SMBus 0x03): 0x00 closed, 0x10 open, 0x20 unloading, 0x30 opening,
 0x40 no disc, 0x50 closing, 0x60 disc detected, 0x70 drive off.

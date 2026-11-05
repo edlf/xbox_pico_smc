@@ -359,7 +359,7 @@ uint8_t update() {
         break;
       }
       if (Led::isFadingOut()) {
-        break;  // SMC_LED_FADE: power off once the LEDs have faded out (0.5 s)
+        break;  // Fade on: power off once the LEDs have faded out (0.5 s)
       }
       hal::turn_off_psu();
       state = smi_power_state::initial;
