@@ -8,7 +8,7 @@ namespace Dvd {
 flags_struct   flags;
 sensors_struct sensors;
 
-static bool support = SMC_DVD_SUPPORT;
+static bool support = !SMC_NO_DVD;
 
 // Without a drive: closed and empty
 constexpr drive_tray_state no_drive_tray_state = drive_tray_state::no_disc;

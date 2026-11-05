@@ -7,9 +7,11 @@ starts in config mode instead of running the SMC (see src/usb_config.hpp).
     python tools/smcx_config.py get
     python tools/smcx_config.py set-brightness 40
     python tools/smcx_config.py set-fade off save
-    python tools/smcx_config.py set-dvd off set-av-pack 1 set-boot-challenge on save
+    python tools/smcx_config.py set-no-dvd on set-av-pack 1 set-boot-challenge on save
     python tools/smcx_config.py set-ntc on set-ntc-beta 3950 set-log-level debug save
     python tools/smcx_config.py set-ntc on set-sensor-bypass on save   (a bad ADM1032)
+    python tools/smcx_config.py set-bypass-cpu-offset 5 set-bypass-board-offset -8 save
+    python tools/smcx_config.py set-power-button off save   (BOOTSEL powers the Xbox instead)
     python tools/smcx_config.py set-rgb-mode mirror set-rgb-brightness 30 save
     python tools/smcx_config.py set-threshold 2 65
     python tools/smcx_config.py set-fan-ramp-up 2 set-fan-glide-down 200 save
@@ -57,7 +59,7 @@ SIMPLE_SETTINGS = {
     "set-boot-challenge": "boot-challenge",
     "set-av-pack": "av-pack",
     "set-log-level": "log-level",
-    "set-dvd": "dvd",
+    "set-no-dvd": "no-dvd",
     "set-sniffer": "sniffer",
     "set-ntc": "ntc",
     "set-ntc-beta": "ntc-beta",
@@ -68,6 +70,11 @@ SIMPLE_SETTINGS = {
     "set-fan-glide-up": "fan-glide-up",
     "set-fan-glide-down": "fan-glide-down",
     "set-sensor-bypass": "sensor-bypass",
+    "set-bypass-cpu-offset": "bypass-cpu-offset",
+    "set-bypass-board-offset": "bypass-board-offset",
+    "set-power-button": "power-button",
+    "set-eject-button": "eject-button",
+    "set-bootsel-power": "bootsel-power",
 }
 
 
@@ -169,12 +176,45 @@ class Smc:
         self.serial = serial.Serial(port, 115200, timeout=0.2)
         time.sleep(0.2)
         self.serial.reset_input_buffer()
+        self.first = True  # The first command gets one retry, see command()
+        self.sync()
 
     def close(self):
         self.serial.close()
 
+    def sync(self):
+        """Starts the Pico on a fresh line: right after the port opens, bytes
+        written before it (Windows probing a new port) can be left in its line,
+        or the first command can arrive before the Pico sees the port open and
+        its reply is dropped. A bare newline ends any half line, the Pico ignores
+        an empty one, and whatever comes back is read until it goes quiet."""
+        self.serial.write(b"\n")
+        deadline = time.monotonic() + 1.0
+        while time.monotonic() < deadline:
+            raw = self.serial.readline()  # Waits up to the 0.2 s timeout
+            if not raw:
+                break
+            text = raw.decode(errors="replace").strip()
+            if text.startswith("[") and self.on_log:
+                self.on_log(text)
+
     def command(self, line, timeout=5.0):
-        """Sends one command, returns its reply lines (without the final OK)."""
+        """Sends one command, returns its reply lines (without the final OK).
+        The first one after opening the port is tried again once if it gets no
+        answer or isn't understood (see sync()); later ones aren't, a "save"
+        or "reboot" mustn't run twice."""
+        if not self.first:
+            return self.send(line, timeout)
+        self.first = False
+        try:
+            return self.send(line, timeout)
+        except (TimeoutError, SmcError) as e:
+            if isinstance(e, SmcError) and not str(e).startswith("unknown command"):
+                raise
+            self.sync()
+            return self.send(line, timeout)
+
+    def send(self, line, timeout):
         self.serial.write((line + "\n").encode())
         reply = []
         deadline = time.monotonic() + timeout
@@ -224,12 +264,24 @@ def parse_settings(lines):
             settings["password"] = rest  # Empty: made from the board ID
         elif key == "board-password":
             settings["board_password"] = rest  # The board ID one (not sent by older firmware)
-        elif key in ("boot-challenge", "dvd", "sniffer", "sensor-bypass"):
+        elif key in (
+            "boot-challenge",
+            "no-dvd",
+            "sniffer",
+            "sensor-bypass",
+            "power-button",
+            "eject-button",
+            "bootsel-power",
+        ):
             settings[key.replace("-", "_")] = rest == "on"  # Not sent by older firmware, nor the ones below
         elif key == "av-pack":
             settings["av_pack"] = None if rest == "detect" else int(rest)  # None: read the connector
         elif key == "log-level":
             settings["log_level"] = rest.lower()
+        elif key == "bypass-offsets":
+            # bypass-offsets cpu <C> board <C>
+            words = rest.split()
+            settings["bypass_offsets"] = {"cpu": int(words[1]), "board": int(words[3])}
         elif key == "fan-ramp":
             # fan-ramp up <1-5> down <1-5> glide-up <ms> glide-down <ms>
             words = rest.split()
@@ -294,16 +346,24 @@ def print_settings(s):
         code = s["av_pack"]
         shown = "from the AV connector" if code is None else f"{code} {AV_PACKS.get(code, '?')}"
         print(f"AV pack:         {shown}")
-    if "dvd" in s:
-        print(f"DVD drive:       {'on' if s['dvd'] else 'off (tray reported closed and empty)'}")
+    if "no_dvd" in s:
+        print(f"No DVD drive:    {'on (tray reported closed and empty)' if s['no_dvd'] else 'off (the drive is used)'}")
     if "log_level" in s:
         print(f"Log level:       {s['log_level']}")
     if "sniffer" in s:
         print(f"Encoder sniffer: {'on' if s['sniffer'] else 'off'}")
+    if "power_button" in s:
+        print(f"Power button:    {'on' if s['power_button'] else 'off'}")
+        print(f"Eject button:    {'on' if s['eject_button'] else 'off'}")
+        if not s["power_button"]:
+            bootsel = "power button (needed: the power button is off)"
+        else:
+            bootsel = "power button too" if s["bootsel_power"] else "unused"
+        print(f"BOOTSEL button:  {bootsel}")
     if "sensor_bypass" in s:
-        print(
-            f"Sensor bypass:   {'on (CPU from the NTC, board from the Pico)' if s['sensor_bypass'] else 'off (ADM1032)'}"
-        )
+        offsets = s.get("bypass_offsets", {"cpu": 0, "board": 0})
+        on = f"on (CPU from the NTC {offsets['cpu']:+d} C, board from the Pico {offsets['board']:+d} C)"
+        print(f"Sensor bypass:   {on if s['sensor_bypass'] else 'off (ADM1032)'}")
     if "ntc" in s:
         ntc = s["ntc"]
         state = "on" if ntc["enabled"] else "off"
@@ -330,7 +390,7 @@ def main():
     parser.add_argument(
         "commands",
         nargs="+",
-        help="get | set-brightness N | set-fade on|off | set-boot-challenge on|off | set-av-pack detect|0-6 | set-log-level LEVEL | set-dvd on|off | set-sniffer on|off | set-ntc on|off | set-ntc-beta K | set-ntc-r25 OHMS | set-ntc-series OHMS | set-fan-ramp-up 1-5 | set-fan-ramp-down 1-5 | set-fan-glide-up MS | set-fan-glide-down MS | set-sensor-bypass on|off | set-rgb-mode off|boot|mirror | set-rgb-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | set-report-version auto|P01|P11|D01|DXF|P2L | defaults | save | reboot | bootloader",
+        help="get | set-brightness N | set-fade on|off | set-boot-challenge on|off | set-av-pack detect|0-6 | set-log-level LEVEL | set-no-dvd on|off | set-sniffer on|off | set-ntc on|off | set-ntc-beta K | set-ntc-r25 OHMS | set-ntc-series OHMS | set-fan-ramp-up 1-5 | set-fan-ramp-down 1-5 | set-fan-glide-up MS | set-fan-glide-down MS | set-sensor-bypass on|off | set-bypass-cpu-offset C | set-bypass-board-offset C | set-power-button on|off | set-eject-button on|off | set-bootsel-power on|off | set-rgb-mode off|boot|mirror | set-rgb-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | set-report-version auto|P01|P11|D01|DXF|P2L | defaults | save | reboot | bootloader",
     )
     args = parser.parse_args()
 

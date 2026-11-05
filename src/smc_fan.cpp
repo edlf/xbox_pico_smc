@@ -32,6 +32,20 @@ bool temperatureBypass() {
 void setTemperatureBypass(const bool on) {
   sensor_bypass = on;
 }
+
+static BypassOffsets bypass_offsets = default_bypass_offsets;
+
+const BypassOffsets& bypassOffsets() {
+  return bypass_offsets;
+}
+
+bool setBypassOffsets(const BypassOffsets& offsets) {
+  if (offsets.cpu < -max_bypass_offset || offsets.cpu > max_bypass_offset || offsets.board < -max_bypass_offset || offsets.board > max_bypass_offset) {
+    return false;
+  }
+  bypass_offsets = offsets;
+  return true;
+}
 static uint8_t raise_to_speed;  // P2L: SMBus 0x05 off, applied on the next tick
 
 const Ramp& ramp() {

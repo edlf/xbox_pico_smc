@@ -131,6 +131,24 @@ I2CMasterResult i2c_master_transfer(uint8_t address, const uint8_t* tx, size_t t
 }
 void i2c_bus_recovery() {}
 
+int serial_read() {
+  if (fake::hal.serial_input.empty()) {
+    return -1;
+  }
+  const int c = static_cast<unsigned char>(fake::hal.serial_input.front());
+  fake::hal.serial_input.erase(0, 1);
+  return c;
+}
+
+bool bootsel_button_pressed() {
+  return fake::hal.bootsel;
+}
+
+int run_flash_safe(void (*func)(void*), void* param, uint32_t) {
+  func(param);
+  return 0;
+}
+
 void assertSystemReset() {
   fake::hal.system_reset = true;
 }

@@ -30,6 +30,7 @@ add_library(smcx_host STATIC
   fake_flash.cpp
   # The firmware's own modules
   ${SMC_SRC_DIR}/smc.cpp
+  ${SMC_SRC_DIR}/serial_console.cpp
   ${SMC_SRC_DIR}/smc_SMI.cpp
   ${SMC_SRC_DIR}/smc_audio_clamp.cpp
   ${SMC_SRC_DIR}/smc_boot_challenge.cpp

@@ -40,6 +40,44 @@ struct Debouncer {
 static Debouncer power;
 static Debouncer eject;
 
+static bool power_button = true;
+static bool eject_button = true;
+static bool bootsel_power = SMC_BOOTSEL_POWER;
+
+bool powerButtonEnabled() {
+  return power_button;
+}
+
+void setPowerButtonEnabled(const bool on) {
+  power_button = on;
+}
+
+bool ejectButtonEnabled() {
+  return eject_button;
+}
+
+void setEjectButtonEnabled(const bool on) {
+  eject_button = on;
+}
+
+bool bootselPowerSetting() {
+  return bootsel_power;
+}
+
+bool bootselIsPower() {
+  return bootsel_power || !power_button;
+}
+
+void setBootselPower(const bool on) {
+  bootsel_power = on;
+}
+
+// The power button and/or BOOTSEL, as set
+static bool powerPressed() {
+  const bool button = power_button && hal::power_button_pressed();
+  return button || (bootselIsPower() && hal::bootsel_button_pressed());
+}
+
 void init() {
   power = {};
   eject = {};
@@ -52,14 +90,14 @@ void update() {
 
 void updatePower() {
   // Only counts while the eject button is idle (as P2L)
-  if (power.update(hal::power_button_pressed()) && eject.idle()) {
+  if (power.update(powerPressed()) && eject.idle()) {
     SMI::flags.power_change_requested = true;
   }
 }
 
 void updateEject() {
   // Only counts while the power button is idle (as P2L)
-  if (eject.update(hal::eject_button_pressed()) && power.idle()) {
+  if (eject.update(eject_button && hal::eject_button_pressed()) && power.idle()) {
     Dvd::flags.eject_change_requested = true;
     Dvd::flags.eject_button_event = true;
   }

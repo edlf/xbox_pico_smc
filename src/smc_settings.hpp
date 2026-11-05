@@ -19,6 +19,9 @@ namespace Settings {
 
 // At start-up, once the modules are initialised: applies what was saved
 void load();
+// The boot log's Settings section: every setting as it is in use now, saved or
+// the defaults (named as in the USB config)
+void printSettings();
 
 // Wi-Fi access point. Read when the access point starts, at power-up: a change
 // only takes effect after a save and a restart.
@@ -41,7 +44,7 @@ bool setWifiPassword(const char* password);
 // Back to SMC_WIFI_SSID / SMC_WIFI_PASSWORD
 void resetWifi();
 
-// Start the web interface at power-up (default on). Kept and saved on builds
+// Start the web interface at power-up (default SMC_WEB_START, off). Kept and saved on builds
 // without one too, it's only ignored there. A change takes effect after a
 // save and a restart.
 bool webEnabled();

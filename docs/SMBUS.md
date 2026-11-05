@@ -155,12 +155,12 @@ transactions. Writing any value restarts at the first character.
 The build sets the default with `SMC_REPORT_VERSION`: `AUTO` (the default)
 reports the `SMC_FIRMWARE` version. `P01`, `P11`, `D01`, `DXF` and `P2L` report
 that version whatever the behavior is: only the reported string changes, the
-behavior still follows `SMC_FIRMWARE`. The boot log shows the build's reported
-version.
+behavior still follows `SMC_FIRMWARE`. The boot log's Settings section shows
+the reported version in use (`report-version=`, with `(the build's)` when it's
+the default).
 
 The USB config (`set report-version`, or "Reported version" in the config GUI)
-can replace it with one of the same five, saved with the other settings: the
-boot log's `SETTINGS: Loaded` line then ends with `reported version <name>`.
+can replace it with one of the same five, saved with the other settings.
 `auto` goes back to the build's. Nothing on the SMBus or the web interface
 changes it.
 
@@ -192,7 +192,7 @@ The drive's tray state pins in bits 4-6, plus bit 0 while the tray is moving.
 
 A new state is only reported after reading the same twice in a row, and the
 tray is ignored for 39 ticks after power on. With the DVD drive off
-(`set dvd off`, default `SMC_DVD_SUPPORT`) it always reports 0x40.
+(`set no-dvd on`, default `SMC_NO_DVD`) it always reports 0x40.
 
 ### 0x04 AV pack (read)
 
@@ -253,13 +253,14 @@ about 180 ms each: 0xF = on, 0x0 = off, 0x5 or 0xA = blinking.
 
 In °C, read from the ADM1032 temperature sensor (address 0x4C, remote channel).
 With the sensor bypass (USB config `set sensor-bypass on`, for a bad ADM1032)
-it's the NTC thermistor's instead (0x32), rounded.
+it's the NTC thermistor's instead (0x32), plus the bypass CPU offset, rounded.
 
 ### 0x0A Board temperature (read)
 
 In °C, from the temperature sensor's internal probe.
 P2L has no board sensor and returns the CPU temperature. With the sensor
-bypass it's the Pico's own temperature (0x31), rounded.
+bypass it's the Pico's own temperature (0x31), plus the bypass board offset,
+rounded.
 
 ### 0x0B Audio clamp (write)
 

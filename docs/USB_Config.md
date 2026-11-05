@@ -68,6 +68,24 @@ the settings. The header shows the firmware and its build: the short git hash
 it was built from (`-dirty` if it had uncommitted changes), also printed as
 `GIT_HASH` in the boot log.
 
+The boot log has two sections. "Build options"
+is what's fixed in the firmware: `GIT_HASH`, `PICO_BOARD`, `SMC_FIRMWARE`,
+`SMC_RGB_LED` and `SMC_WEB_INTERFACE`. "Settings" follows once the saved
+settings are loaded, `(saved)` or `(none saved, the defaults)`, and lists every
+setting in use under its `set` name, e.g. `brightness=100%, fade=on`. The
+Wi-Fi password is the one the access point uses, with `(from the board ID)`
+when no password is set.
+The other CMake options are only the defaults of those settings.
+
+The settings are in cards, in three columns:
+
+- **Front panel** (LED brightness and fade, the power and eject buttons,
+  BOOTSEL as a power button), **RGB LED**, **Web interface**.
+- **SMC** (reported version), **Enhancements** (AV pack, DVD drive, boot
+  challenge), **NTC thermistor** (its values, and the sensor bypass that uses
+  it), **Diagnostics** (log level, encoder sniffer).
+- **Fan** (thresholds, ramp and glide).
+
 Change the settings, then:
 
 - **Apply** sends what changed to the Pico. It's used at once in config mode,
@@ -115,7 +133,7 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | Command | Reply |
 |---------|-------|
 | `help` | The commands |
-| `get` | `firmware <name>`, `git <hash>` (short git hash of the build, `-dirty` if it had uncommitted changes), `brightness <percent>`, `fade on` or `fade off`, `rgb-mode <mode>`, `rgb-brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `board-password smcx-<id>` (the one the access point uses while the password is empty), `web on` or `web off` (with a note on builds without a web interface), `report-version <auto|name> default <name>` (the version reported on SMBus 0x01: `auto` is the build's, named after `default`), `boot-challenge on|off`, `av-pack detect|<0-6>`, `log-level <LEVEL>`, `dvd on|off`, `sniffer on|off`, `ntc on|off beta <K> r25 <ohms> series <ohms>`, `fan-ramp up <n> down <n> glide-up <ms> glide-down <ms>`, `sensor-bypass on|off`, then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
+| `get` | `firmware <name>`, `git <hash>` (short git hash of the build, `-dirty` if it had uncommitted changes), `brightness <percent>`, `fade on` or `fade off`, `rgb-mode <mode>`, `rgb-brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `board-password smcx-<id>` (the one the access point uses while the password is empty), `web on` or `web off` (with a note on builds without a web interface), `report-version <auto|name> default <name>` (the version reported on SMBus 0x01: `auto` is the build's, named after `default`), `boot-challenge on|off`, `av-pack detect|<0-6>`, `log-level <LEVEL>`, `no-dvd on|off`, `sniffer on|off`, `ntc on|off beta <K> r25 <ohms> series <ohms>`, `fan-ramp up <n> down <n> glide-up <ms> glide-down <ms>`, `sensor-bypass on|off`, `bypass-offsets cpu <C> board <C>`, `power-button on|off`, `eject-button on|off`, `bootsel-power on|off` (as set: it's in use anyway while the power button is off), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
 | `set brightness <1-100>` | LED brightness in percent |
 | `set fade <on\|off>` | Fade the front panel LEDs in at power up and out at power down (default `SMC_LED_FADE`). Off: they switch at once, like the PIC |
 | `set rgb-mode <off\|boot\|mirror>` | RGB LED: `off` (dark, even while booting), `boot` (the boot phases, then dark), `mirror` (the boot phases, then what the front panel LEDs show) |
@@ -125,17 +143,21 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | `set threshold <index> <value>` | A fan threshold, between the minimum and the firmware's default |
 | `set ssid <name>` | Wi-Fi access point name, 1-32 printable characters (spaces allowed) |
 | `set password [<password>]` | Wi-Fi password, 8-63 printable characters. Without one: made from the board's unique ID (`get` shows it as `board-password`) |
-| `set web on`, `set web off` | Start the web interface at power-up (default on). Kept on builds without one, but ignored there |
+| `set web on`, `set web off` | Start the web interface at power-up (default off, `SMC_WEB_START`). Kept on builds without one, but ignored there |
 | `set boot-challenge <on\|off>` | Enforce the boot challenge: a failed RAM test or challenge resets the Xbox (default `SMC_BOOT_CHALLENGE`). Off, failures are only logged |
 | `set av-pack <detect\|0-6>` | Read the AV connector, or report this AV pack code (SMBus 0x04: 0 SCART, 1 HD AV pack, 2 VGA, 3 RF, 4 Advanced AV, 5 none known, 6 Standard AV). Default `SMC_AV_PACK_OVERRIDE` / `SMC_AV_PACK_MODE` |
-| `set dvd <on\|off>` | DVD drive. Off, for drive-less systems: the tray is reported closed and empty (default `SMC_DVD_SUPPORT`) |
+| `set no-dvd <on\|off>` | No DVD drive, for drive-less systems. On: the tray is reported closed and empty. Off (the default, `SMC_NO_DVD=OFF`): the drive is used |
 | `set log-level <silent\|critical\|warnings\|info\|debug>` | Console log level (default `SMC_DEBUG_LEVEL`) |
 | `set sniffer <on\|off>` | Log the video encoder the CPU talks to (default `SMC_I2C_SNIFFER`). Started at boot, so a change needs a restart |
 | `set ntc <on\|off>` | NTC thermistor on GP28 (default `SMC_NTC_SENSOR`) |
+| `set bypass-cpu-offset <-30-30>`, `set bypass-board-offset <-30-30>` | With the sensor bypass: °C added to the NTC's reading for the CPU temperature, and to the Pico's for the board temperature (default +10 each). SMBus 0x31/0x32 stay raw |
+| `set power-button <on\|off>` | The front panel power button. Off: the Pico's BOOTSEL button is the power button instead |
+| `set eject-button <on\|off>` | The front panel eject button. Off: the tray only moves when the OS asks |
+| `set bootsel-power <on\|off>` | The Pico's BOOTSEL button as a power button, as well as the front panel's (default off, `SMC_BOOTSEL_POWER`). Can't be turned off while the power button is off (turn that on first) |
 | `set sensor-bypass <on\|off>` | For a bad ADM1032: CPU temperature from the NTC, board temperature from the Pico, the ADM1032 not read (default off). Needs the NTC on and fitted, otherwise the fan control sees a dead sensor and forces an overheat |
 | `set ntc-beta <1000-10000>`, `set ntc-r25 <100-1000000>`, `set ntc-series <100-1000000>` | The NTC's beta (K), resistance at 25 °C and the series resistor from 3.3 V (ohms) |
 | `set report-version <auto\|P01\|P11\|D01\|DXF\|P2L>` | Version reported on SMBus 0x01. `auto`: the build's (`SMC_REPORT_VERSION`). Only what the Xbox is told changes, the SMC still behaves as the firmware it was built for |
-| `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, fade to `SMC_LED_FADE`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD`, web interface on, reported version `auto`, the fan ramp to 1/1 and no glide, the sensor bypass off, and the settings above back to their CMake defaults |
+| `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, fade to `SMC_LED_FADE`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD`, web interface off (`SMC_WEB_START`), reported version `auto`, the fan ramp to 1/1 and no glide, the sensor bypass off with +10 offsets, both buttons on and BOOTSEL unused (`SMC_BOOTSEL_POWER`), and the settings above back to their CMake defaults |
 | `save` | Writes the settings to flash (`SETTINGS: Saved`) |
 | `reboot` | Restarts the Pico |
 | `bootloader` | Restarts the Pico into the USB bootloader (BOOTSEL) for a firmware update. Only in config mode: the SMBus and the web interface have no way to do this |

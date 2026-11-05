@@ -64,6 +64,18 @@ const char* levelName(Level level) {
   return names[static_cast<uint8_t>(level)];
 }
 
+void line(const char* format, ...) {
+  char    text[512];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(text, sizeof(text), format, args);
+  va_end(args);
+  fake::log.push_back(text);
+  if (fake::echo_log) {
+    printf("%s\n", text);
+  }
+}
+
 void print_welcome() {}
 void print_build_flags() {}
 

@@ -591,8 +591,10 @@ bool read_temperatures() {
       Fan::flags.temperature_read_failed = true;
       return false;
     }
-    Fan::sensors.CPU_temperature = temperatureByte(ExtraTemp::sensors.ntc_temperature);
-    Fan::sensors.board_temperature = temperatureByte(ExtraTemp::sensors.pico_temperature);
+    // Plus the offsets (whole °C, in tenths here), then rounded
+    const Fan::BypassOffsets& offsets = Fan::bypassOffsets();
+    Fan::sensors.CPU_temperature = temperatureByte(static_cast<int16_t>(ExtraTemp::sensors.ntc_temperature + offsets.cpu * 10));
+    Fan::sensors.board_temperature = temperatureByte(static_cast<int16_t>(ExtraTemp::sensors.pico_temperature + offsets.board * 10));
     return true;
   }
 

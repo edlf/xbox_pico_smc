@@ -87,6 +87,16 @@ bool parseLevel(const char* name, Level& level) {
   return false;
 }
 
+void line(const char* format, ...) {
+  char    text[192];
+  va_list args;
+  va_start(args, format);
+  vsnprintf(text, sizeof(text), format, args);
+  va_end(args);
+  printf("%s\n", text);
+  fflush(stdout);
+}
+
 void print_welcome() {
   printf(
       "\n"
@@ -101,25 +111,14 @@ static const char* onOff(const bool on) {
 }
 
 void print_build_flags() {
-  // Build options from CMake, see CMakeLists.txt. Those marked "default" are
-  // settings: the saved ones (SETTINGS: Loaded below) replace them.
-  printf("Build flags:\n");
+  // What's fixed in this firmware (CMakeLists.txt). The settings, the values
+  // in use, follow once they're loaded (Settings::printSettings()); the CMake
+  // options for those are only their defaults.
+  printf("Build options:\n");
   printf("  > GIT_HASH=%s\n", SMC_GIT_HASH);
   printf("  > PICO_BOARD=%s\n", SMC_BOARD);
-  printf("  > SMC_DVD_SUPPORT=%s (default)\n", onOff(SMC_DVD_SUPPORT));
-  printf("  > SMC_BOOT_CHALLENGE=%s (default)\n", onOff(SMC_BOOT_CHALLENGE));
-  printf("  > SMC_AV_PACK_OVERRIDE=%s, SMC_AV_PACK_MODE=%d (default)\n", onOff(SMC_AV_PACK_OVERRIDE), SMC_AV_PACK_MODE);
-  printf("  > SMC_LED_FADE=%s (default)\n", onOff(SMC_LED_FADE));
-  if (SMC_NTC_SENSOR) {
-    printf("  > SMC_NTC_SENSOR=ON (beta %d, R25 %d, series %d) (default)\n", SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R);
-  } else {
-    printf("  > SMC_NTC_SENSOR=OFF (default)\n");
-  }
-  printf("  > SMC_I2C_SNIFFER=%s (default)\n", onOff(SMC_I2C_SNIFFER));
-  printf("  > SMC_RGB_LED=%s\n", onOff(SMC_RGB_LED));
   printf("  > SMC_FIRMWARE=%s\n", SMC_FIRMWARE_NAME);
-  printf("  > SMC_REPORT_VERSION=%s (default)\n", SMC_VERSION_STRING);
-  printf("  > SMC_DEBUG_LEVEL=%s (default)\n", level_name());
+  printf("  > SMC_RGB_LED=%s\n", onOff(SMC_RGB_LED));
   printf("  > SMC_WEB_INTERFACE=%s\n", onOff(SMC_WEB_INTERFACE));
   fflush(stdout);
 }

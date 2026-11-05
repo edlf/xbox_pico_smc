@@ -70,6 +70,17 @@ bool           setRamp(const Ramp& ramp);  // False (and unchanged) if out of ra
 // fan control treats as a dead sensor (an overheat), as it would the ADM1032.
 bool temperatureBypass();
 void setTemperatureBypass(bool on);
+// Added to the bypass's readings, in whole °C (saved, +10 by default): cpu to
+// the NTC's, board to the Pico's. Only for what the fan control and SMBus
+// 0x09/0x0A see: 0x31/0x32 stay raw.
+constexpr int8_t max_bypass_offset = 30;
+struct BypassOffsets {
+  int8_t cpu;
+  int8_t board;
+};
+constexpr BypassOffsets default_bypass_offsets = {10, 10};
+const BypassOffsets&    bypassOffsets();
+bool                    setBypassOffsets(const BypassOffsets& offsets);  // False (and unchanged) outside -30 to 30
 
 // Once per tick, after update_fan_temp(): moves the fan towards its speed
 void updateGlide();

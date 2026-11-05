@@ -142,6 +142,12 @@ void Simulator::pressEject() {
   fake::hal.eject_button = false;
 }
 
+void Simulator::pressBootsel() {
+  fake::hal.bootsel = true;
+  run(100);
+  fake::hal.bootsel = false;
+}
+
 void Simulator::pushTray() {
   if (mech == Mech::open && drive_powered) {
     simLog("Tray pushed closed by hand");

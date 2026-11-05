@@ -25,7 +25,7 @@ class SettingsTest : public ::testing::Test {
     SMC::Fan::init();
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
-    SMC::Settings::setWebEnabled(true);
+    SMC::Settings::setWebEnabled(SMC_WEB_START);
   }
 
   // The RGB settings live in the module, back to the defaults for the next test
@@ -42,11 +42,15 @@ class SettingsTest : public ::testing::Test {
     SMC::BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
     SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
     debug::setLevel(static_cast<debug::Level>(SMC_DEBUG_LEVEL));
-    SMC::Dvd::setSupported(SMC_DVD_SUPPORT);
+    SMC::Dvd::setSupported(!SMC_NO_DVD);
     SMC::I2CSniffer::setEnabled(SMC_I2C_SNIFFER);
     SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
     SMC::Fan::setRamp(SMC::Fan::default_ramp);
     SMC::Fan::setTemperatureBypass(false);
+    SMC::FrontPanelSW::setPowerButtonEnabled(true);
+    SMC::FrontPanelSW::setEjectButtonEnabled(true);
+    SMC::FrontPanelSW::setBootselPower(SMC_BOOTSEL_POWER);
+    SMC::Fan::setBypassOffsets(SMC::Fan::default_bypass_offsets);
   }
 
   // And all different from them
@@ -54,33 +58,15 @@ class SettingsTest : public ::testing::Test {
     SMC::BootChallenge::setEnforced(!SMC_BOOT_CHALLENGE);
     ASSERT_TRUE(SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? -1 : 6));
     debug::setLevel(SMC_DEBUG_LEVEL == 4 ? debug::Level::Warnings : debug::Level::Debug);
-    SMC::Dvd::setSupported(!SMC_DVD_SUPPORT);
+    SMC::Dvd::setSupported(static_cast<bool>(SMC_NO_DVD));
     SMC::I2CSniffer::setEnabled(!SMC_I2C_SNIFFER);
     ASSERT_TRUE(SMC::ExtraTemp::setNtcConfig({!SMC_NTC_SENSOR, 3435, 4700, 22000}));
     ASSERT_TRUE(SMC::Fan::setRamp({2, 3, 200, 500}));
     SMC::Fan::setTemperatureBypass(true);
-  }
-
-  // Where the fields of the older layouts end: version 1 after the RGB mode,
-  // version 2 after the reported version (4 characters)
-  static constexpr size_t v1_fields_end =
-      14 + SMC::Fan::max_thresholds + (SMC::Settings::max_ssid_length + 1) + (SMC::Settings::max_password_length + 1) + 1 + 2;
-  static constexpr size_t v2_fields_end = v1_fields_end + 4;
-  static constexpr size_t v3_fields_end = v2_fields_end + 1;  // The LED fade
-  // Six bytes (boot challenge to NTC on), padding, the NTC beta, padding, R25
-  // and the series resistor
-  static constexpr size_t v4_fields_end = v3_fields_end + 6 + 1 + 2 + 2 + 4 + 4;
-  static constexpr size_t v5_fields_end = v4_fields_end + 1 + 1 + 2 + 2;  // The fan ramp
-
-  // Rewrites the saved record as an older layout: the same fields up to its
-  // end, then the checksum (4-byte aligned)
-  static void makeOlderRecord(const uint8_t layout_version, const size_t fields_end) {
-    const uint16_t size = static_cast<uint16_t>(((fields_end + 3) & ~size_t{3}) + 4);
-    record()[4] = layout_version;
-    record()[5] = 0;
-    record()[6] = static_cast<uint8_t>(size);
-    record()[7] = static_cast<uint8_t>(size >> 8);
-    fixChecksum();
+    SMC::FrontPanelSW::setPowerButtonEnabled(false);
+    SMC::FrontPanelSW::setEjectButtonEnabled(false);
+    SMC::FrontPanelSW::setBootselPower(true);
+    ASSERT_TRUE(SMC::Fan::setBypassOffsets({7, -12}));
   }
 
   static uint8_t* record() {
@@ -107,7 +93,7 @@ class SettingsTest : public ::testing::Test {
     ASSERT_TRUE(SMC::Fan::setThreshold(0, static_cast<uint8_t>(SMC::Fan::getThreshold(0) - 1)));
     ASSERT_TRUE(SMC::Settings::setWifiSsid("Living room"));
     ASSERT_TRUE(SMC::Settings::setWifiPassword("correct horse"));
-    SMC::Settings::setWebEnabled(false);
+    SMC::Settings::setWebEnabled(!SMC_WEB_START);
     SMC::RgbLed::setMode(SMC::RgbLed::Mode::mirror);
     ASSERT_TRUE(SMC::RgbLed::setBrightness(30));
     SMC::Led::setFade(!SMC_LED_FADE);
@@ -119,7 +105,7 @@ class SettingsTest : public ::testing::Test {
     hal::set_led_brightness(100);
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
-    SMC::Settings::setWebEnabled(true);
+    SMC::Settings::setWebEnabled(SMC_WEB_START);
     SMC::Led::setFade(SMC_LED_FADE);
   }
 };
@@ -127,9 +113,14 @@ class SettingsTest : public ::testing::Test {
 TEST_F(SettingsTest, NoneSavedKeepsDefaults) {
   SMC::Settings::load();
   EXPECT_TRUE(fake::logged("SETTINGS: None saved, using the defaults"));
+  SMC::Settings::printSettings();
+  EXPECT_TRUE(fake::logged("Settings (none saved, the defaults):"));
+  EXPECT_TRUE(fake::logged("  > brightness=100%"));
+  EXPECT_TRUE(fake::logged(", password=smcx-"));
+  EXPECT_TRUE(fake::logged(" (from the board ID)"));
   EXPECT_EQ(hal::get_led_brightness(), 100);
   EXPECT_STREQ(SMC::Settings::wifiSsid(), SMC_WIFI_SSID);
-  EXPECT_TRUE(SMC::Settings::webEnabled());
+  EXPECT_EQ(SMC::Settings::webEnabled(), static_cast<bool>(SMC_WEB_START));
 }
 
 TEST_F(SettingsTest, SavedSettingsLoadBack) {
@@ -141,12 +132,18 @@ TEST_F(SettingsTest, SavedSettingsLoadBack) {
 
   backToDefaults();
   SMC::Settings::load();
-  EXPECT_TRUE(fake::logged("SETTINGS: Loaded, LED brightness 40%, fan thresholds, Wi-Fi name, Wi-Fi password, web interface off, RGB LED mirror 30%"));
+  EXPECT_TRUE(fake::logged("SETTINGS: Loaded"));
+  SMC::Settings::printSettings();
+  EXPECT_TRUE(fake::logged("Settings (saved):"));
+  EXPECT_TRUE(fake::logged("  > brightness=40%"));
+  EXPECT_TRUE(fake::logged("  > rgb-mode=mirror, rgb-brightness=30%"));
+  EXPECT_TRUE(fake::logged("ssid=Living room, password=correct horse"));
+  EXPECT_TRUE(fake::logged(SMC_WEB_START ? "  > web=off" : "  > web=on"));
   EXPECT_EQ(hal::get_led_brightness(), 40);
   EXPECT_EQ(SMC::Fan::getThreshold(0), threshold);
   EXPECT_STREQ(SMC::Settings::wifiSsid(), "Living room");
   EXPECT_STREQ(SMC::Settings::wifiPassword(), "correct horse");
-  EXPECT_FALSE(SMC::Settings::webEnabled());
+  EXPECT_EQ(SMC::Settings::webEnabled(), !SMC_WEB_START);
   EXPECT_EQ(SMC::RgbLed::mode(), SMC::RgbLed::Mode::mirror);
   EXPECT_EQ(SMC::RgbLed::brightness(), 30);
   EXPECT_EQ(SMC::Led::fadeEnabled(), !SMC_LED_FADE);
@@ -181,6 +178,20 @@ TEST_F(SettingsTest, CorruptRecordIsIgnored) {
   EXPECT_EQ(hal::get_led_brightness(), 70);
 }
 
+// Only this layout's version loads: a record of any other is ignored
+TEST_F(SettingsTest, OtherVersionIsIgnored) {
+  SMC::Settings::load();
+  changeEverything();
+  ASSERT_TRUE(SMC::Settings::saveNow());
+  record()[4] = 2;  // Version
+  fixChecksum();
+
+  hal::set_led_brightness(70);
+  SMC::Settings::load();
+  EXPECT_TRUE(fake::logged("SETTINGS: None saved, using the defaults"));
+  EXPECT_EQ(hal::get_led_brightness(), 70);
+}
+
 TEST_F(SettingsTest, ThresholdsFromAnotherFirmwareAreIgnored) {
   SMC::Settings::load();
   changeEverything();
@@ -191,7 +202,7 @@ TEST_F(SettingsTest, ThresholdsFromAnotherFirmwareAreIgnored) {
   backToDefaults();
   const uint8_t default_threshold = SMC::Fan::getThreshold(0);
   SMC::Settings::load();
-  EXPECT_TRUE(fake::logged("fan thresholds left at the defaults (saved for another firmware)"));
+  EXPECT_TRUE(fake::logged("SETTINGS: Fan thresholds saved for another firmware, left at the defaults"));
   EXPECT_EQ(SMC::Fan::getThreshold(0), default_threshold);
   EXPECT_EQ(hal::get_led_brightness(), 40);  // The rest still loads
 }
@@ -222,45 +233,10 @@ TEST_F(SettingsTest, ReportedVersionIsCheckedAndSaved) {
   ASSERT_TRUE(SMC::Settings::saveNow());
   ASSERT_TRUE(SMC::Settings::setReportedVersion("auto"));
   SMC::Settings::load();
-  EXPECT_TRUE(fake::logged(", reported version D01"));
+  SMC::Settings::printSettings();
+  EXPECT_TRUE(fake::logged("  > report-version=D01"));
   EXPECT_STREQ(SMC::Settings::reportedVersion(), "D01");
   EXPECT_FALSE(SMC::Settings::reportedVersionIsDefault());
-}
-
-// Records saved before the reported version existed (layout version 1) still
-// load, with the build's version
-TEST_F(SettingsTest, VersionOneRecordStillLoads) {
-  SMC::Settings::load();
-  changeEverything();
-  ASSERT_TRUE(SMC::Settings::setReportedVersion("D01"));
-  ASSERT_TRUE(SMC::Settings::saveNow());
-  makeOlderRecord(1, v1_fields_end);
-
-  backToDefaults();
-  ASSERT_TRUE(SMC::Settings::setReportedVersion("auto"));
-  SMC::Settings::load();
-  EXPECT_TRUE(fake::logged("SETTINGS: Loaded, LED brightness 40%"));
-  EXPECT_EQ(hal::get_led_brightness(), 40);
-  EXPECT_STREQ(SMC::Settings::wifiSsid(), "Living room");
-  EXPECT_EQ(SMC::RgbLed::mode(), SMC::RgbLed::Mode::mirror);
-  EXPECT_TRUE(SMC::Settings::reportedVersionIsDefault());
-  EXPECT_EQ(SMC::Led::fadeEnabled(), static_cast<bool>(SMC_LED_FADE));
-}
-
-// Version 2 records (before the fade setting) load, the fade stays the build's
-TEST_F(SettingsTest, VersionTwoRecordStillLoads) {
-  SMC::Settings::load();
-  changeEverything();
-  ASSERT_TRUE(SMC::Settings::setReportedVersion("DXF"));
-  ASSERT_TRUE(SMC::Settings::saveNow());
-  makeOlderRecord(2, v2_fields_end);
-
-  backToDefaults();
-  ASSERT_TRUE(SMC::Settings::setReportedVersion("auto"));
-  SMC::Settings::load();
-  EXPECT_EQ(hal::get_led_brightness(), 40);
-  EXPECT_STREQ(SMC::Settings::reportedVersion(), "DXF");
-  EXPECT_EQ(SMC::Led::fadeEnabled(), static_cast<bool>(SMC_LED_FADE));
 }
 
 TEST_F(SettingsTest, SystemSettingsAreSaved) {
@@ -272,66 +248,29 @@ TEST_F(SettingsTest, SystemSettingsAreSaved) {
   EXPECT_EQ(SMC::BootChallenge::enforced(), !SMC_BOOT_CHALLENGE);
   EXPECT_EQ(SMC::Video::avPackOverride(), SMC_AV_PACK_OVERRIDE ? -1 : 6);
   EXPECT_EQ(debug::level(), SMC_DEBUG_LEVEL == 4 ? debug::Level::Warnings : debug::Level::Debug);
-  EXPECT_EQ(SMC::Dvd::supported(), !SMC_DVD_SUPPORT);
+  EXPECT_EQ(SMC::Dvd::supported(), static_cast<bool>(SMC_NO_DVD));
   EXPECT_EQ(SMC::I2CSniffer::enabled(), !SMC_I2C_SNIFFER);
   const SMC::ExtraTemp::NtcConfig& ntc = SMC::ExtraTemp::ntcConfig();
   EXPECT_EQ(ntc.enabled, !SMC_NTC_SENSOR);
   EXPECT_EQ(ntc.beta, 3435);
   EXPECT_EQ(ntc.r25, 4700u);
   EXPECT_EQ(ntc.series_r, 22000u);
-  EXPECT_TRUE(fake::logged("SETTINGS: Boot challenge "));
+  SMC::Settings::printSettings();
+  EXPECT_TRUE(fake::logged(SMC_BOOT_CHALLENGE ? "boot-challenge=off" : "boot-challenge=on"));
   EXPECT_EQ(SMC::Fan::ramp().up, 2);
   EXPECT_EQ(SMC::Fan::ramp().down, 3);
   EXPECT_EQ(SMC::Fan::ramp().glide_up_ms, 200);
   EXPECT_EQ(SMC::Fan::ramp().glide_down_ms, 500);
-  EXPECT_TRUE(fake::logged("SETTINGS: Fan ramp up x2 down x3, glide up 200 ms down 500 ms per step"));
+  EXPECT_TRUE(fake::logged("  > fan-ramp up x2 down x3, glide-up 200 ms, glide-down 500 ms"));
   EXPECT_TRUE(SMC::Fan::temperatureBypass());
-  EXPECT_TRUE(fake::logged("SETTINGS: Sensor bypass on"));
-}
-
-// Version 5 records (before the sensor bypass) load, the bypass stays off
-TEST_F(SettingsTest, VersionFiveRecordStillLoads) {
-  SMC::Settings::load();
-  changeSystemSettings();
-  ASSERT_TRUE(SMC::Settings::saveNow());
-  makeOlderRecord(5, v5_fields_end);
-
-  resetSystemSettings();
-  SMC::Settings::load();
-  EXPECT_EQ(SMC::Fan::ramp().up, 2);  // Version 5 has it
-  EXPECT_FALSE(SMC::Fan::temperatureBypass());
-}
-
-// Version 4 records (before the fan ramp) load, the ramp stays the default
-TEST_F(SettingsTest, VersionFourRecordStillLoads) {
-  SMC::Settings::load();
-  changeSystemSettings();
-  ASSERT_TRUE(SMC::Settings::saveNow());
-  makeOlderRecord(4, v4_fields_end);
-
-  resetSystemSettings();
-  SMC::Settings::load();
-  EXPECT_EQ(SMC::Dvd::supported(), !SMC_DVD_SUPPORT);  // Version 4 has it
-  EXPECT_EQ(SMC::ExtraTemp::ntcConfig().series_r, 22000u);
-  EXPECT_EQ(SMC::Fan::ramp().up, 1);
-  EXPECT_EQ(SMC::Fan::ramp().glide_down_ms, 0);
-}
-
-// Version 3 records (before these settings) load, they stay the build's
-TEST_F(SettingsTest, VersionThreeRecordStillLoads) {
-  SMC::Settings::load();
-  changeEverything();
-  changeSystemSettings();
-  ASSERT_TRUE(SMC::Settings::saveNow());
-  makeOlderRecord(3, v3_fields_end);
-
-  backToDefaults();
-  resetSystemSettings();
-  SMC::Settings::load();
-  EXPECT_EQ(hal::get_led_brightness(), 40);
-  EXPECT_EQ(SMC::Led::fadeEnabled(), !SMC_LED_FADE);
-  EXPECT_EQ(SMC::Dvd::supported(), static_cast<bool>(SMC_DVD_SUPPORT));
-  EXPECT_EQ(SMC::ExtraTemp::ntcConfig().beta, SMC_NTC_BETA);
+  EXPECT_TRUE(fake::logged("  > sensor-bypass=on"));
+  EXPECT_FALSE(SMC::FrontPanelSW::powerButtonEnabled());
+  EXPECT_FALSE(SMC::FrontPanelSW::ejectButtonEnabled());
+  EXPECT_TRUE(SMC::FrontPanelSW::bootselPowerSetting());
+  EXPECT_TRUE(fake::logged("  > power-button=off, eject-button=off, bootsel-power=on"));
+  EXPECT_EQ(SMC::Fan::bypassOffsets().cpu, 7);
+  EXPECT_EQ(SMC::Fan::bypassOffsets().board, -12);
+  EXPECT_TRUE(fake::logged("offsets cpu +7 board -12"));
 }
 
 TEST_F(SettingsTest, NtcValuesAreChecked) {
@@ -351,7 +290,8 @@ TEST_F(SettingsTest, FadeIsSaved) {
   ASSERT_TRUE(SMC::Settings::saveNow());
   SMC::Led::setFade(SMC_LED_FADE);
   SMC::Settings::load();
-  EXPECT_TRUE(fake::logged(SMC_LED_FADE ? ", LED fade off" : ", LED fade on"));
+  SMC::Settings::printSettings();
+  EXPECT_TRUE(fake::logged(SMC_LED_FADE ? "fade=off" : "fade=on"));
   EXPECT_EQ(SMC::Led::fadeEnabled(), !SMC_LED_FADE);
 }
 

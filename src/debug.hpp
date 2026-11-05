@@ -23,6 +23,10 @@ constexpr uint8_t level_count = static_cast<uint8_t>(Level::Debug) + 1;
 const char*       levelName(Level level);  // "SILENT" ... "DEBUG"
 // Upper or lower case. False (and level unchanged) for anything else.
 bool parseLevel(const char* name, Level& level);
+// A line as it is, without the timestamp and level: the boot sections (build
+// options, settings)
+__attribute__((format(printf, 1, 2))) void line(const char* format, ...);
+
 void print_welcome();
 void print_build_flags();
 

@@ -29,7 +29,8 @@ They build with the default settings from `src/config.hpp` (P11).
   rasters, Conexant and Focus SD/HD, the X-HD mode packet), and that the mode
   is only logged once a mode set settles and when it changes.
 - `test_front_panel.cpp`: button debounce (two readings), a held button counting
-  once, glitches, and the power/eject interlock.
+  once, glitches, the power/eject interlock, the power and eject buttons turned
+  off, and BOOTSEL as a power button.
 - `test_smbus.cpp`: the SMBus commands, sent through `handle_SMBus_interrupt()`
   as the I2C slave does: version string, reset/power requests, fan override,
   temperatures, OS answers (0x0D), interrupt reason, RAM test rule,
@@ -44,14 +45,16 @@ They build with the default settings from `src/config.hpp` (P11).
 - `test_fan.cpp`: the fan's ramp steps (multiplied, limited to 10-50) and the
   glide between speeds (up and down separately, an overheat skips it), and
   the temperatures from the ADM1032 or, with the sensor bypass, the NTC and
-  the Pico (failing without an NTC reading, never touching the bus).
+  the Pico with their offsets (failing without an NTC reading, never touching
+  the bus).
 - `test_settings.cpp`: settings saved to and loaded from a fake flash
   (`fake_flash.cpp`): round trip, nothing written when unchanged, corrupt
   records, thresholds from another firmware, thresholds below the 40 °C
   minimum, invalid Wi-Fi values, the access point password (saved, or the
-  board ID one), the reported version, and records from the previous layout
-  (versions 1 to 5) still loading, the fan ramp, and the settings that used to be build
-  options (boot challenge, AV pack, log level, DVD, sniffer, NTC).
+  board ID one), the reported version, the fan ramp, the bypass offsets, the
+  buttons, the settings that used to be build options (boot challenge, AV
+  pack, log level, DVD, sniffer, NTC), and a record of another layout version
+  being ignored.
 - `test_i2c_decoder.cpp`: the sniffer's SMBus decoder fed SDA/SCL levels:
   encoders found, writes logged (long, NACKed, two per tick), reads, other
   devices and our own transfers not logged, and a video mode decoded from bus
@@ -65,7 +68,8 @@ They build with the default settings from `src/config.hpp` (P11).
   reset and power cycle requests, a PSU dropout, the eject storm after a
   power cycle that used to reset the Xbox, a failed RAM test with the boot
   challenge enforced or not, a fixed AV pack, no DVD drive, and the sensor
-  bypass with and without the NTC.
+  bypass with and without the NTC, BOOTSEL as the power button, the eject
+  button off, and the UART console's power and eject commands.
 
 ## Simulator
 

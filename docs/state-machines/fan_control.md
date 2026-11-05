@@ -89,11 +89,17 @@ stateDiagram-v2
 ## Sensor bypass
 
 For a bad ADM1032 (USB config `set sensor-bypass on`, or the config GUI's
-Diagnostics card; off by default): the ADM1032 isn't touched at all (no reads,
+NTC thermistor card; off by default): the ADM1032 isn't touched at all (no reads,
 no P11 configuration write after reset, no bus recovery). The CPU temperature
 comes from the NTC thermistor on GP28 and the board temperature from the Pico's
 own sensor, both rounded to whole °C, so the fan control, SMBus 0x09/0x0A and
 the web interface all use them.
+
+Each has an offset added first, in whole °C from -30 to 30 (+10 by default; USB
+config `set bypass-cpu-offset` / `set bypass-board-offset`, or the GUI): an NTC
+on the heatsink reads below the CPU die, so a positive CPU offset makes up for
+it, and the Pico's chip runs warmer than the board, so a negative board offset.
+SMBus 0x31/0x32 keep the raw Pico and NTC readings.
 
 It needs the NTC on (`set ntc on`) and fitted: without an NTC reading (off,
 open or shorted) a temperature read fails, and the fan control does what it

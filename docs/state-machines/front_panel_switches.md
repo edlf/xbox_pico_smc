@@ -3,6 +3,28 @@
 `src/smc_front_panel_sw.cpp`, PIC 0x800 (power) and 0x828 (eject). Debounces the
 power and eject buttons, once per tick.
 
+## Turning the buttons off
+
+Saved settings (USB config or the config GUI's Front panel card), all on by default
+except BOOTSEL (`SMC_BOOTSEL_POWER` in `src/config.hpp`, off):
+
+- **Power button off:** its line is ignored, and the Pico's own BOOTSEL
+  button is the power button instead, for powering on from standby and for
+  the power SMI while running. BOOTSEL can't be turned off then
+  (`set bootsel-power off` is refused).
+- **BOOTSEL as a power button** can also be on with the power button: either
+  one works.
+- **Eject button off:** its line is ignored; the tray only moves when the OS
+  asks (SMBus 0x0C). It doesn't hold up the power button either (the
+  interlock below only waits for a button that's read).
+
+BOOTSEL goes through the same debouncer. It's read through the flash chip's
+select line, so each read pauses the other core and the interrupts for about
+50 µs (`hal::bootsel_button_pressed()`, `src/hal_bootsel.cpp`); it's only read
+while it's a power button. Holding BOOTSEL while the Pico itself restarts (a
+watchdog reset, a reboot from the USB config) starts its USB bootloader
+instead of the SMC, as always.
+
 Each button has a `Debouncer` with two booleans: `pressed` (the debounced
 level) and `last_raw` (the previous reading). The level only changes when two
 readings in a row agree, and `update()` returns true on the tick a press is

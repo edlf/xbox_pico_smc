@@ -46,10 +46,10 @@
 #define SMC_VERSION_STRING "P11"
 #endif
 
-// Support a DVD drive. Without it there are no tray state machines, and the
-// tray is reported as closed and empty.
-#ifndef SMC_DVD_SUPPORT
-#define SMC_DVD_SUPPORT 1
+// No DVD drive by default (the "no-dvd" setting replaces it once saved): the
+// tray state machines don't run, and the tray is reported closed and empty.
+#ifndef SMC_NO_DVD
+#define SMC_NO_DVD 0
 #endif
 
 // Reset the Xbox when the boot challenge fails. Without it the challenge is
@@ -76,6 +76,14 @@ static_assert(SMC_LED_BRIGHTNESS >= 1 && SMC_LED_BRIGHTNESS <= 100, "SMC_LED_BRI
 // Fade the LEDs at power up and down, unless the saved settings say otherwise
 #ifndef SMC_LED_FADE
 #define SMC_LED_FADE 1
+#endif
+
+// The Pico's BOOTSEL button as a power button too (as well as the front panel
+// one), unless the saved settings say otherwise. Off by default: each read
+// pauses the other core and the interrupts for ~50 us. It's always the power
+// button while the front panel one is off.
+#ifndef SMC_BOOTSEL_POWER
+#define SMC_BOOTSEL_POWER 0
 #endif
 
 // Read an NTC thermistor on GP28 (ADC2): NTC to ground, SMC_NTC_SERIES_R
@@ -119,6 +127,13 @@ static_assert(SMC_RGB_MODE >= 0 && SMC_RGB_MODE <= 2, "SMC_RGB_MODE must be 0-2"
 // (W boards only)
 #ifndef SMC_WEB_INTERFACE
 #define SMC_WEB_INTERFACE 0
+#endif
+
+// Start the web interface at power-up, unless the saved settings say
+// otherwise. Off by default: turn it on with the USB config (`set web on`, or
+// the config GUI) and save. The W boards need external power for the Wi-Fi.
+#ifndef SMC_WEB_START
+#define SMC_WEB_START 0
 #endif
 
 // Access point name, unless one is saved

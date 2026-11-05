@@ -96,6 +96,7 @@ void main_loop() {
   RgbLed::init();
   Settings::load();    // After the modules it sets
   I2CSniffer::init();  // After the settings: started only when it's on
+  Settings::printSettings();
 
   debug::print(debug::Level::Info, "MAIN: Set I2C interrupt");
   i2c_slave_init(I2C_PORT, I2C_SLAVE_ADDRESS, &handle_SMBus_interrupt);
@@ -112,6 +113,7 @@ void main_loop() {
 #if SMC_WEB_INTERFACE
     Web::service();
 #endif
+    SerialConsole::service();
 
     // Power cycle: press the power button for the host
     if (SMI::takePowerOnRequest()) {
@@ -126,6 +128,7 @@ void main_loop() {
 #if SMC_WEB_INTERFACE
         Web::service();
 #endif
+        SerialConsole::service();
         applySMBusWrites();
         PLL_Reset::update();
         BootChallenge::update();

@@ -15,7 +15,7 @@ namespace SMC {
 namespace Settings {
 
 constexpr uint32_t magic = 0x534D4353;  // "SCMS"
-constexpr uint16_t version = 6;         // Bump when the layout changes (add to layouts[] below)
+constexpr uint16_t version = 1;         // Bump when the layout changes: other versions are ignored
 constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 
 // The settings kept here rather than by their module, stored as they are.
@@ -23,7 +23,7 @@ constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 struct Values {
   char    wifi_ssid[max_ssid_length + 1] = SMC_WIFI_SSID;              // Zero-terminated
   char    wifi_password[max_password_length + 1] = SMC_WIFI_PASSWORD;  // Zero-terminated, empty: made from the board ID
-  uint8_t web_enabled = 1;                                             // Start the web interface (ignored without one in the build)
+  uint8_t web_enabled = SMC_WEB_START;                                 // Start the web interface (ignored without one in the build)
 };
 
 struct Record {
@@ -35,49 +35,32 @@ struct Record {
   uint8_t  threshold_count;
   uint8_t  thresholds[Fan::max_thresholds];
   Values   values;
-  uint8_t  rgb_brightness;     // Percent
-  uint8_t  rgb_mode;           // RgbLed::Mode
-  char     report_version[4];  // SMBus 0x01, empty: the build's (version 2)
-  uint8_t  led_fade;           // Led::fadeEnabled() (version 3)
-  uint8_t  boot_challenge;     // BootChallenge::enforced() (version 4, the rest too)
-  int8_t   av_pack;            // Video::avPackOverride(): -1 reads the connector
-  uint8_t  debug_level;        // debug::Level
-  uint8_t  dvd_support;        // Dvd::supported()
-  uint8_t  i2c_sniffer;        // I2CSniffer::enabled()
-  uint8_t  ntc_enabled;        // ExtraTemp::ntcConfig()
-  uint16_t ntc_beta;
-  uint32_t ntc_r25;
-  uint32_t ntc_series_r;
-  uint8_t  fan_ramp_up;  // Fan::ramp() (version 5)
-  uint8_t  fan_ramp_down;
-  uint16_t fan_glide_up_ms;
-  uint16_t fan_glide_down_ms;
-  uint8_t  sensor_bypass;  // Fan::temperatureBypass() (version 6)
-  uint32_t checksum;       // FNV-1a over everything above
+  uint8_t  rgb_brightness;       // Percent
+  uint8_t  rgb_mode;             // RgbLed::Mode
+  char     report_version[4];    // SMBus 0x01, empty: the build's
+  uint8_t  led_fade;             // Led::fadeEnabled()
+  uint8_t  boot_challenge;       // BootChallenge::enforced()
+  int8_t   av_pack;              // Video::avPackOverride(): -1 reads the connector
+  uint8_t  debug_level;          // debug::Level
+  uint8_t  dvd_support;          // Dvd::supported()
+  uint8_t  i2c_sniffer;          // I2CSniffer::enabled()
+  uint8_t  ntc_enabled;          // ExtraTemp::ntcConfig()
+  uint16_t ntc_beta;             // K
+  uint32_t ntc_r25;              // Ohms
+  uint32_t ntc_series_r;         // Ohms
+  uint8_t  fan_ramp_up;          // Fan::ramp()
+  uint8_t  fan_ramp_down;        //
+  uint16_t fan_glide_up_ms;      //
+  uint16_t fan_glide_down_ms;    //
+  uint8_t  sensor_bypass;        // Fan::temperatureBypass()
+  uint8_t  power_button;         // FrontPanelSW::powerButtonEnabled()
+  uint8_t  eject_button;         // FrontPanelSW::ejectButtonEnabled()
+  uint8_t  bootsel_power;        // As set: FrontPanelSW::bootselPowerSetting()
+  int8_t   bypass_cpu_offset;    // Fan::bypassOffsets()
+  int8_t   bypass_board_offset;  //
+  uint32_t checksum;             // FNV-1a over everything above
 };
 static_assert(sizeof(Record) <= FLASH_PAGE_SIZE, "One flash page");
-
-// Each layout version adds fields at the end, so an older record is this one
-// up to where its fields end, then its checksum (4-byte aligned). Older
-// records still load; the fields they don't have keep their defaults.
-struct Layout {
-  uint16_t version;
-  size_t   fields_end;
-};
-constexpr Layout layouts[] = {
-    {1, offsetof(Record, report_version)},
-    {2, offsetof(Record, led_fade)      },
-    {3, offsetof(Record, boot_challenge)},
-    {4, offsetof(Record, fan_ramp_up)   },
-    {5, offsetof(Record, sensor_bypass) },
-    {6, offsetof(Record, checksum)      },
-};
-static_assert(layouts[sizeof(layouts) / sizeof(layouts[0]) - 1].version == version, "The last layout is this one");
-
-constexpr uint16_t recordSize(const size_t fields_end) {
-  return static_cast<uint16_t>(((fields_end + 3) & ~size_t{3}) + 4);
-}
-static_assert(recordSize(offsetof(Record, checksum)) == sizeof(Record), "The checksum is the last field");
 
 // The reported versions, besides the build's
 static const char* const report_versions[] = {"P01", "P11", "D01", "DXF", "P2L"};
@@ -87,44 +70,25 @@ static bool          saved_valid = false;
 static volatile bool save_requested = false;  // requestSave(), done by update()
 static bool          usable = false;          // The sector is past the end of the firmware
 static Values        values;                  // Live, the setters keep them valid
+static bool          loaded = false;          // load() found a saved record
 static char          report_version[4] = "";  // Empty: SMC_VERSION_STRING
 
 extern "C" uint8_t __flash_binary_end;
 
-// FNV-1a over the first length bytes
-static uint32_t checksum(const void* data, const size_t length) {
-  const uint8_t* p = static_cast<const uint8_t*>(data);
+// FNV-1a over everything but the checksum itself
+static uint32_t checksum(const Record& r) {
+  const uint8_t* p = reinterpret_cast<const uint8_t*>(&r);
   uint32_t       hash = 2166136261u;
-  for (size_t i = 0; i < length; i++) {
+  for (size_t i = 0; i < offsetof(Record, checksum); i++) {
     hash = (hash ^ p[i]) * 16777619u;
   }
   return hash;
 }
 
-static uint32_t checksum(const Record& r) {
-  return checksum(&r, offsetof(Record, checksum));
-}
-
-// Where a valid stored record's fields end (one of layouts[]), 0 for none
-static size_t storedFields(const Record* stored) {
-  if (stored->magic != magic) {
-    return 0;
-  }
-  for (const Layout& layout : layouts) {
-    const uint16_t size = recordSize(layout.fields_end);
-    if (stored->version != layout.version || stored->size != size) {
-      continue;
-    }
-    uint32_t stored_checksum;
-    memcpy(&stored_checksum, reinterpret_cast<const uint8_t*>(stored) + size - 4, sizeof(stored_checksum));
-    return stored_checksum == checksum(stored, size - 4) ? layout.fields_end : 0;
-  }
-  return 0;
-}
-
-// The stored record has this field (it's from this layout version or later)
-static bool has(const size_t fields, const size_t field_offset) {
-  return field_offset < fields;
+// A record of this layout (version and size) that checks out. Anything else,
+// records of other versions included, is ignored.
+static bool valid(const Record& r) {
+  return r.magic == magic && r.version == version && r.size == sizeof(Record) && r.checksum == checksum(r);
 }
 
 static void firmwareName(char (&out)[4]) {
@@ -166,6 +130,11 @@ static Record current() {
   r.fan_glide_up_ms = ramp.glide_up_ms;
   r.fan_glide_down_ms = ramp.glide_down_ms;
   r.sensor_bypass = Fan::temperatureBypass() ? 1 : 0;
+  r.power_button = FrontPanelSW::powerButtonEnabled() ? 1 : 0;
+  r.eject_button = FrontPanelSW::ejectButtonEnabled() ? 1 : 0;
+  r.bootsel_power = FrontPanelSW::bootselPowerSetting() ? 1 : 0;
+  r.bypass_cpu_offset = Fan::bypassOffsets().cpu;
+  r.bypass_board_offset = Fan::bypassOffsets().board;
   r.checksum = checksum(r);
   return r;
 }
@@ -274,102 +243,91 @@ void load() {
   const Record* stored = reinterpret_cast<const Record*>(XIP_BASE + flash_offset);
   char          firmware[4];
   firmwareName(firmware);
-  const size_t fields = storedFields(stored);
-  if (fields == 0) {
+  loaded = valid(*stored);
+  if (!loaded) {
     debug::print(debug::Level::Info, "SETTINGS: None saved, using the defaults");
   } else {
+    debug::print(debug::Level::Info, "SETTINGS: Loaded");
+    // Every value checked like a new one: anything invalid keeps the default
     hal::set_led_brightness(stored->led_brightness);
-    Text<224> msg;
-    msg.append("SETTINGS: Loaded, LED brightness %u%%", stored->led_brightness);
     // Thresholds only from the same firmware, setThreshold() checks each range
     if (memcmp(stored->firmware, firmware, sizeof(firmware)) == 0 && stored->threshold_count == Fan::thresholdCount()) {
       for (uint8_t i = 0; i < stored->threshold_count; i++) {
         Fan::setThreshold(i, stored->thresholds[i]);
       }
-      msg += ", fan thresholds";
     } else {
-      msg += ", fan thresholds left at the defaults (saved for another firmware)";
+      debug::print(debug::Level::Warnings, "SETTINGS: Fan thresholds saved for another firmware, left at the defaults");
     }
-    // Checked like a new value, the defaults stay on anything invalid
     char text[max_password_length + 1];
     memcpy(text, stored->values.wifi_ssid, max_ssid_length);
     text[max_ssid_length] = '\0';
-    if (setWifiSsid(text)) {
-      msg += ", Wi-Fi name";
-    }
+    setWifiSsid(text);
     memcpy(text, stored->values.wifi_password, max_password_length);
     text[max_password_length] = '\0';
-    if (setWifiPassword(text)) {
-      msg += ", Wi-Fi password";
-    }
+    setWifiPassword(text);
     setWebEnabled(stored->values.web_enabled != 0);
-    msg += webEnabled() ? ", web interface on" : ", web interface off";
-    // Checked too: an invalid value leaves the default
     RgbLed::setBrightness(stored->rgb_brightness);
     if (stored->rgb_mode < RgbLed::mode_count) {
       RgbLed::setMode(static_cast<RgbLed::Mode>(stored->rgb_mode));
     }
-    msg.append(", RGB LED %s %u%%", RgbLed::modeName(RgbLed::mode()), RgbLed::brightness());
-    if (has(fields, offsetof(Record, led_fade))) {
-      Led::setFade(stored->led_fade != 0);
-      msg += Led::fadeEnabled() ? ", LED fade on" : ", LED fade off";
+    Led::setFade(stored->led_fade != 0);
+    char name[sizeof(stored->report_version) + 1] = {};
+    memcpy(name, stored->report_version, sizeof(stored->report_version));
+    setReportedVersion(name);
+    BootChallenge::setEnforced(stored->boot_challenge != 0);
+    Video::setAvPackOverride(stored->av_pack);
+    if (stored->debug_level < debug::level_count) {
+      debug::setLevel(static_cast<debug::Level>(stored->debug_level));
     }
-    // Checked too: anything else stays the build's
-    if (has(fields, offsetof(Record, report_version))) {
-      char name[sizeof(stored->report_version) + 1] = {};
-      memcpy(name, stored->report_version, sizeof(stored->report_version));
-      if (setReportedVersion(name) && !reportedVersionIsDefault()) {
-        msg.append(", reported version %s", reportedVersion());
-      }
-    }
-    debug::print(debug::Level::Info, "%s", msg.c_str());
-
-    // Checked like new values: anything invalid keeps the build's default
-    if (has(fields, offsetof(Record, boot_challenge))) {
-      BootChallenge::setEnforced(stored->boot_challenge != 0);
-      Video::setAvPackOverride(stored->av_pack);
-      if (stored->debug_level < debug::level_count) {
-        debug::setLevel(static_cast<debug::Level>(stored->debug_level));
-      }
-      Dvd::setSupported(stored->dvd_support != 0);
-      I2CSniffer::setEnabled(stored->i2c_sniffer != 0);
-      ExtraTemp::setNtcConfig({stored->ntc_enabled != 0, stored->ntc_beta, stored->ntc_r25, stored->ntc_series_r});
-    }
-    if (has(fields, offsetof(Record, fan_ramp_up))) {
-      Fan::setRamp({stored->fan_ramp_up, stored->fan_ramp_down, stored->fan_glide_up_ms, stored->fan_glide_down_ms});
-    }
-    if (has(fields, offsetof(Record, sensor_bypass))) {
-      Fan::setTemperatureBypass(stored->sensor_bypass != 0);
-    }
-    // A second line: they don't all fit in one
-    Text<160> more;
-    more.append("SETTINGS: Boot challenge %s", BootChallenge::enforced() ? "enforced" : "not enforced");
-    if (Video::avPackOverride() >= 0) {
-      more.append(", AV pack fixed at %d", Video::avPackOverride());
-    } else {
-      more += ", AV pack from the connector";
-    }
-    more.append(", log level %s, DVD drive %s, sniffer %s", debug::levelName(debug::level()), Dvd::supported() ? "on" : "off",
-                I2CSniffer::enabled() ? "on" : "off");
-    const ExtraTemp::NtcConfig& ntc = ExtraTemp::ntcConfig();
-    if (ntc.enabled) {
-      more.append(", NTC beta %u R25 %lu series %lu", ntc.beta, static_cast<unsigned long>(ntc.r25), static_cast<unsigned long>(ntc.series_r));
-    } else {
-      more += ", NTC off";
-    }
-    debug::print(debug::Level::Info, "%s", more.c_str());
-    const Fan::Ramp& ramp = Fan::ramp();
-    debug::print(debug::Level::Info, "SETTINGS: Fan ramp up x%u down x%u, glide up %u ms down %u ms per step", ramp.up, ramp.down, ramp.glide_up_ms,
-                 ramp.glide_down_ms);
-    if (Fan::temperatureBypass()) {
-      debug::print(debug::Level::Warnings, "SETTINGS: Sensor bypass on: CPU temperature from the NTC, board from the Pico, ADM1032 not read");
-      if (!ExtraTemp::ntcConfig().enabled) {
-        debug::print(debug::Level::Warnings, "SETTINGS: Sensor bypass without the NTC on: the fan control will see a dead sensor");
-      }
-    }
+    Dvd::setSupported(stored->dvd_support != 0);
+    I2CSniffer::setEnabled(stored->i2c_sniffer != 0);
+    ExtraTemp::setNtcConfig({stored->ntc_enabled != 0, stored->ntc_beta, stored->ntc_r25, stored->ntc_series_r});
+    Fan::setRamp({stored->fan_ramp_up, stored->fan_ramp_down, stored->fan_glide_up_ms, stored->fan_glide_down_ms});
+    Fan::setTemperatureBypass(stored->sensor_bypass != 0);
+    FrontPanelSW::setPowerButtonEnabled(stored->power_button != 0);
+    FrontPanelSW::setEjectButtonEnabled(stored->eject_button != 0);
+    FrontPanelSW::setBootselPower(stored->bootsel_power != 0);
+    Fan::setBypassOffsets({stored->bypass_cpu_offset, stored->bypass_board_offset});
+  }
+  if (Fan::temperatureBypass() && !ExtraTemp::ntcConfig().enabled) {
+    debug::print(debug::Level::Warnings, "SETTINGS: Sensor bypass without the NTC on: the fan control will see a dead sensor");
   }
   saved = current();  // What's applied now, so only real changes are written
   saved_valid = true;
+}
+
+static const char* onOff(const bool on) {
+  return on ? "on" : "off";
+}
+
+void printSettings() {
+  debug::line("Settings (%s):", loaded ? "saved" : "none saved, the defaults");
+  debug::line("  > brightness=%u%%, fade=%s", hal::get_led_brightness(), onOff(Led::fadeEnabled()));
+  debug::line("  > power-button=%s, eject-button=%s, bootsel-power=%s%s", onOff(FrontPanelSW::powerButtonEnabled()), onOff(FrontPanelSW::ejectButtonEnabled()),
+              onOff(FrontPanelSW::bootselIsPower()),
+              FrontPanelSW::bootselIsPower() && !FrontPanelSW::bootselPowerSetting() ? " (the power button is off)" : "");
+  debug::line("  > rgb-mode=%s, rgb-brightness=%u%%", RgbLed::modeName(RgbLed::mode()), RgbLed::brightness());
+  char       password[max_password_length + 1];
+  const bool from_board = accessPointPassword(password, sizeof(password));
+  debug::line("  > web=%s, ssid=%s, password=%s%s", onOff(webEnabled()), wifiSsid(), password, from_board ? " (from the board ID)" : "");
+  debug::line("  > report-version=%s%s", reportedVersion(), reportedVersionIsDefault() ? " (the build's)" : "");
+  if (Video::avPackOverride() >= 0) {
+    debug::line("  > av-pack=%d, no-dvd=%s, boot-challenge=%s", Video::avPackOverride(), onOff(!Dvd::supported()), onOff(BootChallenge::enforced()));
+  } else {
+    debug::line("  > av-pack=detect, no-dvd=%s, boot-challenge=%s", onOff(!Dvd::supported()), onOff(BootChallenge::enforced()));
+  }
+  Text<64> thresholds;
+  for (uint8_t i = 0; i < Fan::thresholdCount(); i++) {
+    thresholds.append(i == 0 ? "%u" : " %u", Fan::getThreshold(i));
+  }
+  debug::line("  > thresholds=%s", thresholds.c_str());
+  const Fan::Ramp& ramp = Fan::ramp();
+  debug::line("  > fan-ramp up x%u down x%u, glide-up %u ms, glide-down %u ms", ramp.up, ramp.down, ramp.glide_up_ms, ramp.glide_down_ms);
+  const ExtraTemp::NtcConfig& ntc = ExtraTemp::ntcConfig();
+  debug::line("  > ntc=%s, beta %u, r25 %lu, series %lu", onOff(ntc.enabled), ntc.beta, static_cast<unsigned long>(ntc.r25),
+              static_cast<unsigned long>(ntc.series_r));
+  debug::line("  > sensor-bypass=%s, offsets cpu %+d board %+d", onOff(Fan::temperatureBypass()), Fan::bypassOffsets().cpu, Fan::bypassOffsets().board);
+  debug::line("  > log-level=%s, sniffer=%s", debug::levelName(debug::level()), onOff(I2CSniffer::enabled()));
 }
 
 static void eraseAndProgram(void* param) {
@@ -383,8 +341,10 @@ static void eraseAndProgram(void* param) {
 
 static bool write(const Record& r) {
   hal::petWatchdog();
-  // Stops core 1 (web interface) and the interrupts while the flash is busy
-  const int result = flash_safe_execute(eraseAndProgram, const_cast<Record*>(&r), 500);
+  // Stops core 1 (web interface) and the interrupts while the flash is busy.
+  // Not flash_safe_execute() itself: in builds with the web interface it
+  // refuses while core 1 isn't running (USB config mode, web interface off).
+  const int result = hal::run_flash_safe(eraseAndProgram, const_cast<Record*>(&r), 500);
   hal::petWatchdog();
   if (result != PICO_OK) {
     debug::print(debug::Level::Warnings, "SETTINGS: Save failed (%d)", result);

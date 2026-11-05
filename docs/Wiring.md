@@ -6,6 +6,9 @@ from `src/pin_assignments.hpp`; the pinout is the same on the Pico, Pico W,
 Pico 2 and Pico 2 W.
 
 GPIO0/GPIO1 (Pico pins 1/2) are the debug UART (115200 baud, TX on GPIO0).
+Besides the log it takes commands, one per line (`src/serial_console.hpp`):
+`power` and `eject` press those buttons (from standby too), `help` lists them.
+They work even with the front panel buttons turned off in the settings.
 GPIO23-25 are unused: on the W boards they belong to the wireless chip.
 
 ![Wiring: Raspberry Pi Pico to the Xbox PIC footprint](images/wiring.svg)
@@ -93,7 +96,7 @@ level) and in the web interface.
                            └── NTC ── GND (pin 33, AGND)
   ```
 
-  Turn it on, and set the parts' values, in the config GUI's Diagnostics card
+  Turn it on, and set the parts' values, in the config GUI's NTC thermistor card
   or with the USB config (`set ntc on`, `set ntc-beta`, `set ntc-r25`,
   `set ntc-series`). Defaults: off, 10k NTC with beta 3950, 10k series
   resistor; `-DSMC_NTC_SENSOR=ON`, `SMC_NTC_BETA`, `SMC_NTC_R25` and
@@ -107,7 +110,8 @@ level) and in the web interface.
 - The PIC runs from the 3.3 V standby rail (pin 20). Wired to the Pico's 3V3
   pin, it powers the Pico whenever the Xbox is plugged in.
 - The standby rail is not strong enough for Wi-Fi: the Pico W / Pico 2 W need
-  external power if you use the web functionality (SMC_WEB_ENABLED).
+  external power if you use the web functionality (built with
+  `-DSMC_WEB_INTERFACE=ON`, then turned on with `set web on`).
 - Use a single supply for the Pico. If it's powered over USB or VSYS, the
   standby rail and the Pico's own 3.3 V regulator both drive the 3V3 net; leave
   pin 20 unconnected (or disable the regulator) in that case. All grounds must

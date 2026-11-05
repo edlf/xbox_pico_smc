@@ -16,6 +16,7 @@
 #include "smc_i2c_sniffer.hpp"
 #include "smc_rgb_led.hpp"
 #include "smc_settings.hpp"
+#include "serial_console.hpp"
 #include "smc_smbus.hpp"
 #include "smc_fan.hpp"
 #include "smc_pll_reset.hpp"

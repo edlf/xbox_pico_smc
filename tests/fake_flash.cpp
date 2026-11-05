@@ -18,6 +18,7 @@ uintptr_t fake_xip_base() {
 
 void flash_range_erase(uint32_t offset, size_t count) {
   std::memset(__flash_binary_end + offset, 0xFF, count);
+  fake::flash_writes++;  // One erase per save
 }
 
 void flash_range_program(uint32_t offset, const uint8_t* data, size_t count) {
@@ -28,7 +29,6 @@ void flash_range_program(uint32_t offset, const uint8_t* data, size_t count) {
 
 int flash_safe_execute(void (*func)(void*), void* param, uint32_t) {
   func(param);
-  fake::flash_writes++;
   return PICO_OK;
 }
 

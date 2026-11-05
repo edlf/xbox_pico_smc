@@ -25,6 +25,15 @@ void set_led_fade(uint8_t level);
 
 bool power_button_pressed();
 bool eject_button_pressed();
+// The next character received on the UART console, or -1 for none (never waits)
+int serial_read();
+// The Pico's own BOOTSEL button. Pauses the other core and the interrupts for
+// ~50 us (it's read through the flash chip select): only read when it's used.
+bool bootsel_button_pressed();
+
+// Runs func with nothing reading the flash: core 1 paused if it's running
+// (flash_safe_execute()), interrupts off. PICO_OK, or the error.
+int run_flash_safe(void (*func)(void*), void* param, uint32_t timeout_ms);
 
 void pico_led_on();
 void pico_led_off();

@@ -21,8 +21,11 @@ class ScenarioTest : public ::testing::Test {
     // Settings outlive a simulator run, as on the Pico
     SMC::BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
     SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
-    SMC::Dvd::setSupported(SMC_DVD_SUPPORT);
+    SMC::Dvd::setSupported(!SMC_NO_DVD);
     SMC::Fan::setTemperatureBypass(false);
+    SMC::FrontPanelSW::setPowerButtonEnabled(true);
+    SMC::FrontPanelSW::setEjectButtonEnabled(true);
+    SMC::FrontPanelSW::setBootselPower(SMC_BOOTSEL_POWER);
     SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
   }
 
@@ -82,7 +85,7 @@ TEST_F(ScenarioTest, NoDvdDriveReportsClosedAndEmpty) {
 }
 
 // Sensor bypass with a working NTC: the CPU temperature (SMBus 0x09) is the
-// NTC's, about 45 °C here, the ADM1032 (fake at 40 °C) isn't read
+// NTC's (about 45 °C here) plus its offset, the ADM1032 (fake at 40 °C) isn't read
 TEST_F(ScenarioTest, SensorBypassUsesTheNtc) {
   SMC::Fan::setTemperatureBypass(true);
   SMC::ExtraTemp::NtcConfig ntc = SMC::ExtraTemp::ntcConfig();
@@ -91,8 +94,8 @@ TEST_F(ScenarioTest, SensorBypassUsesTheNtc) {
   fake::hal.ntc_adc = 1241;  // 10k B3950 with a 10k series resistor: ~45 °C
   boot();
   sim->run(3000);
-  EXPECT_GE(sim->smbusRead(0x09), 44);
-  EXPECT_LE(sim->smbusRead(0x09), 46);
+  EXPECT_GE(sim->smbusRead(0x09), 54);  // Plus the default +10 offset
+  EXPECT_LE(sim->smbusRead(0x09), 56);
   EXPECT_FALSE(fake::logged("forcing overheat"));
   EXPECT_TRUE(sim->osRunning());
 }
@@ -103,6 +106,68 @@ TEST_F(ScenarioTest, SensorBypassWithoutTheNtcForcesAnOverheat) {
   sim->pressPower();
   sim->run(4000);
   EXPECT_TRUE(fake::logged("FAN: No NTC reading (sensor bypass), forcing overheat"));
+}
+
+// Power button off: it doesn't start the Xbox, BOOTSEL does, and shuts it
+// down through the OS like the power button
+TEST_F(ScenarioTest, BootselIsThePowerButtonWhenItsOff) {
+  SMC::FrontPanelSW::setPowerButtonEnabled(false);
+  sim->pressPower();
+  sim->run(3000);
+  EXPECT_FALSE(sim->xboxOn());
+
+  sim->pressBootsel();
+  sim->run(3000);
+  ASSERT_TRUE(sim->osRunning())
+  << sim->status();
+  sim->pressBootsel();
+  sim->run(3000);
+  EXPECT_FALSE(sim->xboxOn()) << sim->status();
+}
+
+// Eject button off: the tray stays where it is
+TEST_F(ScenarioTest, EjectButtonOffLeavesTheTray) {
+  SMC::FrontPanelSW::setEjectButtonEnabled(false);
+  boot();
+  sim->pressEject();
+  sim->run(3000);
+  EXPECT_EQ(sim->smbusRead(0x03) & 0x70, 0x60);  // Still closed, with the disc
+}
+
+// The UART console's commands: the power button from standby and while
+// running (through the OS), the eject button
+TEST_F(ScenarioTest, SerialConsolePowerAndEject) {
+  fake::hal.serial_input = "power\r\n";
+  sim->run(3000);
+  ASSERT_TRUE(sim->osRunning())
+  << sim->status();
+  EXPECT_TRUE(fake::logged("SERIAL: Power button"));
+
+  fake::hal.serial_input = "eject\n";
+  sim->run(3000);
+  EXPECT_EQ(sim->smbusRead(0x03) & 0x70, 0x10);  // Open
+
+  fake::hal.serial_input = "power\n";
+  sim->run(3000);
+  EXPECT_FALSE(sim->xboxOn()) << sim->status();
+}
+
+// Even with the front panel buttons turned off in the settings
+TEST_F(ScenarioTest, SerialConsoleWorksWithTheButtonsOff) {
+  SMC::FrontPanelSW::setPowerButtonEnabled(false);
+  SMC::FrontPanelSW::setEjectButtonEnabled(false);
+  fake::hal.serial_input = "power\n";
+  sim->run(3000);
+  EXPECT_TRUE(sim->osRunning()) << sim->status();
+}
+
+TEST_F(ScenarioTest, SerialConsoleRefusesOtherLines) {
+  fake::hal.serial_input = "help\nreboot\npowerpowerpowerpower\n\n";
+  sim->run(200);
+  EXPECT_TRUE(fake::logged("SERIAL: Commands: power (power button), eject (eject button)"));
+  EXPECT_TRUE(fake::logged("SERIAL: Unknown command 'reboot', try help"));
+  EXPECT_TRUE(fake::logged("SERIAL: Unknown command 'powerpowerpower', try help"));  // Cut off
+  EXPECT_FALSE(sim->xboxOn());
 }
 
 TEST_F(ScenarioTest, PowerButtonShutsDownThroughTheOs) {

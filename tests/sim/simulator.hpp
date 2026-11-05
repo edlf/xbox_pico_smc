@@ -47,6 +47,7 @@ class Simulator {
   // Front panel: pressed for 100 ms, then released
   void pressPower();
   void pressEject();
+  void pressBootsel();  // The Pico's BOOTSEL button
   void holdPower(uint32_t ms);
 
   void pushTray();  // Push an open tray closed by hand

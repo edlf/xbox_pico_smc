@@ -156,6 +156,11 @@ bool eject_button_pressed() {
   return !readWeakInput(pins::SW_EJECT);
 }
 
+int serial_read() {
+  const int c = getchar_timeout_us(0);  // stdio: the UART (USB only in config mode)
+  return c == PICO_ERROR_TIMEOUT ? -1 : c;
+}
+
 // Fan PWM, same output as the PIC's CCP1: ~9.8 kHz, 10-bit, and
 // inverted: 50 holds the pin low, and lower speeds keep it high for
 // (50 - speed)% of each period. The PIC also has speed 0 (pin held high, fan

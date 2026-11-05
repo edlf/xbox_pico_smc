@@ -261,43 +261,64 @@ class App(ttk.Frame):
         )
         self.all_ports_check.pack(side="left", padx=12)
 
+        switch = "Switch.TCheckbutton" if sv_ttk else "TCheckbutton"
+
+        # Left column: the front panel, the RGB LED, the web interface
         left = ttk.Frame(self)
         left.grid(row=2, column=0, sticky="nsew", padx=(0, 8))
         left.columnconfigure(0, weight=1)
 
-        # LEDs
-        leds = self.card(left, "LEDs", row=0, column=0, pady=(0, 12))
+        # Front panel: its LEDs and buttons. Without the power button BOOTSEL
+        # has to be one: the switch then shows on and can't be changed
+        # (bootsel_choice keeps what was picked, for when the power button is back).
+        front = self.card(left, "Front panel", row=0, column=0, pady=(0, 12))
         self.brightness = tk.IntVar(value=100)
-        self.slider(leds, 1, "Front panel", self.brightness)
+        self.slider(front, 1, "LED brightness", self.brightness)
         self.fade = tk.BooleanVar(value=True)
         self.fade_check = self.input(
-            ttk.Checkbutton(
-                leds,
-                text="Fade in at power on, out at power off",
-                variable=self.fade,
-                style="Switch.TCheckbutton" if sv_ttk else "TCheckbutton",
-            )
+            ttk.Checkbutton(front, text="LEDs fade in at power on, out at power off", variable=self.fade, style=switch)
         )
         self.fade_check.grid(row=2, column=0, columnspan=3, sticky="w", pady=(4, 0))
-        ttk.Separator(leds).grid(row=3, column=0, columnspan=3, sticky="ew", pady=10)
-        ttk.Label(leds, text="RGB LED").grid(row=4, column=0, sticky="w", padx=(0, 12))
-        self.rgb_mode = self.input(ttk.Combobox(leds, state="readonly", values=list(RGB_MODE_NAMES.values()), width=30))
-        self.rgb_mode.grid(row=4, column=1, columnspan=2, sticky="ew", pady=4)
-        self.rgb_brightness = tk.IntVar(value=100)
-        self.slider(leds, 5, "RGB brightness", self.rgb_brightness)
-        self.rgb_note = self.muted(leds, "")
-        self.rgb_note.grid(row=6, column=0, columnspan=3, sticky="w")
-
-        # Web interface
-        wifi = self.card(left, "Web interface", row=1, column=0)
-        self.web = tk.BooleanVar(value=True)
+        ttk.Separator(front).grid(row=3, column=0, columnspan=3, sticky="ew", pady=10)
+        self.power_button = tk.BooleanVar(value=True)
+        self.eject_button = tk.BooleanVar(value=True)
+        self.bootsel = tk.BooleanVar(value=False)
+        self.bootsel_choice = False
         self.input(
             ttk.Checkbutton(
-                wifi,
-                text="Start at power-up (Pico W / Pico 2 W)",
-                variable=self.web,
-                style="Switch.TCheckbutton" if sv_ttk else "TCheckbutton",
+                front, text="Power button", variable=self.power_button, style=switch, command=self.update_bootsel
             )
+        ).grid(row=4, column=0, columnspan=3, sticky="w")
+        self.input(ttk.Checkbutton(front, text="Eject button", variable=self.eject_button, style=switch)).grid(
+            row=5, column=0, columnspan=3, sticky="w", pady=(6, 0)
+        )
+        self.bootsel_check = ttk.Checkbutton(
+            front,
+            text="Pico BOOTSEL button as a power button",
+            variable=self.bootsel,
+            style=switch,
+            # Only clickable with the power button on
+            command=lambda: setattr(self, "bootsel_choice", self.bootsel.get()),
+        )
+        self.bootsel_check.grid(row=6, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.bootsel_note = self.muted(front, "", wraplength=380)
+        self.bootsel_note.grid(row=7, column=0, columnspan=3, sticky="w")
+
+        # RGB LED
+        rgb = self.card(left, "RGB LED", row=1, column=0, pady=(0, 12))
+        ttk.Label(rgb, text="Shows").grid(row=1, column=0, sticky="w", padx=(0, 12))
+        self.rgb_mode = self.input(ttk.Combobox(rgb, state="readonly", values=list(RGB_MODE_NAMES.values()), width=30))
+        self.rgb_mode.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
+        self.rgb_brightness = tk.IntVar(value=100)
+        self.slider(rgb, 2, "Brightness", self.rgb_brightness)
+        self.rgb_note = self.muted(rgb, "")
+        self.rgb_note.grid(row=3, column=0, columnspan=3, sticky="w")
+
+        # Web interface
+        wifi = self.card(left, "Web interface", row=2, column=0)
+        self.web = tk.BooleanVar(value=False)
+        self.input(
+            ttk.Checkbutton(wifi, text="Start at power-up (Pico W / Pico 2 W)", variable=self.web, style=switch)
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 6))
         ttk.Label(wifi, text="Wi-Fi name").grid(row=2, column=0, sticky="w", padx=(0, 12))
         self.ssid = tk.StringVar()
@@ -331,34 +352,98 @@ class App(ttk.Frame):
         self.web_note = self.muted(wifi, "")
         self.web_note.grid(row=6, column=0, columnspan=3, sticky="w")
 
-        # Middle column: what the SMC tells the Xbox and how it treats it, then
-        # logging and the extra temperature sensor
+        # Middle column: what the SMC tells the Xbox it is, how it treats the
+        # Xbox, the NTC thermistor (and the sensor bypass that uses it), logging
         middle = ttk.Frame(self)
         middle.grid(row=2, column=1, sticky="nsew", padx=8)
         middle.columnconfigure(0, weight=1)
-        xbox = self.card(middle, "Xbox", row=0, column=0, pady=(0, 12))
-        ttk.Label(xbox, text="Reported version").grid(row=1, column=0, sticky="w", padx=(0, 12))
-        self.report_version = self.input(ttk.Combobox(xbox, state="readonly", width=24))
+        smc = self.card(middle, "SMC", row=0, column=0, pady=(0, 12))
+        ttk.Label(smc, text="Reported version").grid(row=1, column=0, sticky="w", padx=(0, 12))
+        self.report_version = self.input(ttk.Combobox(smc, state="readonly", width=24))
         self.report_version.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
-        self.report_version_note = self.muted(xbox, "What the SMC tells the Xbox it is (SMBus 0x01).", wraplength=360)
+        self.report_version_note = self.muted(smc, "What the SMC tells the Xbox it is (SMBus 0x01).", wraplength=360)
         self.report_version_note.grid(row=2, column=0, columnspan=3, sticky="w")
-        ttk.Label(xbox, text="AV pack").grid(row=3, column=0, sticky="w", padx=(0, 12), pady=(6, 0))
+
+        xbox = self.card(middle, "Enhancements", row=1, column=0, pady=(0, 12))
+        ttk.Label(xbox, text="AV pack").grid(row=1, column=0, sticky="w", padx=(0, 12))
         self.av_pack = self.input(ttk.Combobox(xbox, state="readonly", values=AV_PACK_NAMES, width=24))
-        self.av_pack.grid(row=3, column=1, columnspan=2, sticky="ew", pady=(10, 4))
+        self.av_pack.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
         self.av_pack.set(AV_PACK_DETECT)
-        switch = "Switch.TCheckbutton" if sv_ttk else "TCheckbutton"
-        self.dvd = tk.BooleanVar(value=True)
+        self.no_dvd = tk.BooleanVar(value=False)
         self.input(
             ttk.Checkbutton(
-                xbox, text="DVD drive (off: tray reported closed and empty)", variable=self.dvd, style=switch
+                xbox, text="No DVD drive (tray reported closed and empty)", variable=self.no_dvd, style=switch
             )
-        ).grid(row=4, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
         self.boot_challenge = tk.BooleanVar(value=False)
         self.input(
             ttk.Checkbutton(
                 xbox, text="Enforce the boot challenge (reset on a failure)", variable=self.boot_challenge, style=switch
             )
-        ).grid(row=5, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        ).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
+
+        # The optional NTC thermistor, and the sensor bypass that reads it
+        ntc = self.card(middle, "NTC thermistor", row=2, column=0, pady=(0, 12))
+        self.ntc = tk.BooleanVar(value=False)
+        self.input(ttk.Checkbutton(ntc, text="Fitted, on GP28", variable=self.ntc, style=switch)).grid(
+            row=1, column=0, columnspan=3, sticky="w", pady=(0, 4)
+        )
+        self.ntc_values = {}  # Shell name -> (IntVar, min, max)
+        for row, (name, text, low, high, step, unit) in enumerate(
+            [
+                ("ntc-beta", "Beta", 1000, 10000, 50, "K"),
+                ("ntc-r25", "R at 25 °C", 100, 1000000, 100, "ohms"),
+                ("ntc-series", "Series resistor", 100, 1000000, 100, "ohms, from 3.3 V"),
+            ],
+            start=2,
+        ):
+            ttk.Label(ntc, text=text).grid(row=row, column=0, sticky="w", padx=(0, 12))
+            var = tk.IntVar(value={"ntc-beta": 3950}.get(name, 10000))
+            self.input(ttk.Spinbox(ntc, from_=low, to=high, increment=step, textvariable=var, width=9)).grid(
+                row=row, column=1, sticky="w", pady=2
+            )
+            self.muted(ntc, unit).grid(row=row, column=2, sticky="w", padx=(8, 0))
+            self.ntc_values[name] = (var, low, high)
+        ttk.Separator(ntc).grid(row=5, column=0, columnspan=3, sticky="ew", pady=10)
+        self.sensor_bypass = tk.BooleanVar(value=False)
+        self.input(
+            ttk.Checkbutton(
+                ntc,
+                text="Sensor bypass: CPU from the NTC, board from the Pico",
+                variable=self.sensor_bypass,
+                style=switch,
+            )
+        ).grid(row=6, column=0, columnspan=3, sticky="w")
+        # Added to the bypass's readings, both on one row
+        offsets = ttk.Frame(ntc)
+        offsets.grid(row=7, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        self.cpu_offset = tk.IntVar(value=10)  # The firmware's default
+        self.board_offset = tk.IntVar(value=10)
+        for column, (text, var) in enumerate([("Add: CPU", self.cpu_offset), ("Board", self.board_offset)]):
+            ttk.Label(offsets, text=text).grid(row=0, column=column * 3, sticky="w", padx=(0 if column == 0 else 16, 6))
+            self.input(ttk.Spinbox(offsets, from_=-30, to=30, increment=1, textvariable=var, width=4)).grid(
+                row=0, column=column * 3 + 1
+            )
+            self.muted(offsets, "°C").grid(row=0, column=column * 3 + 2, padx=(4, 0))
+        self.muted(
+            ntc,
+            "For a bad ADM1032, which isn't read then. Needs the NTC on and fitted: without a reading the fan "
+            "control sees a dead sensor and shuts the Xbox down.",
+            wraplength=380,
+        ).grid(row=8, column=0, columnspan=3, sticky="w")
+
+        # Logging
+        diag = self.card(middle, "Diagnostics", row=3, column=0)
+        ttk.Label(diag, text="Log level").grid(row=1, column=0, sticky="w", padx=(0, 12))
+        self.log_level = self.input(ttk.Combobox(diag, state="readonly", values=LOG_LEVEL_NAMES, width=12))
+        self.log_level.grid(row=1, column=1, sticky="w", pady=4)
+        self.log_level.set("Info")
+        self.sniffer = tk.BooleanVar(value=True)
+        self.input(
+            ttk.Checkbutton(
+                diag, text="Log the video encoder the CPU talks to (sniffer)", variable=self.sniffer, style=switch
+            )
+        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
 
         # Fan thresholds: the P01/P11 ones until the Pico says otherwise
         right = ttk.Frame(self)
@@ -398,54 +483,6 @@ class App(ttk.Frame):
             "Ramp: how far each 20 s decision moves the speed. Glide: how quickly the fan gets there.",
             wraplength=360,
         ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(6, 0))
-
-        # Logging and the extra temperature sensor
-        diag = self.card(middle, "Diagnostics", row=1, column=0)
-        ttk.Label(diag, text="Log level").grid(row=1, column=0, sticky="w", padx=(0, 12))
-        self.log_level = self.input(ttk.Combobox(diag, state="readonly", values=LOG_LEVEL_NAMES, width=12))
-        self.log_level.grid(row=1, column=1, sticky="w", pady=4)
-        self.log_level.set("Info")
-        self.sniffer = tk.BooleanVar(value=True)
-        self.input(
-            ttk.Checkbutton(
-                diag, text="Log the video encoder the CPU talks to (sniffer)", variable=self.sniffer, style=switch
-            )
-        ).grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 0))
-        self.ntc = tk.BooleanVar(value=False)
-        self.input(ttk.Checkbutton(diag, text="NTC thermistor on GP28", variable=self.ntc, style=switch)).grid(
-            row=3, column=0, columnspan=3, sticky="w", pady=(6, 4)
-        )
-        self.ntc_values = {}  # Shell name -> IntVar
-        for row, (name, text, low, high, step, unit) in enumerate(
-            [
-                ("ntc-beta", "Beta", 1000, 10000, 50, "K"),
-                ("ntc-r25", "R at 25 °C", 100, 1000000, 100, "ohms"),
-                ("ntc-series", "Series resistor", 100, 1000000, 100, "ohms, from 3.3 V"),
-            ],
-            start=4,
-        ):
-            ttk.Label(diag, text=text).grid(row=row, column=0, sticky="w", padx=(0, 12))
-            var = tk.IntVar(value={"ntc-beta": 3950}.get(name, 10000))
-            self.input(ttk.Spinbox(diag, from_=low, to=high, increment=step, textvariable=var, width=9)).grid(
-                row=row, column=1, sticky="w", pady=2
-            )
-            self.muted(diag, unit).grid(row=row, column=2, sticky="w", padx=(8, 0))
-            self.ntc_values[name] = (var, low, high)
-        self.sensor_bypass = tk.BooleanVar(value=False)
-        self.input(
-            ttk.Checkbutton(
-                diag,
-                text="Sensor bypass: CPU from the NTC, board from the Pico",
-                variable=self.sensor_bypass,
-                style=switch,
-            )
-        ).grid(row=7, column=0, columnspan=3, sticky="w", pady=(6, 0))
-        self.muted(
-            diag,
-            "For a bad ADM1032: it isn't read at all. Needs the NTC on and fitted: without a reading the fan "
-            "control sees a dead sensor and shuts the Xbox down (overheat).",
-            wraplength=380,
-        ).grid(row=8, column=0, columnspan=3, sticky="w")
 
         # Actions
         actions = ttk.Frame(self)
@@ -572,7 +609,23 @@ class App(ttk.Frame):
         for widget in self.inputs + spinboxes:
             widget.state(["!disabled"] if enabled else ["disabled"])
         self.update_password_state()
+        self.update_bootsel()
         self.connect_button.configure(state="disabled" if self.busy else "normal")
+
+    def update_bootsel(self):
+        """BOOTSEL is the power button while the front panel's is off: shown on,
+        and fixed. Otherwise the switch is what was picked."""
+        enabled = self.smc is not None and not self.busy
+        if self.power_button.get():
+            self.bootsel.set(self.bootsel_choice)
+            self.bootsel_check.state(["!disabled"] if enabled else ["disabled"])
+            self.bootsel_note.configure(text="")
+        else:
+            self.bootsel.set(True)
+            self.bootsel_check.state(["disabled"])
+            self.bootsel_note.configure(
+                text="Needed while the power button is off: BOOTSEL powers the Xbox on and off."
+            )
 
     # ---- Serial work ----------------------------------------------------
 
@@ -701,7 +754,7 @@ class App(ttk.Frame):
         self.rgb_mode.set(RGB_MODE_NAMES.get(s.get("rgb_mode"), s.get("rgb_mode", "")))
         self.rgb_brightness.set(s.get("rgb_brightness", 100))
         self.rgb_note.configure(text="" if s["rgb_available"] else "No RGB LED in this build: kept, but ignored.")
-        self.web.set(s.get("web", True))
+        self.web.set(s.get("web", False))
         if "fan_ramp" in s:
             ramp = s["fan_ramp"]
             self.ramp_up.current(ramp["up"] - 1)
@@ -710,12 +763,19 @@ class App(ttk.Frame):
             self.glide_down.set(ramp["glide_down"])
         if "av_pack" in s:
             self.av_pack.set(AV_PACK_DETECT if s["av_pack"] is None else AV_PACK_NAMES[s["av_pack"] + 1])
-        self.dvd.set(s.get("dvd", True))
+        self.no_dvd.set(s.get("no_dvd", False))
         self.boot_challenge.set(s.get("boot_challenge", False))
+        self.power_button.set(s.get("power_button", True))
+        self.eject_button.set(s.get("eject_button", True))
+        self.bootsel_choice = s.get("bootsel_power", False)  # Older firmware: no BOOTSEL setting
+        self.bootsel.set(self.bootsel_choice)
         if "log_level" in s:
             self.log_level.set(s["log_level"].capitalize())
         self.sniffer.set(s.get("sniffer", True))
         self.sensor_bypass.set(s.get("sensor_bypass", False))
+        if "bypass_offsets" in s:
+            self.cpu_offset.set(s["bypass_offsets"]["cpu"])
+            self.board_offset.set(s["bypass_offsets"]["board"])
         if "ntc" in s:
             self.ntc.set(s["ntc"]["enabled"])
             for name, key in (("ntc-beta", "beta"), ("ntc-r25", "r25"), ("ntc-series", "series")):
@@ -873,13 +933,25 @@ class App(ttk.Frame):
             if code != s["av_pack"]:
                 commands.append(f"set av-pack {'detect' if code is None else code}")
         for key, var, name in (
-            ("dvd", self.dvd, "dvd"),
+            ("no_dvd", self.no_dvd, "no-dvd"),
             ("boot_challenge", self.boot_challenge, "boot-challenge"),
             ("sniffer", self.sniffer, "sniffer"),
             ("sensor_bypass", self.sensor_bypass, "sensor-bypass"),
+            ("eject_button", self.eject_button, "eject-button"),
         ):
             if key in s and var.get() != s[key]:
                 commands.append(f"set {name} {'on' if var.get() else 'off'}")
+        if "power_button" in s:
+            # BOOTSEL as picked (the firmware keeps it in use without the power
+            # button anyway). It can only be turned off with the power button
+            # on, so that one goes first when it's turned on.
+            power = self.power_button.get()
+            bootsel = self.bootsel_choice
+            power_command = [f"set power-button {'on' if power else 'off'}"] if power != s["power_button"] else []
+            bootsel_command = (
+                [f"set bootsel-power {'on' if bootsel else 'off'}"] if bootsel != s["bootsel_power"] else []
+            )
+            commands += power_command + bootsel_command if power else bootsel_command + power_command
         if "log_level" in s and self.log_level.get().lower() != s["log_level"]:
             commands.append(f"set log-level {self.log_level.get().lower()}")
         if "ntc" in s:
@@ -894,6 +966,19 @@ class App(ttk.Frame):
                     raise ValueError(f"The NTC {key} must be {low}-{high}")
                 if value != s["ntc"][key]:
                     commands.append(f"set {name} {value}")
+            if "bypass_offsets" in s:
+                for key, var, name in (
+                    ("cpu", self.cpu_offset, "bypass-cpu-offset"),
+                    ("board", self.board_offset, "bypass-board-offset"),
+                ):
+                    try:
+                        offset = var.get()
+                    except tk.TclError:
+                        raise ValueError(f"The {key} offset must be a number")
+                    if not -30 <= offset <= 30:
+                        raise ValueError(f"The {key} offset must be -30 to 30 °C")
+                    if offset != s["bypass_offsets"][key]:
+                        commands.append(f"set {name} {offset}")
             if self.sensor_bypass.get() and not self.ntc.get():
                 raise ValueError("The sensor bypass needs the NTC on: it takes the CPU temperature from it")
             if self.ntc.get() != s["ntc"]["enabled"]:

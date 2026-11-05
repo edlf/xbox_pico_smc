@@ -21,6 +21,7 @@ class FanTest : public ::testing::Test {
   void TearDown() override {
     SMC::Fan::setRamp(SMC::Fan::default_ramp);
     SMC::Fan::setTemperatureBypass(false);
+    SMC::Fan::setBypassOffsets(SMC::Fan::default_bypass_offsets);
     SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
     SMC::ExtraTemp::sensors = {};
   }
@@ -138,10 +139,33 @@ TEST_F(FanTest, BypassReadsTheNtcAndThePico) {
   SMC::Fan::setTemperatureBypass(true);
   ntcReading();
   ASSERT_TRUE(SMC::read_temperatures());
-  EXPECT_EQ(SMC::Fan::sensors.CPU_temperature, 53);
-  EXPECT_EQ(SMC::Fan::sensors.board_temperature, 35);
+  EXPECT_EQ(SMC::Fan::sensors.CPU_temperature, 63);  // 52.6 plus the default +10
+  EXPECT_EQ(SMC::Fan::sensors.board_temperature, 45);
   EXPECT_FALSE(SMC::Fan::flags.temperature_read_failed);
   EXPECT_TRUE(fake::hal.transfers.empty());
+}
+
+// The offsets: added before rounding, only to what the fan control sees
+TEST_F(FanTest, BypassOffsetsAreAdded) {
+  SMC::Fan::setTemperatureBypass(true);
+  ntcReading();  // NTC 52.6, Pico 35.4
+  ASSERT_TRUE(SMC::Fan::setBypassOffsets({5, -8}));
+  ASSERT_TRUE(SMC::read_temperatures());
+  EXPECT_EQ(SMC::Fan::sensors.CPU_temperature, 58);
+  EXPECT_EQ(SMC::Fan::sensors.board_temperature, 27);
+  EXPECT_EQ(SMC::ExtraTemp::sensors.ntc_temperature, 526);  // The raw reading (0x32) unchanged
+
+  ASSERT_TRUE(SMC::Fan::setBypassOffsets({-30, -30}));
+  SMC::ExtraTemp::sensors.pico_temperature = 200;  // 20.0 - 30: below 0 reads 0
+  ASSERT_TRUE(SMC::read_temperatures());
+  EXPECT_EQ(SMC::Fan::sensors.CPU_temperature, 23);
+  EXPECT_EQ(SMC::Fan::sensors.board_temperature, 0);
+}
+
+TEST_F(FanTest, BypassOffsetsAreChecked) {
+  EXPECT_FALSE(SMC::Fan::setBypassOffsets({31, 0}));
+  EXPECT_FALSE(SMC::Fan::setBypassOffsets({0, -31}));
+  EXPECT_TRUE(SMC::Fan::setBypassOffsets({30, -30}));
 }
 
 // Bypass without an NTC reading: a failed read, like a dead ADM1032 (the fan

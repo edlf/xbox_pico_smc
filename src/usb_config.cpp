@@ -104,7 +104,7 @@ static void printSettings() {
     printf("av-pack detect\n");
   }
   printf("log-level %s\n", debug::levelName(debug::level()));
-  printf("dvd %s\n", SMC::Dvd::supported() ? "on" : "off");
+  printf("no-dvd %s\n", SMC::Dvd::supported() ? "off" : "on");  // On: no drive, the tray reads closed and empty
   printf("sniffer %s\n", SMC::I2CSniffer::enabled() ? "on" : "off");
   const SMC::ExtraTemp::NtcConfig& ntc = SMC::ExtraTemp::ntcConfig();
   printf("ntc %s beta %u r25 %lu series %lu\n", ntc.enabled ? "on" : "off", ntc.beta, static_cast<unsigned long>(ntc.r25),
@@ -112,6 +112,11 @@ static void printSettings() {
   const SMC::Fan::Ramp& ramp = SMC::Fan::ramp();
   printf("fan-ramp up %u down %u glide-up %u glide-down %u\n", ramp.up, ramp.down, ramp.glide_up_ms, ramp.glide_down_ms);
   printf("sensor-bypass %s\n", SMC::Fan::temperatureBypass() ? "on" : "off");
+  printf("bypass-offsets cpu %d board %d\n", SMC::Fan::bypassOffsets().cpu, SMC::Fan::bypassOffsets().board);
+  printf("power-button %s\n", SMC::FrontPanelSW::powerButtonEnabled() ? "on" : "off");
+  printf("eject-button %s\n", SMC::FrontPanelSW::ejectButtonEnabled() ? "on" : "off");
+  // As set; it's in use anyway while the power button is off
+  printf("bootsel-power %s\n", SMC::FrontPanelSW::bootselPowerSetting() ? "on" : "off");
   for (uint8_t i = 0; i < SMC::Fan::thresholdCount(); i++) {
     printf("threshold %u %u default %u min %u label %s\n", i, SMC::Fan::getThreshold(i), SMC::Fan::thresholdDefault(i), SMC::Fan::min_threshold,
            SMC::Fan::thresholdLabel(i));
@@ -180,13 +185,18 @@ static void command(char* line) {
         "set fan-glide-up <0-1000>    ms per speed step while speeding up, 0: at once\n"
         "set fan-glide-down <0-1000>  ms per speed step while slowing down, 0: at once\n"
         "set sensor-bypass <on|off>   CPU temperature from the NTC, board from the Pico, no ADM1032\n"
+        "set bypass-cpu-offset <-30-30>    added to the NTC for the CPU temperature (C)\n"
+        "set bypass-board-offset <-30-30>  added to the Pico for the board temperature (C)\n"
+        "set power-button <on|off>    the front panel power button (off: BOOTSEL is the power button)\n"
+        "set eject-button <on|off>    the front panel eject button\n"
+        "set bootsel-power <on|off>   the Pico's BOOTSEL button as a power button too\n"
         "set ssid <name>              Wi-Fi access point name, 1-32 characters\n"
         "set password [<password>]    Wi-Fi password, 8-63 characters, none: from the board ID\n"
         "set web <on|off>             start the web interface (W boards)\n"
         "set boot-challenge <on|off>  reset the Xbox when the boot challenge fails\n"
         "set av-pack <detect|0-6>     read the AV connector, or report this AV pack code\n"
         "set log-level <silent|critical|warnings|info|debug>  console log level\n"
-        "set dvd <on|off>             DVD drive (off: tray closed and empty)\n"
+        "set no-dvd <on|off>          no DVD drive (on: tray reported closed and empty)\n"
         "set sniffer <on|off>         log the video encoder the CPU talks to\n"
         "set ntc <on|off>             NTC thermistor on GP28\n"
         "set ntc-beta <1000-10000>    NTC beta (K)\n"
@@ -238,6 +248,34 @@ static void command(char* line) {
     }
     debug::setLevel(level);
     ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 &&
+             (strcmp(words[1], "power-button") == 0 || strcmp(words[1], "eject-button") == 0 || strcmp(words[1], "bootsel-power") == 0)) {
+    bool on;
+    if (!parseOnOff(words[2], on)) {
+      error("power-button, eject-button and bootsel-power must be on or off");
+      return;
+    }
+    if (strcmp(words[1], "power-button") == 0) {
+      SMC::FrontPanelSW::setPowerButtonEnabled(on);
+    } else if (strcmp(words[1], "eject-button") == 0) {
+      SMC::FrontPanelSW::setEjectButtonEnabled(on);
+    } else if (!on && !SMC::FrontPanelSW::powerButtonEnabled()) {
+      error("bootsel-power is needed while the power button is off: turn the power button on first");
+      return;
+    } else {
+      SMC::FrontPanelSW::setBootselPower(on);
+    }
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && (strcmp(words[1], "bypass-cpu-offset") == 0 || strcmp(words[1], "bypass-board-offset") == 0)) {
+    SMC::Fan::BypassOffsets offsets = SMC::Fan::bypassOffsets();
+    const bool              valid = parseNumber(words[2], a) && a >= -SMC::Fan::max_bypass_offset && a <= SMC::Fan::max_bypass_offset;
+    if (!valid) {
+      error("bypass-cpu-offset and bypass-board-offset must be -30 to 30");
+      return;
+    }
+    (strcmp(words[1], "bypass-cpu-offset") == 0 ? offsets.cpu : offsets.board) = static_cast<int8_t>(a);
+    SMC::Fan::setBypassOffsets(offsets);
+    ok();
   } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "sensor-bypass") == 0) {
     bool on;
     if (!parseOnOff(words[2], on)) {
@@ -246,13 +284,13 @@ static void command(char* line) {
     }
     SMC::Fan::setTemperatureBypass(on);
     ok();
-  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "dvd") == 0) {
-    bool on;
-    if (!parseOnOff(words[2], on)) {
-      error("dvd must be on or off");
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "no-dvd") == 0) {
+    bool no_dvd;
+    if (!parseOnOff(words[2], no_dvd)) {
+      error("no-dvd must be on or off");
       return;
     }
-    SMC::Dvd::setSupported(on);
+    SMC::Dvd::setSupported(!no_dvd);
     ok();
   } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "sniffer") == 0) {
     bool on;
@@ -346,14 +384,18 @@ static void command(char* line) {
     SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
-    SMC::Settings::setWebEnabled(true);
+    SMC::Settings::setWebEnabled(SMC_WEB_START);
     SMC::Settings::setReportedVersion("auto");
     SMC::BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
     SMC::Fan::setRamp(SMC::Fan::default_ramp);
     SMC::Fan::setTemperatureBypass(false);
+    SMC::Fan::setBypassOffsets(SMC::Fan::default_bypass_offsets);
+    SMC::FrontPanelSW::setPowerButtonEnabled(true);
+    SMC::FrontPanelSW::setEjectButtonEnabled(true);
+    SMC::FrontPanelSW::setBootselPower(SMC_BOOTSEL_POWER);
     SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
     debug::setLevel(static_cast<debug::Level>(SMC_DEBUG_LEVEL));
-    SMC::Dvd::setSupported(SMC_DVD_SUPPORT);
+    SMC::Dvd::setSupported(!SMC_NO_DVD);
     SMC::I2CSniffer::setEnabled(SMC_I2C_SNIFFER);
     SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
     ok();

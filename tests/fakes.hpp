@@ -12,13 +12,15 @@ namespace fake {
 
 struct Hal {
   // Inputs, set by the tests
-  bool     power_button = false;
-  bool     eject_button = false;
-  bool     power_ok = false;
-  uint8_t  tray_state = 0x00;           // PORTB & 0x70 encoding
-  uint8_t  video_mode = 0x00;           // PORTB & 0x0E encoding
-  uint16_t pico_temperature_adc = 876;  // About 27 °C
-  uint16_t ntc_adc = 0;
+  bool        power_button = false;
+  bool        eject_button = false;
+  bool        power_ok = false;
+  uint8_t     tray_state = 0x00;           // PORTB & 0x70 encoding
+  bool        bootsel = false;             // The Pico's BOOTSEL button
+  uint8_t     video_mode = 0x00;           // PORTB & 0x0E encoding
+  uint16_t    pico_temperature_adc = 876;  // About 27 °C
+  uint16_t    ntc_adc = 0;
+  std::string serial_input;  // Characters waiting on the UART console
 
   // Outputs, checked by the tests
   bool    green_led = false;
