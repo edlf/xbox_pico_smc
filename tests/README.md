@@ -43,8 +43,9 @@ They build with the default settings from `src/config.hpp` (P11).
 - `test_settings.cpp`: settings saved to and loaded from a fake flash
   (`fake_flash.cpp`): round trip, nothing written when unchanged, corrupt
   records, thresholds from another firmware, thresholds below the 40 °C
-  minimum, invalid Wi-Fi values, and the access point password (saved, or the
-  board ID one).
+  minimum, invalid Wi-Fi values, the access point password (saved, or the
+  board ID one), the reported version, and records from the previous layout
+  (version 1) still loading.
 - `test_i2c_decoder.cpp`: the sniffer's SMBus decoder fed SDA/SCL levels:
   encoders found, writes logged (long, NACKed, two per tick), reads, other
   devices and our own transfers not logged, and a video mode decoded from bus

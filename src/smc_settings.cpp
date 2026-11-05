@@ -15,7 +15,7 @@ namespace SMC {
 namespace Settings {
 
 constexpr uint32_t magic = 0x534D4353;  // "SCMS"
-constexpr uint16_t version = 1;         // Bump when the layout changes, older records are ignored
+constexpr uint16_t version = 2;         // Bump when the layout changes (load() reads version 1 too)
 constexpr uint32_t flash_offset = PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE;
 
 // The settings kept here rather than by their module, stored as they are.
@@ -35,27 +35,48 @@ struct Record {
   uint8_t  threshold_count;
   uint8_t  thresholds[Fan::max_thresholds];
   Values   values;
-  uint8_t  rgb_brightness;  // Percent
-  uint8_t  rgb_mode;        // RgbLed::Mode
-  uint32_t checksum;        // FNV-1a over everything above
+  uint8_t  rgb_brightness;     // Percent
+  uint8_t  rgb_mode;           // RgbLed::Mode
+  char     report_version[4];  // SMBus 0x01, empty: the build's (version 2)
+  uint32_t checksum;           // FNV-1a over everything above
 };
 static_assert(sizeof(Record) <= FLASH_PAGE_SIZE, "One flash page");
+
+// Version 1 records are the same up to rgb_mode, without report_version: the
+// checksum follows rgb_mode (4-byte aligned)
+constexpr uint16_t v1_size = static_cast<uint16_t>(((offsetof(Record, report_version) + 3) & ~size_t{3}) + 4);
+
+// The reported versions, besides the build's
+static const char* const report_versions[] = {"P01", "P11", "D01", "DXF", "P2L"};
 
 static Record        saved;  // What's in flash (or the defaults)
 static bool          saved_valid = false;
 static volatile bool save_requested = false;  // requestSave(), done by update()
 static bool          usable = false;          // The sector is past the end of the firmware
 static Values        values;                  // Live, the setters keep them valid
+static char          report_version[4] = "";  // Empty: SMC_VERSION_STRING
 
 extern "C" uint8_t __flash_binary_end;
 
-static uint32_t checksum(const Record& r) {
-  const uint8_t* p = reinterpret_cast<const uint8_t*>(&r);
+// FNV-1a over the first length bytes
+static uint32_t checksum(const void* data, const size_t length) {
+  const uint8_t* p = static_cast<const uint8_t*>(data);
   uint32_t       hash = 2166136261u;
-  for (size_t i = 0; i < offsetof(Record, checksum); i++) {
+  for (size_t i = 0; i < length; i++) {
     hash = (hash ^ p[i]) * 16777619u;
   }
   return hash;
+}
+
+static uint32_t checksum(const Record& r) {
+  return checksum(&r, offsetof(Record, checksum));
+}
+
+// A version 1 record: the layout above up to rgb_mode, then its checksum
+static bool validV1(const Record* stored) {
+  uint32_t stored_checksum;
+  memcpy(&stored_checksum, reinterpret_cast<const uint8_t*>(stored) + v1_size - 4, sizeof(stored_checksum));
+  return stored->version == 1 && stored->size == v1_size && stored_checksum == checksum(stored, v1_size - 4);
 }
 
 static void firmwareName(char (&out)[4]) {
@@ -79,6 +100,7 @@ static Record current() {
     r.thresholds[i] = Fan::getThreshold(i);
   }
   r.values = values;
+  memcpy(r.report_version, report_version, sizeof(r.report_version));
   r.checksum = checksum(r);
   return r;
 }
@@ -150,6 +172,28 @@ void setWebEnabled(const bool enabled) {
   values.web_enabled = enabled ? 1 : 0;
 }
 
+const char* reportedVersion() {
+  return report_version[0] != '\0' ? report_version : SMC_VERSION_STRING;
+}
+
+bool reportedVersionIsDefault() {
+  return report_version[0] == '\0';
+}
+
+bool setReportedVersion(const char* name) {
+  if (name[0] == '\0' || strcmp(name, "auto") == 0) {
+    memset(report_version, 0, sizeof(report_version));
+    return true;
+  }
+  for (const char* candidate : report_versions) {
+    if (strcmp(name, candidate) == 0) {
+      memcpy(report_version, candidate, sizeof(report_version));
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool sameSettings(const Record& a, const Record& b) {
   return memcmp(&a, &b, offsetof(Record, checksum)) == 0;
 }
@@ -165,7 +209,8 @@ void load() {
   const Record* stored = reinterpret_cast<const Record*>(XIP_BASE + flash_offset);
   char          firmware[4];
   firmwareName(firmware);
-  if (stored->magic != magic || stored->version != version || stored->size != sizeof(Record) || stored->checksum != checksum(*stored)) {
+  const bool current_record = stored->version == version && stored->size == sizeof(Record) && stored->checksum == checksum(*stored);
+  if (stored->magic != magic || !(current_record || validV1(stored))) {
     debug::print(debug::Level::Info, "SETTINGS: None saved, using the defaults");
   } else {
     hal::set_led_brightness(stored->led_brightness);
@@ -200,6 +245,14 @@ void load() {
       RgbLed::setMode(static_cast<RgbLed::Mode>(stored->rgb_mode));
     }
     msg.append(", RGB LED %s %u%%", RgbLed::modeName(RgbLed::mode()), RgbLed::brightness());
+    // Not in version 1 records. Checked too: anything else stays the build's
+    if (current_record) {
+      char name[sizeof(stored->report_version) + 1] = {};
+      memcpy(name, stored->report_version, sizeof(stored->report_version));
+      if (setReportedVersion(name) && !reportedVersionIsDefault()) {
+        msg.append(", reported version %s", reportedVersion());
+      }
+    }
     debug::print(debug::Level::Info, "%s", msg.c_str());
   }
   saved = current();  // What's applied now, so only real changes are written

@@ -32,6 +32,7 @@ class SettingsTest : public ::testing::Test {
   void TearDown() override {
     SMC::RgbLed::setMode(static_cast<SMC::RgbLed::Mode>(SMC_RGB_MODE));
     SMC::RgbLed::setBrightness(SMC_RGB_BRIGHTNESS);
+    SMC::Settings::setReportedVersion("auto");
   }
 
   static uint8_t* record() {
@@ -156,6 +157,47 @@ TEST_F(SettingsTest, InvalidWifiInRecordKeepsDefault) {
   SMC::Settings::load();
   EXPECT_STREQ(SMC::Settings::wifiSsid(), SMC_WIFI_SSID);
   EXPECT_STREQ(SMC::Settings::wifiPassword(), "correct horse");
+}
+
+TEST_F(SettingsTest, ReportedVersionIsCheckedAndSaved) {
+  EXPECT_STREQ(SMC::Settings::reportedVersion(), SMC_VERSION_STRING);
+  EXPECT_TRUE(SMC::Settings::reportedVersionIsDefault());
+  EXPECT_FALSE(SMC::Settings::setReportedVersion("P12"));
+  EXPECT_FALSE(SMC::Settings::setReportedVersion("p2l"));
+  EXPECT_TRUE(SMC::Settings::reportedVersionIsDefault());
+
+  SMC::Settings::load();
+  ASSERT_TRUE(SMC::Settings::setReportedVersion("D01"));
+  ASSERT_TRUE(SMC::Settings::saveNow());
+  ASSERT_TRUE(SMC::Settings::setReportedVersion("auto"));
+  SMC::Settings::load();
+  EXPECT_TRUE(fake::logged(", reported version D01"));
+  EXPECT_STREQ(SMC::Settings::reportedVersion(), "D01");
+  EXPECT_FALSE(SMC::Settings::reportedVersionIsDefault());
+}
+
+// Records saved before the reported version existed (layout version 1) still
+// load, with the build's version
+TEST_F(SettingsTest, VersionOneRecordStillLoads) {
+  SMC::Settings::load();
+  changeEverything();
+  ASSERT_TRUE(SMC::Settings::setReportedVersion("D01"));
+  ASSERT_TRUE(SMC::Settings::saveNow());
+  // Rewrite it as version 1: the same up to the RGB mode, then the checksum
+  const uint16_t v1_size = static_cast<uint16_t>(((recordSize() - 4 - 4 + 3) & ~3) + 4);
+  record()[4] = 1;
+  record()[6] = static_cast<uint8_t>(v1_size);
+  record()[7] = static_cast<uint8_t>(v1_size >> 8);
+  fixChecksum();
+
+  backToDefaults();
+  ASSERT_TRUE(SMC::Settings::setReportedVersion("auto"));
+  SMC::Settings::load();
+  EXPECT_TRUE(fake::logged("SETTINGS: Loaded, LED brightness 40%"));
+  EXPECT_EQ(hal::get_led_brightness(), 40);
+  EXPECT_STREQ(SMC::Settings::wifiSsid(), "Living room");
+  EXPECT_EQ(SMC::RgbLed::mode(), SMC::RgbLed::Mode::mirror);
+  EXPECT_TRUE(SMC::Settings::reportedVersionIsDefault());
 }
 
 // Below min_threshold (40 °C) the Xbox would see an overheat at every start

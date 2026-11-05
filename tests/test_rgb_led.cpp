@@ -65,6 +65,7 @@ TEST_F(RgbLedTest, BootPhasesInOrder) {
     }
     sim->run(20);
   }
+  // clang-format off: one colour per line, it would pack them into a table
   const std::vector<Colour> expected = {
       dark,
       {255, 0, 255},  // Powered, held in reset
@@ -72,6 +73,7 @@ TEST_F(RgbLedTest, BootPhasesInOrder) {
       {0, 255, 255},  // RAM test passed, kernel
       green,          // Booted
   };
+  // clang-format on
   EXPECT_EQ(seen, expected);
 }
 

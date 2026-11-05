@@ -4,6 +4,7 @@
 // lwIP settings for the web interface (SMC_WEB_INTERFACE): no OS, polled from
 // core 1 (pico_cyw43_arch_lwip_poll), access point with a few clients
 
+// clang-format off: aligned by hand, as a table
 #define NO_SYS                      1
 #define LWIP_SOCKET                 0
 #define LWIP_NETCONN                0
@@ -44,5 +45,6 @@
 #define SYS_STATS                   0
 #define MEMP_STATS                  0
 #define LINK_STATS                  0
+// clang-format on
 
-#endif // _LWIPOPTS_H
+#endif  // _LWIPOPTS_H

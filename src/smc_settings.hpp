@@ -46,6 +46,17 @@ void resetWifi();
 // save and a restart.
 bool webEnabled();
 void setWebEnabled(bool enabled);
+
+// Version reported on SMBus 0x01, three characters: "P01", "P11", "D01",
+// "DXF" or "P2L". SMC_VERSION_STRING (CMake SMC_REPORT_VERSION) unless one is
+// set and saved. Only what's reported changes, not how the SMC behaves
+// (SMC_FIRMWARE). Read from the SMBus IRQ; set only while the SMBus isn't
+// running (load(), USB config mode).
+const char* reportedVersion();
+bool        reportedVersionIsDefault();  // Not set: the build's
+// One of the names above, or "" / "auto" for the build's. False (and nothing
+// changed) otherwise.
+bool setReportedVersion(const char* name);
 // Save the current settings, the next time update() runs (Xbox off)
 void requestSave();
 // Save them now, only where nothing else is running (USB config mode). False

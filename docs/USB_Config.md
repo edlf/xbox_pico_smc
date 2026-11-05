@@ -1,7 +1,7 @@
 # USB configuration
 
 The saved settings (LED brightness, RGB LED mode and brightness, fan thresholds, Wi-Fi access point name
-and password, web interface on or off) can be changed over USB
+and password, web interface on or off, the version reported on SMBus 0x01) can be changed over USB
 serial, with `tools/smcx_config_gui.py` (a window) or `tools/smcx_config.py`
 (the command line). This only works with the Pico **out of
 the Xbox**, powered from USB alone.
@@ -115,7 +115,7 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | Command | Reply |
 |---------|-------|
 | `help` | The commands |
-| `get` | `firmware <name>`, `git <hash>` (short git hash of the build, `-dirty` if it had uncommitted changes), `brightness <percent>`, `rgb-mode <mode>`, `rgb-brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `board-password smcx-<id>` (the one the access point uses while the password is empty), `web on` or `web off` (with a note on builds without a web interface), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
+| `get` | `firmware <name>`, `git <hash>` (short git hash of the build, `-dirty` if it had uncommitted changes), `brightness <percent>`, `rgb-mode <mode>`, `rgb-brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `board-password smcx-<id>` (the one the access point uses while the password is empty), `web on` or `web off` (with a note on builds without a web interface), `report-version <auto|name> default <name>` (the version reported on SMBus 0x01: `auto` is the build's, named after `default`), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
 | `set brightness <1-100>` | LED brightness in percent |
 | `set rgb-mode <off\|boot\|mirror>` | RGB LED: `off` (dark, even while booting), `boot` (the boot phases, then dark), `mirror` (the boot phases, then what the front panel LEDs show) |
 | `set rgb-brightness <1-100>` | RGB LED brightness in percent |
@@ -123,7 +123,8 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | `set ssid <name>` | Wi-Fi access point name, 1-32 printable characters (spaces allowed) |
 | `set password [<password>]` | Wi-Fi password, 8-63 printable characters. Without one: made from the board's unique ID (`get` shows it as `board-password`) |
 | `set web on`, `set web off` | Start the web interface at power-up (default on). Kept on builds without one, but ignored there |
-| `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD`, web interface on |
+| `set report-version <auto\|P01\|P11\|D01\|DXF\|P2L>` | Version reported on SMBus 0x01. `auto`: the build's (`SMC_REPORT_VERSION`). Only what the Xbox is told changes, the SMC still behaves as the firmware it was built for |
+| `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD`, web interface on, reported version `auto` |
 | `save` | Writes the settings to flash (`SETTINGS: Saved`) |
 | `reboot` | Restarts the Pico |
 | `bootloader` | Restarts the Pico into the USB bootloader (BOOTSEL) for a firmware update. Only in config mode: the SMBus and the web interface have no way to do this |

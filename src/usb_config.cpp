@@ -83,6 +83,8 @@ static void error(const char* reason) {
 static void printSettings() {
   printf("firmware %s\n", SMC_FIRMWARE_NAME);
   printf("git %s\n", SMC_GIT_HASH);  // Short hash of the build, "-dirty" with uncommitted changes
+  // SMBus 0x01: "auto" while it's the build's, which follows
+  printf("report-version %s default %s\n", SMC::Settings::reportedVersionIsDefault() ? "auto" : SMC::Settings::reportedVersion(), SMC_VERSION_STRING);
   printf("brightness %u\n", hal::get_led_brightness());
   // Kept on builds without the RGB LED too, ignored there
   printf("rgb-mode %s%s\n", SMC::RgbLed::modeName(SMC::RgbLed::mode()), SMC_RGB_LED ? "" : " (no RGB LED in this build, ignored)");
@@ -150,6 +152,7 @@ static void command(char* line) {
         "set ssid <name>              Wi-Fi access point name, 1-32 characters\n"
         "set password [<password>]    Wi-Fi password, 8-63 characters, none: from the board ID\n"
         "set web <on|off>             start the web interface (W boards)\n"
+        "set report-version <auto|P01|P11|D01|DXF|P2L>  version reported on SMBus 0x01\n"
         "defaults                     back to the firmware's defaults\n"
         "save                         write them to flash\n"
         "reboot                       restart the Pico\n"
@@ -164,6 +167,12 @@ static void command(char* line) {
       return;
     }
     SMC::Settings::setWebEnabled(strcmp(words[2], "on") == 0);
+    ok();
+  } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "report-version") == 0) {
+    if (!SMC::Settings::setReportedVersion(words[2])) {
+      error("report-version must be auto, P01, P11, D01, DXF or P2L");
+      return;
+    }
     ok();
   } else if (strcmp(words[0], "set") == 0 && count == 3 && strcmp(words[1], "brightness") == 0) {
     if (!parseNumber(words[2], a) || a < 1 || a > 100) {
@@ -201,6 +210,7 @@ static void command(char* line) {
     SMC::Fan::resetThresholds();
     SMC::Settings::resetWifi();
     SMC::Settings::setWebEnabled(true);
+    SMC::Settings::setReportedVersion("auto");
     ok();
   } else if (strcmp(words[0], "save") == 0) {
     if (!SMC::Settings::saveNow()) {

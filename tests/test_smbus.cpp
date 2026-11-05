@@ -56,6 +56,20 @@ TEST_F(SmbusTest, FirmwareVersionOneCharacterPerRead) {
   EXPECT_EQ(read(0x01), 'P');
 }
 
+// The reported version is a setting (USB config), the build's unless set
+TEST_F(SmbusTest, FirmwareVersionFromTheSettings) {
+  ASSERT_TRUE(SMC::Settings::setReportedVersion("P2L"));
+  write(0x01, 0x00);
+  EXPECT_EQ(read(0x01), 'P');
+  EXPECT_EQ(read(0x01), '2');
+  EXPECT_EQ(read(0x01), 'L');
+
+  ASSERT_TRUE(SMC::Settings::setReportedVersion("auto"));
+  EXPECT_EQ(read(0x01), SMC_VERSION_STRING[0]);
+  EXPECT_EQ(read(0x01), SMC_VERSION_STRING[1]);
+  EXPECT_EQ(read(0x01), SMC_VERSION_STRING[2]);
+}
+
 TEST_F(SmbusTest, ResetRequest) {
   write(0x02, 0x01);
   EXPECT_TRUE(SMC::PLL_Reset::flags.warm_reset_request);

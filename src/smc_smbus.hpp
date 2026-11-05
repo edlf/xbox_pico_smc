@@ -16,8 +16,6 @@ bool smbusMasterReadByte(uint8_t address, uint8_t reg, uint8_t& value);
 void applySMBusWrites();
 void printSMBusLog();
 void resetSMBusRegisters();
-// Version reported on SMBus 0x01 (SMC_REPORT_VERSION)
-extern const char version_string[];
 
 }  // namespace SMC
 

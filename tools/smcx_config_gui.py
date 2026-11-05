@@ -32,6 +32,8 @@ except ImportError:
 
 TITLE = "SMCX config"
 
+REPORT_VERSIONS = ("P01", "P11", "D01", "DXF", "P2L")
+
 RGB_MODE_NAMES = {
     "off": "Off, even while booting",
     "boot": "Boot phases, then dark",
@@ -291,8 +293,13 @@ class App(ttk.Frame):
         self.web_note = self.muted(wifi, "")
         self.web_note.grid(row=6, column=0, columnspan=3, sticky="w")
 
+        right = ttk.Frame(self)
+        right.grid(row=2, column=1, sticky="nsew", padx=(8, 0))
+        right.columnconfigure(0, weight=1)
+        right.rowconfigure(0, weight=1)
+
         # Fan thresholds, filled in by show_settings()
-        self.fan = self.card(self, "Fan thresholds", row=2, column=1, padx=(8, 0))
+        self.fan = self.card(right, "Fan thresholds", row=0, column=0, pady=(0, 12))
         self.fan_rows = ttk.Frame(self.fan)
         self.fan_rows.grid(row=1, column=0, columnspan=3, sticky="nsew")
         self.fan_rows.columnconfigure(0, weight=1)
@@ -302,6 +309,14 @@ class App(ttk.Frame):
         self.fan_rows.bind("<Configure>", self.schedule_fan_wrap)
         self.muted(self.fan_rows, "Connect to read them.").grid(row=0, column=0, sticky="w")
         self.thresholds = []  # (index, IntVar, min, default, value read)
+
+        # Version reported to the Xbox on SMBus 0x01
+        xbox = self.card(right, "Reported version", row=1, column=0)
+        ttk.Label(xbox, text="SMBus 0x01").grid(row=1, column=0, sticky="w", padx=(0, 12))
+        self.report_version = self.input(ttk.Combobox(xbox, state="readonly", width=24))
+        self.report_version.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
+        self.report_version_note = self.muted(xbox, "What the SMC tells the Xbox it is.", wraplength=360)
+        self.report_version_note.grid(row=2, column=0, columnspan=3, sticky="w")
 
         # Actions
         actions = ttk.Frame(self)
@@ -557,6 +572,17 @@ class App(ttk.Frame):
         self.rgb_brightness.set(s.get("rgb_brightness", 100))
         self.rgb_note.configure(text="" if s["rgb_available"] else "No RGB LED in this build: kept, but ignored.")
         self.web.set(s.get("web", True))
+        if "report_version" in s:
+            auto = f"Same as the build ({s['report_version_default']})"
+            self.report_version.configure(values=[auto, *REPORT_VERSIONS])
+            self.report_version.set(auto if s["report_version"] == "auto" else s["report_version"])
+            self.report_version_note.configure(
+                text=f"What the SMC tells the Xbox it is. It still behaves as {s.get('firmware', '?')} firmware."
+            )
+        else:
+            self.report_version.configure(values=[])
+            self.report_version.set("")
+            self.report_version_note.configure(text="This firmware can't change it.")
         self.ssid.set(s.get("ssid", ""))
         self.board_password_value = s.get("board_password", "")
         self.board_password_note.configure(
@@ -650,6 +676,12 @@ class App(ttk.Frame):
             if password and (not 8 <= len(password) <= 63 or not printable(password)):
                 raise ValueError("The Wi-Fi password must be 8-63 printable characters")
             commands.append(f"set password {password}" if password else "set password")
+
+        if "report_version" in s:
+            choice = self.report_version.get()
+            version = "auto" if choice.startswith("Same as the build") else choice
+            if version and version != s["report_version"]:
+                commands.append(f"set report-version {version}")
 
         if self.web.get() != s.get("web"):
             commands.append(f"set web {'on' if self.web.get() else 'off'}")

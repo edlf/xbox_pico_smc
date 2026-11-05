@@ -1,5 +1,6 @@
-# Builds the firmware for the four supported boards and runs the host tests on
-# every push and pull request. The .uf2 files are kept as build artifacts.
+# Builds the firmware for the four supported boards, runs the host tests and
+# checks the formatting (clang-format, ruff) on every push and pull request.
+# The .uf2 files are kept as build artifacts.
 name: Build
 
 on:
@@ -10,6 +11,9 @@ on:
 env:
   PICO_SDK_VERSION: 2.2.0
   ARM_GCC_VERSION: 14.2.Rel1
+  # Pinned: other versions format some lines differently
+  CLANG_FORMAT_VERSION: 21.1.8
+  RUFF_VERSION: 0.17.3
 
 jobs:
   firmware:
@@ -72,3 +76,31 @@ jobs:
 
       - name: Run
         run: ctest --test-dir build-tests --output-on-failure
+
+  lint:
+    name: Formatting and lint
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install clang-format and ruff
+        run: pip install clang-format==${{ env.CLANG_FORMAT_VERSION }} ruff==${{ env.RUFF_VERSION }}
+
+      # The C++ sources and the tests, against .clang-format. Fix locally with
+      # clang-format -i --style=file <files>
+      - name: clang-format
+        run: git ls-files 'src/*.cpp' 'src/*.hpp' 'src/*.h' 'tests/*.cpp' 'tests/*.hpp' 'tests/*.h' | xargs clang-format --dry-run --Werror --style=file
+
+      # The Python tools, with ruff.toml. Fix locally with ruff check --fix . and ruff format .
+      - name: ruff check
+        run: ruff check --output-format=github .
+
+      - name: ruff format
+        run: ruff format --check --diff .

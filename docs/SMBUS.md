@@ -151,10 +151,17 @@ Each read returns the next character of the version string, wrapping after
 three (for example `'P'`, `'1'`, `'1'`). The position is kept between
 transactions. Writing any value restarts at the first character.
 
-The string is set by `SMC_REPORT_VERSION`: `AUTO` (the default) reports the
-`SMC_FIRMWARE` version. `P01`, `P11`, `D01`, `DXF` and `P2L` report that version
-whatever the behavior is: only the reported string changes, the behavior
-still follows `SMC_FIRMWARE`. The boot log shows the reported version.
+The build sets the default with `SMC_REPORT_VERSION`: `AUTO` (the default)
+reports the `SMC_FIRMWARE` version. `P01`, `P11`, `D01`, `DXF` and `P2L` report
+that version whatever the behavior is: only the reported string changes, the
+behavior still follows `SMC_FIRMWARE`. The boot log shows the build's reported
+version.
+
+The USB config (`set report-version`, or "Reported version" in the config GUI)
+can replace it with one of the same five, saved with the other settings: the
+boot log's `SETTINGS: Loaded` line then ends with `reported version <name>`.
+`auto` goes back to the build's. Nothing on the SMBus or the web interface
+changes it.
 
 ### 0x02 Reset / power (write)
 

@@ -80,9 +80,9 @@ struct Registers {
 };
 static Registers regs;
 
-// SMBus 0x01, SMC_VERSION_STRING (CMake SMC_REPORT_VERSION)
-const char version_string[] = SMC_VERSION_STRING;
-static_assert(sizeof(version_string) == 4, "The version is 3 characters");
+// SMBus 0x01: Settings::reportedVersion(), SMC_VERSION_STRING (CMake
+// SMC_REPORT_VERSION) unless one is set over the USB config
+static_assert(sizeof(SMC_VERSION_STRING) == 4, "The version is 3 characters");
 // SMBus 0x30: version of this SMC firmware (the commands it adds), separate
 // from the PIC version above. Bump it when the custom commands change.
 constexpr uint8_t custom_version = 0x01;
@@ -138,7 +138,7 @@ static uint8_t readRegister(uint8_t command) {
       if (regs.version_counter < 1 || regs.version_counter > 3) {
         regs.version_counter = 1;
       }
-      response = version_string[regs.version_counter - 1];
+      response = Settings::reportedVersion()[regs.version_counter - 1];  // SMC_VERSION_STRING unless set
       regs.version_counter = (regs.version_counter == 3) ? 1 : regs.version_counter + 1;
       break;
 

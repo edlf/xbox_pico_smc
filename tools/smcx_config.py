@@ -12,6 +12,7 @@ starts in config mode instead of running the SMC (see src/usb_config.hpp).
     python tools/smcx_config.py set-ssid "My Xbox" set-password secret123 save
     python tools/smcx_config.py set-password "" save   (back to the board ID one)
     python tools/smcx_config.py set-web off save
+    python tools/smcx_config.py set-report-version P2L save   (auto: the build's)
     python tools/smcx_config.py defaults
     python tools/smcx_config.py save
     python tools/smcx_config.py reboot
@@ -187,6 +188,11 @@ def parse_settings(lines):
             settings["password"] = rest  # Empty: made from the board ID
         elif key == "board-password":
             settings["board_password"] = rest  # The board ID one (not sent by older firmware)
+        elif key == "report-version":
+            # report-version <auto|name> default <the build's>; not sent by older firmware
+            words = rest.split()
+            settings["report_version"] = words[0]
+            settings["report_version_default"] = words[2]
         elif key == "web":
             settings["web"] = rest.split()[0] == "on"
             settings["web_available"] = "(" not in rest  # "(no web interface in this build, ignored)"
@@ -220,6 +226,10 @@ def print_settings(s):
     print(
         f"Web interface:   {'on' if s.get('web') else 'off'}{'' if s['web_available'] else ' (no web interface in this build, ignored)'}"
     )
+    if "report_version" in s:
+        version = s["report_version"]
+        shown = f"{s['report_version_default']} (the build's)" if version == "auto" else version
+        print(f"Reported version: {shown}")
     for t in s["thresholds"]:
         print(f"Threshold {t['index']}:     {t['value']} C (default {t['default']}, min {t['min']})  {t['label']}")
 
@@ -230,7 +240,7 @@ def main():
     parser.add_argument(
         "commands",
         nargs="+",
-        help="get | set-brightness N | set-rgb-mode off|boot|mirror | set-rgb-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | defaults | save | reboot | bootloader",
+        help="get | set-brightness N | set-rgb-mode off|boot|mirror | set-rgb-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | set-report-version auto|P01|P11|D01|DXF|P2L | defaults | save | reboot | bootloader",
     )
     args = parser.parse_args()
 
@@ -267,6 +277,10 @@ def main():
                 state = words.pop(0)
                 smc.command(f"set web {state}")
                 print(f"Web interface {state}")
+            elif name == "set-report-version":
+                version = words.pop(0)
+                smc.command(f"set report-version {version}")
+                print(f"Reported version {version}")
             elif name == "defaults":
                 smc.command("defaults")
                 print("Back to the defaults (not saved yet)")
