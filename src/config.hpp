@@ -122,9 +122,10 @@ static_assert(SMC_RGB_MODE >= 0 && SMC_RGB_MODE <= 2, "SMC_RGB_MODE must be 0-2"
 #endif
 
 // Access point name, unless one is saved
-#define SMC_WIFI_SSID "OG-SMC"
+#define SMC_WIFI_SSID "SMCX"
 // Access point WPA2 password, 8-63 characters, unless one is saved. Empty: one
-// made from the board's unique ID ("ogsmc-<id>"), shown in the boot log.
+// made from the board's unique ID ("smcx-<id>", Settings::boardWifiPassword()),
+// shown in the boot log and by the USB config's `get`.
 #define SMC_WIFI_PASSWORD ""
 static_assert(sizeof(SMC_WIFI_PASSWORD) == 1 || (sizeof(SMC_WIFI_PASSWORD) >= 9 && sizeof(SMC_WIFI_PASSWORD) <= 64),
               "SMC_WIFI_PASSWORD must be 8-63 characters, or empty for one made from the board's unique ID");

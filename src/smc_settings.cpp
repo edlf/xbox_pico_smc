@@ -5,7 +5,9 @@
 #include "hardware/flash.h"
 #include "hardware/sync.h"
 #include "pico/flash.h"
+#include "pico/unique_id.h"
 
+#include <cstdio>
 #include <cstring>
 #include "text.hpp"
 
@@ -97,6 +99,22 @@ const char* wifiSsid() {
 
 const char* wifiPassword() {
   return values.wifi_password;
+}
+
+// The SDK reads the ID at boot, so this is also safe from core 1
+void boardWifiPassword(char* out, const size_t size) {
+  char id[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1];
+  pico_get_unique_board_id_string(id, sizeof(id));
+  snprintf(out, size, "smcx-%s", id);
+}
+
+bool accessPointPassword(char* out, const size_t size) {
+  if (values.wifi_password[0] != '\0') {
+    snprintf(out, size, "%s", values.wifi_password);
+    return false;
+  }
+  boardWifiPassword(out, size);
+  return true;
 }
 
 bool setWifiSsid(const char* ssid) {

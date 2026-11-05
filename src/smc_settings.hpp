@@ -28,6 +28,12 @@ constexpr size_t max_password_length = 63;
 const char*      wifiSsid();
 // Empty: the web interface makes one from the board's unique ID
 const char* wifiPassword();
+// "smcx-<board ID>", the password used while none is saved: different for
+// every Pico
+void boardWifiPassword(char* out, size_t size);
+// The password the access point uses: the saved one, or the board ID one.
+// True when it's the board ID one.
+bool accessPointPassword(char* out, size_t size);
 // False (and nothing changed) if it doesn't fit: 1-32 printable characters
 bool setWifiSsid(const char* ssid);
 // False (and nothing changed) if it doesn't fit: empty or 8-63 printable characters

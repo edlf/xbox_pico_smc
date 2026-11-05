@@ -6,7 +6,6 @@
 #include "pico/cyw43_arch.h"
 #include "pico/flash.h"
 #include "pico/multicore.h"
-#include "pico/unique_id.h"
 #include "pico/util/queue.h"
 #include "pico/critical_section.h"
 #include "lwip/tcp.h"
@@ -104,7 +103,7 @@ void log(const char* format, ...) {
 
 const char page[] = R"HTML(<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>OG SMC</title>
+<title>SMCX</title>
 <style>
 :root{--bg:#101410;--card:#1a221a;--fg:#e4ece4;--dim:#8a9a8a;--accent:#5fbf3f;--warn:#e0a030;--bad:#e05040}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px system-ui,sans-serif}
@@ -121,7 +120,7 @@ input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
 .wide{grid-column:1/-1}.thr{flex:1;min-width:200px}
 input[type=number]{width:64px;background:#2a362a;color:var(--fg);border:1px solid #3a4a3a;border-radius:8px;padding:7px 8px;font:inherit}
 </style></head><body><main>
-<h1>OG SMC</h1><div id="conn">Connecting...</div>
+<h1>SMCX</h1><div id="conn">Connecting...</div>
 <div class="grid">
 <div class="card"><h2>Power</h2><div class="value" id="power">-</div><div class="note" id="extra"></div>
 <div class="row"><button onclick="act('power')">Power button</button><button onclick="act('reset')">Reset</button></div></div>
@@ -483,21 +482,6 @@ bool startHttpServer() {
   return true;
 }
 
-// The saved password (Settings, default SMC_WIFI_PASSWORD), or when that's
-// empty one made from this board's unique ID: different for every Pico and
-// shown in the boot log. The SDK reads the ID at boot, and the settings are
-// loaded before core 1 starts, so this is safe from core 1.
-bool wifiPassword(char* out, size_t size) {
-  if (Settings::wifiPassword()[0] != '\0') {
-    snprintf(out, size, "%s", Settings::wifiPassword());
-    return false;
-  }
-  char id[2 * PICO_UNIQUE_BOARD_ID_SIZE_BYTES + 1];
-  pico_get_unique_board_id_string(id, sizeof(id));
-  snprintf(out, size, "ogsmc-%s", id);
-  return true;
-}
-
 // Core 1 has nothing left to do: wait here rather than return, so it still
 // answers flash_safe_execute() (a returned core 1 would stall every settings
 // save for the full timeout)
@@ -516,7 +500,9 @@ void core1Main() {
     idle();
   }
   char password[64];
-  wifiPassword(password, sizeof(password));
+  // The saved one or the board ID one. The settings are loaded before core 1
+  // starts, so this is safe from here.
+  Settings::accessPointPassword(password, sizeof(password));
   cyw43_arch_enable_ap_mode(Settings::wifiSsid(), password, CYW43_AUTH_WPA2_AES_PSK);
 
   netif* ap = &cyw43_state.netif[CYW43_ITF_AP];
@@ -674,7 +660,7 @@ void start() {
   publishStatus();
   // Printed here, before the Wi-Fi is started, so it shows even if that fails
   char password[64];
-  if (wifiPassword(password, sizeof(password))) {
+  if (Settings::accessPointPassword(password, sizeof(password))) {
     debug::print(debug::Level::Info, "WEB: Access point \"%s\", password %s", Settings::wifiSsid(), password);
   } else {
     debug::print(debug::Level::Info, "WEB: Access point \"%s\", saved password", Settings::wifiSsid());

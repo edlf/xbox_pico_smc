@@ -1,22 +1,30 @@
 // Fake Pico SDK time and GPIO IRQs, and stubs for the modules that only run on
 // the Pico (the sniffer's PIO/DMA)
 
+#include <cstdio>
+
 #include "hardware/i2c.h"
 #include "pico/stdlib.h"
+#include "pico/unique_id.h"
 #include "fakes.hpp"
 #include "smc_i2c_sniffer.hpp"
 
 i2c_inst_t fake_i2c0;
+
+void pico_get_unique_board_id_string(char* id_out, unsigned len) {
+  snprintf(id_out, len, "%s", fake::board_id);
+}
 
 static uint64_t time_now_us = 0;
 
 namespace fake {
 
 void (*tick_hook)() = nullptr;
-Watchdog watchdog;
-GpioIrq  power_ok_irq;
-bool     echo_log = false;
-bool     echo_debug = false;
+Watchdog    watchdog;
+GpioIrq     power_ok_irq;
+bool        echo_log = false;
+bool        echo_debug = false;
+const char* board_id = "E6614103E7123456";
 
 uint64_t now_us() {
   return time_now_us;

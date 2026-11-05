@@ -1,5 +1,5 @@
-// og_smc_sim: the SMC firmware running on the PC, driven by commands typed in
-// or read from a script file (og_smc_sim script.txt). See tests/README.md.
+// smcx_sim: the SMC firmware running on the PC, driven by commands typed in
+// or read from a script file (smcx_sim script.txt). See tests/README.md.
 
 #include <cstdio>
 #include <cstdlib>
@@ -141,7 +141,7 @@ int main(int argc, char** argv) {
   fake::echo_log = true;
   sim::Simulator s;
   if (typed) {
-    puts("OG SMC simulator: the Xbox is off. Type help for the commands.");
+    puts("SMCX simulator: the Xbox is off. Type help for the commands.");
   }
 
   std::string line;

@@ -79,8 +79,9 @@ struct GpioIrq {
 extern GpioIrq power_ok_irq;
 
 // Also print each log line, with the time, as the serial console would
-extern bool echo_log;
-extern bool echo_debug;  // DEBUG lines too
+extern bool        echo_log;
+extern bool        echo_debug;  // DEBUG lines too
+extern const char* board_id;    // pico_get_unique_board_id_string()
 
 // Fake flash (fake_flash.cpp), PICO_FLASH_SIZE_BYTES of it
 uint8_t*   flash();

@@ -18,7 +18,7 @@ cmake --build build-tests -j 8
 ctest --test-dir build-tests --output-on-failure
 ```
 
-Or run `build-tests/og_smc_tests.exe` directly to see every test by name;
+Or run `build-tests/smcx_tests.exe` directly to see every test by name;
 `--gtest_filter=SmbusTest.*` runs one fixture.
 
 They build with the default settings from `src/config.hpp` (P11).
@@ -42,7 +42,8 @@ They build with the default settings from `src/config.hpp` (P11).
   SMBus override, power off, tray moving) and the power down fade.
 - `test_settings.cpp`: settings saved to and loaded from a fake flash
   (`fake_flash.cpp`): round trip, nothing written when unchanged, corrupt
-  records, thresholds from another firmware, invalid Wi-Fi values.
+  records, thresholds from another firmware, invalid Wi-Fi values, and the
+  access point password (saved, or the board ID one).
 - `test_i2c_decoder.cpp`: the sniffer's SMBus decoder fed SDA/SCL levels:
   encoders found, writes logged (long, NACKed, two per tick), reads, other
   devices and our own transfers not logged, and a video mode decoded from bus
@@ -79,10 +80,10 @@ milliseconds. The watchdog works too: 1 s without a pet reboots the "Pico"
 
 ### Console
 
-`build-tests/og_smc_sim` takes commands typed in, or a script file:
+`build-tests/smcx_sim` takes commands typed in, or a script file:
 
 ```
-build-tests/og_smc_sim tests/sim/eject_storm.txt
+build-tests/smcx_sim tests/sim/eject_storm.txt
 ```
 
 It prints the firmware's log as the serial console would, with the models'
@@ -136,7 +137,7 @@ TEST_F(FrontPanelTest, EjectPressCountsAfterTwoReadings) {
 
 Each `update()` call is one 20 ms tick. Inputs and outputs are in
 `fake::hal` (`fakes.hpp`), log lines in `fake::log` (`fake::logged(text)`).
-New test files go in `add_executable(og_smc_tests ...)` in `CMakeLists.txt`.
+New test files go in `add_executable(smcx_tests ...)` in `CMakeLists.txt`.
 
 Not covered: anything that only runs on the Pico itself (`hal*.cpp`, the web
 interface, USB config, the sniffer's PIO/DMA capture, real flash), and real timing.

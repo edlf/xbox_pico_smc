@@ -8,7 +8,7 @@ namespace UsbConfig {
 // SMC touches any pin: a USB host has to enumerate the Pico within a second,
 // and the Xbox's standby pull-ups on AV mode 0 and 2 must be absent. Then the
 // SMC doesn't start at all, the Pico only runs a line-based command shell
-// (tools/og_smc_config.py) until it's reset.
+// (tools/smcx_config.py) until it's reset.
 
 // True to run the shell instead of the SMC. Leaves USB off otherwise.
 bool              detect();

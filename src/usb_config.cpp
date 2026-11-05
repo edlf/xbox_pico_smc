@@ -86,6 +86,9 @@ static void printSettings() {
   printf("rgb-brightness %u\n", SMC::RgbLed::brightness());
   printf("ssid %s\n", SMC::Settings::wifiSsid());
   printf("password %s\n", SMC::Settings::wifiPassword());  // Empty: made from the board ID
+  char board_password[32];
+  SMC::Settings::boardWifiPassword(board_password, sizeof(board_password));
+  printf("board-password %s\n", board_password);  // Used while the password is empty
   // The setting is kept on builds without a web interface, it's ignored there
   printf("web %s%s\n", SMC::Settings::webEnabled() ? "on" : "off", SMC_WEB_INTERFACE ? "" : " (no web interface in this build, ignored)");
   for (uint8_t i = 0; i < SMC::Fan::thresholdCount(); i++) {

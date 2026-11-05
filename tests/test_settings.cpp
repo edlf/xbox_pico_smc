@@ -180,4 +180,20 @@ TEST_F(SettingsTest, WifiValuesAreChecked) {
   EXPECT_FALSE(SMC::Settings::setWifiPassword(std::string(SMC::Settings::max_password_length + 1, 'a').c_str()));
 }
 
+// The access point uses the saved password, or while none is saved one made
+// from the board ID (also reported over USB config)
+TEST_F(SettingsTest, AccessPointPasswordFallsBackToTheBoardId) {
+  char password[64];
+  SMC::Settings::boardWifiPassword(password, sizeof(password));
+  EXPECT_STREQ(password, "smcx-E6614103E7123456");
+
+  ASSERT_TRUE(SMC::Settings::setWifiPassword(""));
+  EXPECT_TRUE(SMC::Settings::accessPointPassword(password, sizeof(password)));
+  EXPECT_STREQ(password, "smcx-E6614103E7123456");
+
+  ASSERT_TRUE(SMC::Settings::setWifiPassword("correct horse"));
+  EXPECT_FALSE(SMC::Settings::accessPointPassword(password, sizeof(password)));
+  EXPECT_STREQ(password, "correct horse");
+}
+
 }  // namespace

@@ -1,6 +1,6 @@
 # Host tests: the SMC state machines built for the PC, on a fake HAL and a few
 # fake Pico SDK headers, with GoogleTest. Not part of the firmware build.
-# Also builds og_smc_sim, the firmware's main loop running on the PC with
+# Also builds smcx_sim, the firmware's main loop running on the PC with
 # models of the Xbox around it (sim/).
 #
 #   cmake -S tests -B build-tests
@@ -10,7 +10,7 @@
 # Needs GoogleTest installed (MSYS2: pacman -S gtest). Uses the default
 # firmware settings from src/config.hpp (P11).
 cmake_minimum_required(VERSION 3.13)
-project(og_smc_tests CXX)
+project(smcx_tests CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,7 +22,7 @@ include(GoogleTest)
 set(SMC_SRC_DIR ${CMAKE_CURRENT_LIST_DIR}/../src)
 
 # The firmware's own modules on the fakes, and the simulator
-add_library(og_smc_host STATIC
+add_library(smcx_host STATIC
   # Fakes
   fake_hal.cpp
   fake_debug.cpp
@@ -51,11 +51,11 @@ add_library(og_smc_host STATIC
   sim/simulator.cpp
 )
 # The fake SDK headers come first, so <pico/...> and <hardware/...> resolve to them
-target_include_directories(og_smc_host PUBLIC ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/fake_sdk ${CMAKE_CURRENT_LIST_DIR}/sim ${SMC_SRC_DIR})
-target_compile_options(og_smc_host PUBLIC -Wall -Wextra)
-target_link_libraries(og_smc_host PUBLIC Threads::Threads)
+target_include_directories(smcx_host PUBLIC ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_CURRENT_LIST_DIR}/fake_sdk ${CMAKE_CURRENT_LIST_DIR}/sim ${SMC_SRC_DIR})
+target_compile_options(smcx_host PUBLIC -Wall -Wextra)
+target_link_libraries(smcx_host PUBLIC Threads::Threads)
 
-add_executable(og_smc_tests
+add_executable(smcx_tests
   test_encoder_mode.cpp
   test_smbus.cpp
   test_front_panel.cpp
@@ -68,10 +68,10 @@ add_executable(og_smc_tests
   test_scenarios.cpp
   test_rgb_led.cpp
 )
-target_link_libraries(og_smc_tests PRIVATE og_smc_host GTest::gtest_main)
+target_link_libraries(smcx_tests PRIVATE smcx_host GTest::gtest_main)
 
-add_executable(og_smc_sim sim/sim_main.cpp)
-target_link_libraries(og_smc_sim PRIVATE og_smc_host)
+add_executable(smcx_sim sim/sim_main.cpp)
+target_link_libraries(smcx_sim PRIVATE smcx_host)
 
 enable_testing()
-gtest_discover_tests(og_smc_tests)
+gtest_discover_tests(smcx_tests)

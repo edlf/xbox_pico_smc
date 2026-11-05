@@ -43,3 +43,4 @@
 # Build Folder
 build
 build-tests
+/tools/__pycache__

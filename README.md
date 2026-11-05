@@ -17,6 +17,7 @@ Experimental, currently only confirmed to work on 1.0 boards, it should work for
 - Different LED pattern for ram test failures (red blink). Depending on the failure you might still get a regular FRAG.
 - Logging via uart
 - Experimental (optional) WiFi control, requires external power to the pico (the 3.3v standby rail is not strong enough)
+- Python GUI to configure the smc, requires python tk and sv-ttk
 
 ## Notes
 - *Heavily* based on the work Prehistoricman did. [Xbox_SMC](https://github.com/Prehistoricman/Xbox_SMC)

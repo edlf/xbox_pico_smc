@@ -37,7 +37,7 @@ endif()
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(OG_SMC C CXX ASM)
+project(SMCX C CXX ASM)
 
 # Initialize the Raspberry Pi Pico SDK
 pico_sdk_init()
@@ -219,7 +219,7 @@ else()
   set(SMC_FAN_SRC ${SMC_SRC_DIR}/smc_fan_pic.cpp)
 endif()
 
-add_executable(OG_SMC ${SMC_SRC_DIR}/debug.cpp
+add_executable(SMCX ${SMC_SRC_DIR}/debug.cpp
                       ${SMC_SRC_DIR}/main.cpp
                       ${SMC_SRC_DIR}/hal.cpp
                       ${SMC_SRC_DIR}/hal_leds.cpp
@@ -245,13 +245,13 @@ add_executable(OG_SMC ${SMC_SRC_DIR}/debug.cpp
                       ${SMC_SRC_DIR}/smc_settings.cpp
                       ${SMC_SRC_DIR}/usb_config.cpp
                       ${SMC_SRC_DIR}/smc_rgb_led.cpp)
-pico_generate_pio_header(OG_SMC ${SMC_SRC_DIR}/ws2812.pio)
+pico_generate_pio_header(SMCX ${SMC_SRC_DIR}/ws2812.pio)
 
 # Core 0 stack: 4 KB (the SDK default is 2 KB), all of SCRATCH_Y.
 # Core 1 runs on its own 8 KB stack, see web.cpp.
-target_compile_definitions(OG_SMC PRIVATE PICO_STACK_SIZE=0x1000)
+target_compile_definitions(SMCX PRIVATE PICO_STACK_SIZE=0x1000)
 
-target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
+target_compile_definitions(SMCX PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPORT}>
                                           SMC_BOOT_CHALLENGE=$<BOOL:${SMC_BOOT_CHALLENGE}>
                                           SMC_AV_PACK_OVERRIDE=$<BOOL:${SMC_AV_PACK_OVERRIDE}>
                                           SMC_AV_PACK_MODE=${SMC_AV_PACK_MODE}
@@ -272,45 +272,58 @@ target_compile_definitions(OG_SMC PRIVATE SMC_DVD_SUPPORT=$<BOOL:${SMC_DVD_SUPPO
                                           SMC_WEB_INTERFACE=$<BOOL:${SMC_WEB_ENABLED}>
                                           SMC_BOARD="${PICO_BOARD}")
 
-pico_set_program_name(OG_SMC "OG_SMC")
-pico_set_program_version(OG_SMC "0.1")
+pico_set_program_name(SMCX "SMCX")
+pico_set_program_version(SMCX "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(OG_SMC 1)
-pico_enable_stdio_usb(OG_SMC 1) # Only started in USB config mode, see src/usb_config.hpp
+pico_enable_stdio_uart(SMCX 1)
+pico_enable_stdio_usb(SMCX 1) # Only started in USB config mode, see src/usb_config.hpp
+
+# USB product name. The config tools (tools/smcx_config*.py) only open ports
+# with this name, so they leave other Picos and serial devices alone.
+set(SMC_USB_PRODUCT "SMCX")
+# USB product ID under the Raspberry Pi vendor ID (0x2E8A). Empty: the Pico
+# SDK's (0x000A RP2040, 0x0009 RP2350). Only set one allocated to this project
+# (github.com/raspberrypi/usb-pid); the tools don't depend on it.
+set(SMC_USB_PID "" CACHE STRING "USB product ID, e.g. 0x10XX; empty for the Pico SDK's")
+target_compile_definitions(SMCX PRIVATE USBD_PRODUCT="${SMC_USB_PRODUCT}")
+if(SMC_USB_PID)
+  target_compile_definitions(SMCX PRIVATE USBD_PID=${SMC_USB_PID})
+endif()
 
 # Add the standard library to the build
-target_link_libraries(OG_SMC
+target_link_libraries(SMCX
         pico_stdlib
         hardware_pwm
         hardware_adc
         hardware_pio
         hardware_dma
         hardware_flash
-        pico_flash)
+        pico_flash
+        pico_unique_id)
 
 # Project headers, and lwipopts.h for the web interface
-target_include_directories(OG_SMC PRIVATE
+target_include_directories(SMCX PRIVATE
         ${SMC_SRC_DIR}
 )
 
 # Add any user requested libraries
-target_link_libraries(OG_SMC
+target_link_libraries(SMCX
         hardware_i2c
         hardware_watchdog
         pico_i2c_slave
         )
 
 if(SMC_WEB_ENABLED)
-  target_sources(OG_SMC PRIVATE ${SMC_SRC_DIR}/web.cpp ${SMC_SRC_DIR}/dhcp_server.cpp)
-  target_link_libraries(OG_SMC pico_cyw43_arch_lwip_poll pico_multicore pico_unique_id)
+  target_sources(SMCX PRIVATE ${SMC_SRC_DIR}/web.cpp ${SMC_SRC_DIR}/dhcp_server.cpp)
+  target_link_libraries(SMCX pico_cyw43_arch_lwip_poll pico_multicore pico_unique_id)
 endif()
 
 # Extra warnings for our own sources only: the SDK, lwIP and TinyUSB build in
 # the same target and aren't written for them
-get_target_property(SMC_TARGET_SOURCES OG_SMC SOURCES)
+get_target_property(SMC_TARGET_SOURCES SMCX SOURCES)
 list(FILTER SMC_TARGET_SOURCES INCLUDE REGEX "^${SMC_SRC_DIR}/")
 set_source_files_properties(${SMC_TARGET_SOURCES} PROPERTIES
                             COMPILE_OPTIONS "-Wall;-Wextra;-Wshadow;-Wconversion")
 
-pico_add_extra_outputs(OG_SMC)
+pico_add_extra_outputs(SMCX)
