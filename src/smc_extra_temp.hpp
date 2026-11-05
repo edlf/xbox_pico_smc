@@ -31,6 +31,21 @@ const NtcConfig&   ntcConfig();
 // False (and nothing changed) when a value is out of range
 bool setNtcConfig(const NtcConfig& config);
 
+// Shut the Xbox down, as an overheat, once the NTC reads limit_c or more: for
+// an NTC on something the ADM1032 doesn't see. Saved setting, SMC_NTC_SHUTDOWN
+// (off) and SMC_NTC_SHUTDOWN_TEMP by default. Ignored while the sensor bypass
+// is on (the NTC is the CPU temperature then, with its own thresholds), and
+// while the NTC is off or not connected.
+struct NtcShutdown {
+  bool    enabled;
+  uint8_t limit_c;  // °C
+};
+constexpr uint8_t  min_ntc_shutdown = 40, max_ntc_shutdown = 120;
+const NtcShutdown& ntcShutdown();
+bool               setNtcShutdown(const NtcShutdown& shutdown);  // False (and unchanged) outside 40-120 °C
+// The check applies and the NTC is at or over its limit
+bool ntcOverheated();
+
 void init();
 // Called once per tick
 void update();

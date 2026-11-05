@@ -59,11 +59,13 @@ struct Record {
   uint8_t  bootsel_power;        // As set: FrontPanelSW::bootselPowerSetting()
   int8_t   bypass_cpu_offset;    // Fan::bypassOffsets()
   int8_t   bypass_board_offset;  //
+  uint8_t  ntc_shutdown;         // ExtraTemp::ntcShutdown(): 0 the default, 1 off, 2 on
+  uint8_t  ntc_shutdown_temp;    // °C, 0 the default
   // Room for new settings without a new version, so a firmware update keeps
   // the saved ones: take the bytes from the start of this, with 0 meaning the
   // default (records saved before the setting existed have 0 there), and
   // shrink it by as much. Firmware that doesn't know them ignores them.
-  uint8_t  reserved[32];
+  uint8_t  reserved[30];
   uint32_t checksum;  // FNV-1a over everything above
 };
 static_assert(sizeof(Record) <= FLASH_PAGE_SIZE, "One flash page");
@@ -143,6 +145,8 @@ static Record current() {
   r.bootsel_power = FrontPanelSW::bootselPowerSetting() ? 1 : 0;
   r.bypass_cpu_offset = Fan::bypassOffsets().cpu;
   r.bypass_board_offset = Fan::bypassOffsets().board;
+  r.ntc_shutdown = ExtraTemp::ntcShutdown().enabled ? 2 : 1;
+  r.ntc_shutdown_temp = ExtraTemp::ntcShutdown().limit_c;
   r.checksum = checksum(r);
   return r;
 }
@@ -296,6 +300,13 @@ void load() {
     FrontPanelSW::setEjectButtonEnabled(stored->eject_button != 0);
     FrontPanelSW::setBootselPower(stored->bootsel_power != 0);
     Fan::setBypassOffsets({stored->bypass_cpu_offset, stored->bypass_board_offset});
+    ExtraTemp::setNtcShutdown({stored->ntc_shutdown == 0 ? SMC_NTC_SHUTDOWN != 0 : stored->ntc_shutdown == 2,
+                               stored->ntc_shutdown_temp == 0 ? static_cast<uint8_t>(SMC_NTC_SHUTDOWN_TEMP) : stored->ntc_shutdown_temp});
+  }
+  if (ExtraTemp::ntcShutdown().enabled && Fan::temperatureBypass()) {
+    debug::print(debug::Level::Warnings, "SETTINGS: NTC shutdown ignored while the sensor bypass is on");
+  } else if (ExtraTemp::ntcShutdown().enabled && !ExtraTemp::ntcConfig().enabled) {
+    debug::print(debug::Level::Warnings, "SETTINGS: NTC shutdown on, but the NTC is off");
   }
   if (Fan::temperatureBypass() && !ExtraTemp::ntcConfig().enabled) {
     debug::print(debug::Level::Warnings, "SETTINGS: Sensor bypass without the NTC on: the fan control will see a dead sensor");
@@ -347,6 +358,7 @@ void describe(void (*emit)(const char* line)) {
   emitf(emit, "fan-ramp up %u down %u glide-up %u glide-down %u", ramp.up, ramp.down, ramp.glide_up_ms, ramp.glide_down_ms);
   emitf(emit, "sensor-bypass %s", onOff(Fan::temperatureBypass()));
   emitf(emit, "bypass-offsets cpu %d board %d", Fan::bypassOffsets().cpu, Fan::bypassOffsets().board);
+  emitf(emit, "ntc-shutdown %s temp %u", onOff(ExtraTemp::ntcShutdown().enabled), ExtraTemp::ntcShutdown().limit_c);
   emitf(emit, "power-button %s", onOff(FrontPanelSW::powerButtonEnabled()));
   emitf(emit, "eject-button %s", onOff(FrontPanelSW::ejectButtonEnabled()));
   // As set; it's in use anyway while the power button is off
@@ -394,6 +406,7 @@ void resetToDefaults() {
   Dvd::setSupported(!SMC_NO_DVD);
   I2CSniffer::setEnabled(SMC_I2C_SNIFFER);
   ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
+  ExtraTemp::setNtcShutdown({SMC_NTC_SHUTDOWN != 0, SMC_NTC_SHUTDOWN_TEMP});
 }
 
 static void eraseAndProgram(void* param) {

@@ -39,6 +39,14 @@ cooldown always runs its full ~15 min: P2L only stops early above 97 °C or on a
 sensor error. The fan starts at 30 when the PSU turns on, there is no I2C bus
 recovery, and turning off the SMBus 0x05 override raises the fan to at least 30.
 
+Optionally the NTC thermistor counts too (`set ntc-shutdown on`, off by
+default): at each decision, an NTC reading at or over `ntc-shutdown-temp`
+(80 °C by default) is an overheat like the CPU's, so the fan goes to 50 and the
+Xbox shuts down after the cooldown (`FAN: NTC at <t> C, its shutdown limit is
+<limit> C` in the log). The cooldown itself still watches the CPU and board
+temperatures. Only with the NTC on and connected, and not with the sensor
+bypass, where the NTC already is the CPU temperature.
+
 ```mermaid
 stateDiagram-v2
     [*] --> initial
@@ -49,7 +57,7 @@ stateDiagram-v2
     sample_temperatures --> decision_state: median of 3 readings, prediction
     sample_temperatures --> overheated: sensor not responding
 
-    decision_state --> overheated: too hot
+    decision_state --> overheated: too hot, or the NTC over its shutdown limit
     decision_state --> custom_fan_speed: SMBus fan override
     decision_state --> cpu_hot: CPU or predicted CPU hot
     decision_state --> board_hot: predicted CPU or board warm

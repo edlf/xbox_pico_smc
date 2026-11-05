@@ -230,6 +230,7 @@ add_executable(SMCX ${SMC_SRC_DIR}/debug.cpp
                     ${SMC_SRC_DIR}/smc_encoder_mode.cpp
                     ${SMC_SRC_DIR}/smc_settings.cpp
                     ${SMC_SRC_DIR}/usb_config.cpp
+                    ${SMC_SRC_DIR}/usb_commands.cpp
                     ${SMC_SRC_DIR}/serial_console.cpp
                     ${SMC_SRC_DIR}/smc_rgb_led.cpp)
 if(SMC_WEB_BUILT)

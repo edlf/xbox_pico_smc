@@ -33,7 +33,6 @@ except ImportError:
 
 TITLE = "SMCX config"
 
-REPORT_VERSIONS = ("P01", "P11", "D01", "DXF", "P2L")
 
 AV_PACK_DETECT = "From the AV connector"
 # By name, in code order (the position gives the code back). Code 5 has no
@@ -386,23 +385,37 @@ class App(ttk.Frame):
         self.input(ttk.Checkbutton(ntc, text="Fitted, on GP28", variable=self.ntc, style=switch)).grid(
             row=1, column=0, columnspan=3, sticky="w", pady=(0, 4)
         )
-        self.ntc_values = {}  # Shell name -> (IntVar, min, max)
-        for row, (name, text, low, high, step, unit) in enumerate(
+        self.ntc_values = {}  # "beta", "r25", "series" -> IntVar
+        for row, (key, text, step, unit) in enumerate(
             [
-                ("ntc-beta", "Beta", 1000, 10000, 50, "K"),
-                ("ntc-r25", "R at 25 °C", 100, 1000000, 100, "ohms"),
-                ("ntc-series", "Series resistor", 100, 1000000, 100, "ohms, from 3.3 V"),
+                ("beta", "Beta", 50, "K"),
+                ("r25", "R at 25 °C", 100, "ohms"),
+                ("series", "Series resistor", 100, "ohms, from 3.3 V"),
             ],
             start=2,
         ):
+            low, high = cli.NTC_RANGES[key]
             ttk.Label(ntc, text=text).grid(row=row, column=0, sticky="w", padx=(0, 12))
-            var = tk.IntVar(value={"ntc-beta": 3950}.get(name, 10000))
+            var = tk.IntVar(value={"beta": 3950}.get(key, 10000))
             self.input(ttk.Spinbox(ntc, from_=low, to=high, increment=step, textvariable=var, width=9)).grid(
                 row=row, column=1, sticky="w", pady=2
             )
             self.muted(ntc, unit).grid(row=row, column=2, sticky="w", padx=(8, 0))
-            self.ntc_values[name] = (var, low, high)
-        ttk.Separator(ntc).grid(row=5, column=0, columnspan=3, sticky="ew", pady=10)
+            self.ntc_values[key] = var
+        # Shut down when the NTC gets too hot (an NTC on something the ADM1032 doesn't see)
+        shutdown = ttk.Frame(ntc)
+        shutdown.grid(row=5, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.ntc_shutdown = tk.BooleanVar(value=False)
+        self.ntc_shutdown_temp = tk.IntVar(value=80)  # The firmware's default
+        self.input(ttk.Checkbutton(shutdown, text="Shut down at", variable=self.ntc_shutdown, style=switch)).grid(
+            row=0, column=0, sticky="w"
+        )
+        low, high = cli.NTC_SHUTDOWN_RANGE
+        self.input(
+            ttk.Spinbox(shutdown, from_=low, to=high, increment=1, textvariable=self.ntc_shutdown_temp, width=4)
+        ).grid(row=0, column=1, padx=(8, 0))
+        self.muted(shutdown, "°C (not with the sensor bypass)").grid(row=0, column=2, padx=(6, 0))
+        ttk.Separator(ntc).grid(row=6, column=0, columnspan=3, sticky="ew", pady=10)
         self.sensor_bypass = tk.BooleanVar(value=False)
         self.input(
             ttk.Checkbutton(
@@ -411,24 +424,31 @@ class App(ttk.Frame):
                 variable=self.sensor_bypass,
                 style=switch,
             )
-        ).grid(row=6, column=0, columnspan=3, sticky="w")
+        ).grid(row=7, column=0, columnspan=3, sticky="w")
         # Added to the bypass's readings, both on one row
         offsets = ttk.Frame(ntc)
-        offsets.grid(row=7, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        offsets.grid(row=8, column=0, columnspan=3, sticky="w", pady=(4, 0))
         self.cpu_offset = tk.IntVar(value=10)  # The firmware's default
         self.board_offset = tk.IntVar(value=10)
         for column, (text, var) in enumerate([("Add: CPU", self.cpu_offset), ("Board", self.board_offset)]):
             ttk.Label(offsets, text=text).grid(row=0, column=column * 3, sticky="w", padx=(0 if column == 0 else 16, 6))
-            self.input(ttk.Spinbox(offsets, from_=-30, to=30, increment=1, textvariable=var, width=4)).grid(
-                row=0, column=column * 3 + 1
-            )
+            self.input(
+                ttk.Spinbox(
+                    offsets,
+                    from_=-cli.MAX_BYPASS_OFFSET,
+                    to=cli.MAX_BYPASS_OFFSET,
+                    increment=1,
+                    textvariable=var,
+                    width=4,
+                )
+            ).grid(row=0, column=column * 3 + 1)
             self.muted(offsets, "°C").grid(row=0, column=column * 3 + 2, padx=(4, 0))
         self.muted(
             ntc,
             "For a bad ADM1032, which isn't read then. Needs the NTC on and fitted: without a reading the fan "
             "control sees a dead sensor and shuts the Xbox down.",
             wraplength=380,
-        ).grid(row=8, column=0, columnspan=3, sticky="w")
+        ).grid(row=9, column=0, columnspan=3, sticky="w")
 
         # Logging
         diag = self.card(middle, "Diagnostics", row=3, column=0)
@@ -456,7 +476,7 @@ class App(ttk.Frame):
         self.fan_wrap_job = None  # Pending re-wrap (after())
         self.fan_wrap_width = None  # Width the labels were last wrapped to
         self.fan_rows.bind("<Configure>", self.schedule_fan_wrap)
-        self.thresholds = []  # (index, IntVar, min, default, value read)
+        self.thresholds = []  # (index, IntVar) per row
         self.fan_rows_shown = []  # (label, Spinbox, range label, IntVar) per threshold
         self.build_fan_rows(PIC_THRESHOLDS)
 
@@ -782,16 +802,19 @@ class App(ttk.Frame):
             self.log_level.set(s["log_level"].capitalize())
         self.sniffer.set(s.get("sniffer", True))
         self.sensor_bypass.set(s.get("sensor_bypass", False))
+        if "ntc_shutdown" in s:
+            self.ntc_shutdown.set(s["ntc_shutdown"]["enabled"])
+            self.ntc_shutdown_temp.set(s["ntc_shutdown"]["temp"])
         if "bypass_offsets" in s:
             self.cpu_offset.set(s["bypass_offsets"]["cpu"])
             self.board_offset.set(s["bypass_offsets"]["board"])
         if "ntc" in s:
             self.ntc.set(s["ntc"]["enabled"])
-            for name, key in (("ntc-beta", "beta"), ("ntc-r25", "r25"), ("ntc-series", "series")):
-                self.ntc_values[name][0].set(s["ntc"][key])
+            for key in ("beta", "r25", "series"):
+                self.ntc_values[key].set(s["ntc"][key])
         if "report_version" in s:
             auto = f"Same as the build ({s['report_version_default']})"
-            self.report_version.configure(values=[auto, *REPORT_VERSIONS])
+            self.report_version.configure(values=[auto, *cli.REPORT_VERSIONS])
             self.report_version.set(auto if s["report_version"] == "auto" else s["report_version"])
             self.report_version_note.configure(
                 text=f"What the SMC tells the Xbox it is. It still behaves as {s.get('firmware', '?')} firmware."
@@ -826,7 +849,7 @@ class App(ttk.Frame):
             spinbox.configure(from_=t["min"], to=t["default"])
             var.set(t["value"])
             limits.configure(text=f"°C, {t['min']}-{t['default']}")
-            self.thresholds.append((t["index"], var, t["min"], t["default"], t["value"]))
+            self.thresholds.append((t["index"], var))
 
     def build_fan_rows(self, thresholds):
         """One row per threshold: its name, a box for the value and its range"""
@@ -849,7 +872,7 @@ class App(ttk.Frame):
             limits = self.muted(self.fan_rows, f"°C, {t['min']}-{t['default']}")
             limits.grid(row=row, column=2, sticky="w", pady=4)
             self.fan_rows_shown.append((label, spinbox, limits, var))
-            self.thresholds.append((t["index"], var, t["min"], t["default"], t["value"]))
+            self.thresholds.append((t["index"], var))
         if self.thresholds:
             note = self.muted(self.fan_rows, "The firmware's default is the highest you can set each one.")
             note.grid(row=len(self.thresholds), column=0, columnspan=3, sticky="w", pady=(10, 0))
@@ -898,7 +921,7 @@ class App(ttk.Frame):
             (key for key, name in RGB_MODE_NAMES.items() if name == self.rgb_mode.get()), s.get("rgb_mode")
         )
         s["rgb_brightness"] = self.rgb_brightness.get()
-        values = {index: number(var, f"Fan threshold {index}") for index, var, *_ in self.thresholds}
+        values = {index: number(var, f"Fan threshold {index}") for index, var in self.thresholds}
         for t in s["thresholds"]:
             t["value"] = values.get(t["index"], t["value"])
         s["ssid"] = self.ssid.get()
@@ -930,7 +953,12 @@ class App(ttk.Frame):
         if "ntc" in s:
             s["ntc"] = {"enabled": self.ntc.get()}
             for key in ("beta", "r25", "series"):
-                s["ntc"][key] = number(self.ntc_values[f"ntc-{key}"][0], f"The NTC {key}")
+                s["ntc"][key] = number(self.ntc_values[key], f"The NTC {key}")
+        if "ntc_shutdown" in s:
+            s["ntc_shutdown"] = {
+                "enabled": self.ntc_shutdown.get(),
+                "temp": number(self.ntc_shutdown_temp, "The NTC shutdown temperature"),
+            }
         if "bypass_offsets" in s:
             s["bypass_offsets"] = {
                 "cpu": number(self.cpu_offset, "The cpu offset"),

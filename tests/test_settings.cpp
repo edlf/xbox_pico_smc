@@ -47,6 +47,7 @@ class SettingsTest : public ::testing::Test {
     SMC::FrontPanelSW::setEjectButtonEnabled(false);
     SMC::FrontPanelSW::setBootselPower(true);
     ASSERT_TRUE(SMC::Fan::setBypassOffsets({7, -12}));
+    ASSERT_TRUE(SMC::ExtraTemp::setNtcShutdown({!SMC_NTC_SHUTDOWN, 95}));
   }
 
   static uint8_t* record() {
@@ -175,7 +176,7 @@ TEST_F(SettingsTest, ReservedBytesAreIgnored) {
   SMC::Settings::load();
   changeEverything();
   ASSERT_TRUE(SMC::Settings::saveNow());
-  for (uint16_t i = recordSize() - 4 - 32; i < recordSize() - 4; i++) {
+  for (uint16_t i = recordSize() - 4 - 30; i < recordSize() - 4; i++) {  // reserved[30]
     ASSERT_EQ(record()[i], 0) << "Saved as 0";
     record()[i] = 0xA5;
   }
@@ -185,6 +186,27 @@ TEST_F(SettingsTest, ReservedBytesAreIgnored) {
   SMC::Settings::load();
   EXPECT_TRUE(fake::logged("SETTINGS: Loaded"));
   EXPECT_EQ(hal::get_led_brightness(), 40);
+}
+
+// The NTC shutdown came from the reserved bytes: a record saved before it has
+// zeros there, and loads with its defaults
+TEST_F(SettingsTest, NtcShutdownZerosAreTheDefaults) {
+  SMC::Settings::load();
+  changeEverything();
+  changeSystemSettings();
+  ASSERT_TRUE(SMC::Settings::saveNow());
+  const uint16_t ntc_shutdown = recordSize() - 4 - 30 - 2;  // Just before reserved[30]
+  record()[ntc_shutdown] = 0;
+  record()[ntc_shutdown + 1] = 0;
+  fixChecksum();
+
+  backToDefaults();
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcShutdown({!SMC_NTC_SHUTDOWN, 100}));
+  SMC::Settings::load();
+  EXPECT_TRUE(fake::logged("SETTINGS: Loaded"));
+  EXPECT_EQ(SMC::ExtraTemp::ntcShutdown().enabled, static_cast<bool>(SMC_NTC_SHUTDOWN));
+  EXPECT_EQ(SMC::ExtraTemp::ntcShutdown().limit_c, SMC_NTC_SHUTDOWN_TEMP);
+  EXPECT_EQ(SMC::Fan::bypassOffsets().cpu, 7);  // The rest as saved
 }
 
 TEST_F(SettingsTest, ThresholdsFromAnotherFirmwareAreIgnored) {
@@ -267,6 +289,8 @@ TEST_F(SettingsTest, SystemSettingsAreSaved) {
   EXPECT_TRUE(fake::logged("  > bootsel-power on"));
   EXPECT_EQ(SMC::Fan::bypassOffsets().cpu, 7);
   EXPECT_EQ(SMC::Fan::bypassOffsets().board, -12);
+  EXPECT_EQ(SMC::ExtraTemp::ntcShutdown().enabled, !SMC_NTC_SHUTDOWN);
+  EXPECT_EQ(SMC::ExtraTemp::ntcShutdown().limit_c, 95);
   EXPECT_TRUE(fake::logged("  > bypass-offsets cpu 7 board -12"));
 }
 

@@ -81,6 +81,16 @@ def test_sensor_bypass_needs_the_ntc(app):
     assert app.changes() == ["set sensor-bypass on", "set ntc on"]
 
 
+def test_ntc_shutdown(app):
+    read(app, "ntc on beta 3950 r25 10000 series 10000")
+    app.ntc_shutdown.set(True)
+    app.ntc_shutdown_temp.set(90)
+    assert app.changes() == ["set ntc-shutdown-temp 90", "set ntc-shutdown on"]
+    app.ntc.set(False)
+    with pytest.raises(ValueError, match="needs the NTC on"):
+        app.changes()
+
+
 def test_reported_version_auto_and_fixed(app):
     read(app, "report-version D01 default P01")
     assert app.changes() == []

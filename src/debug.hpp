@@ -14,8 +14,6 @@ bool enabled(Level level);
 // enabled. Formatted into a fixed buffer, no heap: longer lines end in "...".
 __attribute__((format(printf, 2, 3))) void print(Level level, const char* format, ...);
 
-const char* level_name();
-
 // The level messages are printed at: saved setting, SMC_DEBUG_LEVEL by default
 Level             level();
 void              setLevel(Level level);

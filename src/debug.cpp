@@ -54,10 +54,6 @@ void print(Level level, const char* format, ...) {
   fflush(stdout);
 }
 
-const char* level_name() {
-  return info(debugLevel).name;
-}
-
 Level level() {
   return debugLevel;
 }

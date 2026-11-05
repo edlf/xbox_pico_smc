@@ -19,14 +19,7 @@ class ScenarioTest : public ::testing::Test {
   void TearDown() override {
     sim.reset();
     // Settings outlive a simulator run, as on the Pico
-    SMC::BootChallenge::setEnforced(SMC_BOOT_CHALLENGE);
-    SMC::Video::setAvPackOverride(SMC_AV_PACK_OVERRIDE ? SMC_AV_PACK_MODE : -1);
-    SMC::Dvd::setSupported(!SMC_NO_DVD);
-    SMC::Fan::setTemperatureBypass(false);
-    SMC::FrontPanelSW::setPowerButtonEnabled(true);
-    SMC::FrontPanelSW::setEjectButtonEnabled(true);
-    SMC::FrontPanelSW::setBootselPower(SMC_BOOTSEL_POWER);
-    SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
+    SMC::Settings::resetToDefaults();
   }
 
   // Power button, then until the dashboard runs
@@ -98,6 +91,38 @@ TEST_F(ScenarioTest, SensorBypassUsesTheNtc) {
   EXPECT_LE(sim->smbusRead(0x09), 56);
   EXPECT_FALSE(fake::logged("forcing overheat"));
   EXPECT_TRUE(sim->osRunning());
+}
+
+// The NTC shutdown: the NTC (about 45 °C here) over a 40 °C limit shuts the
+// Xbox down as an overheat would, while the CPU (fake ADM1032 at 40 °C) is fine
+TEST_F(ScenarioTest, NtcOverTheShutdownLimitShutsDown) {
+  SMC::ExtraTemp::NtcConfig ntc = SMC::ExtraTemp::ntcConfig();
+  ntc.enabled = true;
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcConfig(ntc));
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcShutdown({true, 40}));
+  fake::hal.ntc_adc = 1241;
+  sim->pressPower();  // The first fan decision comes before the dashboard
+  sim->run(30000);
+  EXPECT_TRUE(fake::logged("FAN: NTC at 4"));
+  EXPECT_TRUE(fake::logged("its shutdown limit is 40 C"));
+  EXPECT_TRUE(fake::logged("FAN: Overheated"));
+  EXPECT_FALSE(sim->osRunning()) << sim->status();
+}
+
+// The same with the sensor bypass on: the NTC is the CPU's then, and 45 °C
+// (plus the +10 offset) is far from the CPU's overheat threshold
+TEST_F(ScenarioTest, NtcShutdownIsIgnoredWithTheSensorBypass) {
+  SMC::Fan::setTemperatureBypass(true);
+  SMC::ExtraTemp::NtcConfig ntc = SMC::ExtraTemp::ntcConfig();
+  ntc.enabled = true;
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcConfig(ntc));
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcShutdown({true, 40}));
+  fake::hal.ntc_adc = 1241;
+  boot();
+  sim->run(30000);
+  EXPECT_FALSE(fake::logged("FAN: NTC at"));
+  EXPECT_FALSE(SMC::Fan::flags.overheated);
+  EXPECT_TRUE(sim->osRunning()) << sim->status();
 }
 
 // Sensor bypass without the NTC: a dead sensor, so an overheat

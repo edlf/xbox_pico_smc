@@ -48,6 +48,7 @@ add_library(smcx_host STATIC
   ${SMC_SRC_DIR}/smc_i2c_decoder.cpp
   ${SMC_SRC_DIR}/smc_smbus.cpp
   ${SMC_SRC_DIR}/smc_video.cpp
+  ${SMC_SRC_DIR}/usb_commands.cpp
   # Simulator
   sim/simulator.cpp
 )
@@ -69,6 +70,7 @@ add_executable(smcx_tests
   test_scenarios.cpp
   test_rgb_led.cpp
   test_fan.cpp
+  test_usb_commands.cpp
 )
 target_link_libraries(smcx_tests PRIVATE smcx_host GTest::gtest_main)
 

@@ -26,6 +26,26 @@ const NtcConfig& ntcConfig() {
   return ntc;
 }
 
+static NtcShutdown ntc_shutdown = {SMC_NTC_SHUTDOWN != 0, SMC_NTC_SHUTDOWN_TEMP};
+static_assert(SMC_NTC_SHUTDOWN_TEMP >= min_ntc_shutdown && SMC_NTC_SHUTDOWN_TEMP <= max_ntc_shutdown, "SMC_NTC_SHUTDOWN_TEMP must be 40-120");
+
+const NtcShutdown& ntcShutdown() {
+  return ntc_shutdown;
+}
+
+bool setNtcShutdown(const NtcShutdown& shutdown) {
+  if (shutdown.limit_c < min_ntc_shutdown || shutdown.limit_c > max_ntc_shutdown) {
+    return false;
+  }
+  ntc_shutdown = shutdown;
+  return true;
+}
+
+bool ntcOverheated() {
+  return ntc_shutdown.enabled && !Fan::temperatureBypass() && ntc.enabled && sensors.ntc_connected &&
+         sensors.ntc_temperature >= static_cast<int16_t>(ntc_shutdown.limit_c * 10);
+}
+
 bool setNtcConfig(const NtcConfig& config) {
   if (config.beta < min_ntc_beta || config.beta > max_ntc_beta || config.r25 < min_ntc_ohms || config.r25 > max_ntc_ohms || config.series_r < min_ntc_ohms ||
       config.series_r > max_ntc_ohms) {

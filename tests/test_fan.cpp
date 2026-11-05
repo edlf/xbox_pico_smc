@@ -23,6 +23,7 @@ class FanTest : public ::testing::Test {
     SMC::Fan::setTemperatureBypass(false);
     SMC::Fan::setBypassOffsets(SMC::Fan::default_bypass_offsets);
     SMC::ExtraTemp::setNtcConfig({SMC_NTC_SENSOR != 0, SMC_NTC_BETA, SMC_NTC_R25, SMC_NTC_SERIES_R});
+    SMC::ExtraTemp::setNtcShutdown({SMC_NTC_SHUTDOWN != 0, SMC_NTC_SHUTDOWN_TEMP});
     SMC::ExtraTemp::sensors = {};
   }
 
@@ -122,6 +123,33 @@ TEST_F(FanTest, OverheatSkipsTheGlide) {
   SMC::Fan::setSpeedNow(50);
   EXPECT_EQ(fake::hal.fan_speed, 50);
   EXPECT_EQ(SMC::Fan::getOutputSpeed(), 50);
+}
+
+// The NTC shutdown: only when on, with the NTC on and connected, at or over the
+// limit, and not with the sensor bypass
+TEST_F(FanTest, NtcShutdownConditions) {
+  ntcReading();  // 52.6 °C
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcShutdown({false, 50}));
+  EXPECT_FALSE(SMC::ExtraTemp::ntcOverheated());  // Off
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcShutdown({true, 50}));
+  EXPECT_TRUE(SMC::ExtraTemp::ntcOverheated());
+  ASSERT_TRUE(SMC::ExtraTemp::setNtcShutdown({true, 53}));
+  EXPECT_FALSE(SMC::ExtraTemp::ntcOverheated());  // Under the limit
+  SMC::ExtraTemp::sensors.ntc_temperature = 530;
+  EXPECT_TRUE(SMC::ExtraTemp::ntcOverheated());  // At it
+  SMC::Fan::setTemperatureBypass(true);
+  EXPECT_FALSE(SMC::ExtraTemp::ntcOverheated());  // The NTC is the CPU's then
+  SMC::Fan::setTemperatureBypass(false);
+  SMC::ExtraTemp::sensors.ntc_connected = false;
+  EXPECT_FALSE(SMC::ExtraTemp::ntcOverheated());  // Open or shorted
+}
+
+TEST_F(FanTest, NtcShutdownLimitIsChecked) {
+  EXPECT_FALSE(SMC::ExtraTemp::setNtcShutdown({true, 39}));
+  EXPECT_FALSE(SMC::ExtraTemp::setNtcShutdown({true, 121}));
+  EXPECT_EQ(SMC::ExtraTemp::ntcShutdown().limit_c, SMC_NTC_SHUTDOWN_TEMP);  // Unchanged
+  EXPECT_TRUE(SMC::ExtraTemp::setNtcShutdown({true, 40}));
+  EXPECT_TRUE(SMC::ExtraTemp::setNtcShutdown({true, 120}));
 }
 
 // Without the bypass: the ADM1032 at 0x4C, CPU register 0x01, board 0x00

@@ -95,7 +95,11 @@ void update_fan_temp() {
       timeout2 = wait_rounds;
       timeout1 = wait_round_ticks - sample_count;  // The sampling ticks count in the first round
 
-      if (sensors.CPU_temperature >= p2l_thresholds.overheat_cpu) {
+      if (ExtraTemp::ntcOverheated()) {
+        debug::print(debug::Level::Warnings, "FAN: NTC at %d.%d C, its shutdown limit is %u C", ExtraTemp::sensors.ntc_temperature / 10,
+                     ExtraTemp::sensors.ntc_temperature % 10, ExtraTemp::ntcShutdown().limit_c);
+      }
+      if (sensors.CPU_temperature >= p2l_thresholds.overheat_cpu || ExtraTemp::ntcOverheated()) {
         state = fan_control_state::overheated;
       } else if (flags.fan_override) {
         state = fan_control_state::custom_fan_speed;

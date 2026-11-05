@@ -42,10 +42,6 @@ void print(Level level, const char* format, ...) {
   }
 }
 
-const char* level_name() {
-  return "DEBUG";
-}
-
 // Kept, so settings can be tested; enabled() still lets every line through
 static Level current_level = static_cast<Level>(SMC_DEBUG_LEVEL);
 
@@ -62,6 +58,21 @@ void setLevel(Level level) {
 const char* levelName(Level level) {
   static const char* const names[] = {"SILENT", "CRITICAL", "WARNINGS", "INFO", "DEBUG"};
   return names[static_cast<uint8_t>(level)];
+}
+
+bool parseLevel(const char* name, Level& level) {
+  for (uint8_t i = 0; i < level_count; i++) {
+    const char* candidate = levelName(static_cast<Level>(i));
+    size_t      n = 0;
+    while (name[n] != '\0' && candidate[n] != '\0' && (name[n] == candidate[n] || name[n] == candidate[n] + ('a' - 'A'))) {
+      n++;
+    }
+    if (name[n] == '\0' && candidate[n] == '\0') {
+      level = static_cast<Level>(i);
+      return true;
+    }
+  }
+  return false;
 }
 
 void line(const char* format, ...) {

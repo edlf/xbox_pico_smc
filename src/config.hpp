@@ -86,6 +86,16 @@ static_assert(SMC_LED_BRIGHTNESS >= 1 && SMC_LED_BRIGHTNESS <= 100, "SMC_LED_BRI
 #define SMC_BOOTSEL_POWER 0
 #endif
 
+// Shut the Xbox down (as an overheat) once the NTC reads SMC_NTC_SHUTDOWN_TEMP
+// °C or more, unless the saved settings say otherwise. Off by default. Only
+// with the NTC on, and not with the sensor bypass (the NTC is the CPU's then).
+#ifndef SMC_NTC_SHUTDOWN
+#define SMC_NTC_SHUTDOWN 0
+#endif
+#ifndef SMC_NTC_SHUTDOWN_TEMP
+#define SMC_NTC_SHUTDOWN_TEMP 80
+#endif
+
 // Read an NTC thermistor on GP28 (ADC2): NTC to ground, SMC_NTC_SERIES_R
 // from 3.3 V to the pin. Beta equation with SMC_NTC_BETA and the resistance at
 // 25 °C (SMC_NTC_R25).

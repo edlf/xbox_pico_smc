@@ -40,6 +40,7 @@ def test_parses_every_line():
     assert s["fan_ramp"] == {"up": 1, "down": 1, "glide_up": 0, "glide_down": 0}
     assert s["sensor_bypass"] is False
     assert s["bypass_offsets"] == {"cpu": 10, "board": 10}
+    assert s["ntc_shutdown"] == {"enabled": False, "temp": 80}
     assert s["power_button"] is True and s["eject_button"] is True and s["bootsel_power"] is False
     assert s["thresholds"][1] == {
         "index": 1,
@@ -78,9 +79,9 @@ def test_print_settings_handles_a_full_reply(capsys):
 def firmware_keys():
     """The first word of each line the firmware's `get` sends."""
     describe = (ROOT / "src" / "smc_settings.cpp").read_text(encoding="utf-8")
-    usb = (ROOT / "src" / "usb_config.cpp").read_text(encoding="utf-8")
+    usb = (ROOT / "src" / "usb_commands.cpp").read_text(encoding="utf-8")
     keys = set(re.findall(r'emitf?\((?:emit, )?"([a-z-]+)[ "]', describe))
-    keys |= set(re.findall(r'printf\("(firmware|git) ', usb))
+    keys |= set(re.findall(r'reply\("(firmware|git) ', usb))
     return keys
 
 
@@ -92,8 +93,8 @@ def test_sample_matches_the_firmware():
 
 def test_cli_settings_exist_in_the_firmware():
     """Each `set-<x>` the CLI offers is a `set <name>` the firmware's help lists."""
-    usb = (ROOT / "src" / "usb_config.cpp").read_text(encoding="utf-8")
-    for name in cli.SIMPLE_SETTINGS.values():
+    usb = (ROOT / "src" / "usb_commands.cpp").read_text(encoding="utf-8")
+    for name, _ in cli.SIMPLE_SETTINGS.values():
         assert f'"set {name} ' in usb, name
 
 
@@ -201,6 +202,16 @@ def test_later_errors_are_not_retried(pico):
 def test_the_same_settings_need_no_commands():
     s = settings()
     assert cli.commands_for(s, s) == []
+
+
+def test_ntc_shutdown_is_sent_after_the_ntc_and_needs_it():
+    current = settings()
+    wanted = settings("ntc on beta 3950 r25 10000 series 10000", "ntc-shutdown on temp 95")
+    assert cli.commands_for(current, wanted) == ["set ntc on", "set ntc-shutdown-temp 95", "set ntc-shutdown on"]
+    with pytest.raises(ValueError, match="needs the NTC on"):
+        cli.commands_for(current, settings("ntc-shutdown on temp 95"))
+    with pytest.raises(ValueError, match="40 to 120"):
+        cli.commands_for(current, settings("ntc-shutdown off temp 30"))
 
 
 def test_values_the_firmware_would_refuse_are_refused():

@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
 
 # A `get` reply as the firmware sends it (Settings::describe() in
-# src/smc_settings.cpp, firmware and git from src/usb_config.cpp). Checked
+# src/smc_settings.cpp, firmware and git from src/usb_commands.cpp). Checked
 # against those sources by test_sample_matches_the_firmware.
 GET_REPLY = [
     "firmware P01",
@@ -31,6 +31,7 @@ GET_REPLY = [
     "fan-ramp up 1 down 1 glide-up 0 glide-down 0",
     "sensor-bypass off",
     "bypass-offsets cpu 10 board 10",
+    "ntc-shutdown off temp 80",
     "power-button on",
     "eject-button on",
     "bootsel-power off",

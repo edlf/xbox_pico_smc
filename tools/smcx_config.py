@@ -57,29 +57,59 @@ AV_PACKS = {
     6: "Standard AV",
 }
 
-# CLI commands that are one `set <name> <value>` each: CLI name -> shell name
+REPORT_VERSIONS = ("P01", "P11", "D01", "DXF", "P2L")  # Besides "auto", the build's
+# The firmware's ranges (its `help`), for the checks before sending
+NTC_RANGES = {"beta": (1000, 10000), "r25": (100, 1000000), "series": (100, 1000000)}
+MAX_BYPASS_OFFSET = 30  # °C, either way
+NTC_SHUTDOWN_RANGE = (40, 120)  # °C
+
+# CLI commands that are one `set <name> <value>` each: CLI name -> (shell
+# name, what the value is, for --help)
 SIMPLE_SETTINGS = {
-    "set-fade": "fade",
-    "set-boot-challenge": "boot-challenge",
-    "set-av-pack": "av-pack",
-    "set-log-level": "log-level",
-    "set-no-dvd": "no-dvd",
-    "set-sniffer": "sniffer",
-    "set-ntc": "ntc",
-    "set-ntc-beta": "ntc-beta",
-    "set-ntc-r25": "ntc-r25",
-    "set-ntc-series": "ntc-series",
-    "set-fan-ramp-up": "fan-ramp-up",
-    "set-fan-ramp-down": "fan-ramp-down",
-    "set-fan-glide-up": "fan-glide-up",
-    "set-fan-glide-down": "fan-glide-down",
-    "set-sensor-bypass": "sensor-bypass",
-    "set-bypass-cpu-offset": "bypass-cpu-offset",
-    "set-bypass-board-offset": "bypass-board-offset",
-    "set-power-button": "power-button",
-    "set-eject-button": "eject-button",
-    "set-bootsel-power": "bootsel-power",
+    "set-brightness": ("brightness", "1-100"),
+    "set-fade": ("fade", "on|off"),
+    "set-rgb-mode": ("rgb-mode", "|".join(RGB_MODES)),
+    "set-rgb-brightness": ("rgb-brightness", "1-100"),
+    "set-ssid": ("ssid", "NAME"),
+    "set-web": ("web", "on|off"),
+    "set-report-version": ("report-version", "|".join(("auto", *REPORT_VERSIONS))),
+    "set-boot-challenge": ("boot-challenge", "on|off"),
+    "set-av-pack": ("av-pack", "detect|0-6"),
+    "set-log-level": ("log-level", "|".join(LOG_LEVELS)),
+    "set-no-dvd": ("no-dvd", "on|off"),
+    "set-sniffer": ("sniffer", "on|off"),
+    "set-ntc": ("ntc", "on|off"),
+    "set-ntc-beta": ("ntc-beta", "K"),
+    "set-ntc-r25": ("ntc-r25", "OHMS"),
+    "set-ntc-series": ("ntc-series", "OHMS"),
+    "set-fan-ramp-up": ("fan-ramp-up", "1-5"),
+    "set-fan-ramp-down": ("fan-ramp-down", "1-5"),
+    "set-fan-glide-up": ("fan-glide-up", "MS"),
+    "set-fan-glide-down": ("fan-glide-down", "MS"),
+    "set-sensor-bypass": ("sensor-bypass", "on|off"),
+    "set-bypass-cpu-offset": ("bypass-cpu-offset", "C"),
+    "set-bypass-board-offset": ("bypass-board-offset", "C"),
+    "set-ntc-shutdown": ("ntc-shutdown", "on|off"),
+    "set-ntc-shutdown-temp": ("ntc-shutdown-temp", "C"),
+    "set-power-button": ("power-button", "on|off"),
+    "set-eject-button": ("eject-button", "on|off"),
+    "set-bootsel-power": ("bootsel-power", "on|off"),
 }
+# All the CLI's commands, for --help
+COMMANDS = " | ".join(
+    [
+        "get",
+        "export FILE",
+        "import FILE",
+        *(f"{name} {value}" for name, (_, value) in SIMPLE_SETTINGS.items()),
+        "set-threshold I C",
+        "set-password PW (empty: the board ID one)",
+        "defaults",
+        "save",
+        "reboot",
+        "bootloader",
+    ]
+)
 
 
 class SmcError(Exception):
@@ -287,6 +317,10 @@ def parse_settings(lines):
             # bypass-offsets cpu <C> board <C>
             words = rest.split()
             settings["bypass_offsets"] = {"cpu": int(words[1]), "board": int(words[3])}
+        elif key == "ntc-shutdown":
+            # ntc-shutdown <on|off> temp <C>
+            words = rest.split()
+            settings["ntc_shutdown"] = {"enabled": words[0] == "on", "temp": int(words[2])}
         elif key == "fan-ramp":
             # fan-ramp up <1-5> down <1-5> glide-up <ms> glide-down <ms>
             words = rest.split()
@@ -329,9 +363,6 @@ def parse_settings(lines):
 
 
 # ---- What to send, export and import ----------------------------------------
-
-REPORT_VERSIONS = ("P01", "P11", "D01", "DXF", "P2L")  # Besides "auto", the build's
-NTC_RANGES = {"beta": (1000, 10000), "r25": (100, 1000000), "series": (100, 1000000)}  # As the firmware's help
 
 
 def printable(text):
@@ -440,7 +471,9 @@ def commands_for(current, wanted):
                 commands.append(f"set ntc-{key} {w['ntc'][key]}")
         if "bypass_offsets" in s:
             for key in ("cpu", "board"):
-                offset = _number(w["bypass_offsets"].get(key), f"The {key} offset", -30, 30, " °C")
+                offset = _number(
+                    w["bypass_offsets"].get(key), f"The {key} offset", -MAX_BYPASS_OFFSET, MAX_BYPASS_OFFSET, " °C"
+                )
                 if offset != s["bypass_offsets"][key]:
                     commands.append(f"set bypass-{key}-offset {offset}")
         ntc_on = _switch(w["ntc"].get("enabled"), "The NTC")
@@ -448,6 +481,17 @@ def commands_for(current, wanted):
             raise ValueError("The sensor bypass needs the NTC on: it takes the CPU temperature from it")
         if ntc_on != s["ntc"]["enabled"]:
             commands.append(f"set ntc {_on(ntc_on)}")
+        if "ntc_shutdown" in s:
+            low, high = NTC_SHUTDOWN_RANGE
+            shutdown, wanted_shutdown = s["ntc_shutdown"], w["ntc_shutdown"]
+            temp = _number(wanted_shutdown.get("temp"), "The NTC shutdown temperature", low, high, " °C")
+            if temp != shutdown["temp"]:
+                commands.append(f"set ntc-shutdown-temp {temp}")
+            enabled = _switch(wanted_shutdown.get("enabled"), "The NTC shutdown")
+            if enabled and not ntc_on:
+                raise ValueError("The NTC shutdown needs the NTC on: it's the NTC's temperature it watches")
+            if enabled != shutdown["enabled"]:
+                commands.append(f"set ntc-shutdown {_on(enabled)}")
     if "report_version" in s:
         version = w["report_version"]
         if version != "auto" and version not in REPORT_VERSIONS:
@@ -481,6 +525,7 @@ EXPORT_KEYS = (
     "fan_ramp",
     "sensor_bypass",
     "bypass_offsets",
+    "ntc_shutdown",
     "power_button",
     "eject_button",
     "bootsel_power",
@@ -584,6 +629,14 @@ def print_settings(s):
         ntc = s["ntc"]
         state = "on" if ntc["enabled"] else "off"
         print(f"NTC:             {state}, beta {ntc['beta']} K, R25 {ntc['r25']} ohms, series {ntc['series']} ohms")
+    if "ntc_shutdown" in s:
+        shutdown = s["ntc_shutdown"]
+        if not shutdown["enabled"]:
+            print("NTC shutdown:    off")
+        elif s.get("sensor_bypass"):
+            print(f"NTC shutdown:    at {shutdown['temp']} C, but ignored: the sensor bypass is on")
+        else:
+            print(f"NTC shutdown:    at {shutdown['temp']} C")
     if "report_version" in s:
         version = s["report_version"]
         shown = f"{s['report_version_default']} (the build's)" if version == "auto" else version
@@ -606,7 +659,7 @@ def main():
     parser.add_argument(
         "commands",
         nargs="+",
-        help="get | export FILE | import FILE | set-brightness N | set-fade on|off | set-boot-challenge on|off | set-av-pack detect|0-6 | set-log-level LEVEL | set-no-dvd on|off | set-sniffer on|off | set-ntc on|off | set-ntc-beta K | set-ntc-r25 OHMS | set-ntc-series OHMS | set-fan-ramp-up 1-5 | set-fan-ramp-down 1-5 | set-fan-glide-up MS | set-fan-glide-down MS | set-sensor-bypass on|off | set-bypass-cpu-offset C | set-bypass-board-offset C | set-power-button on|off | set-eject-button on|off | set-bootsel-power on|off | set-rgb-mode off|boot|mirror | set-rgb-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | set-report-version auto|P01|P11|D01|DXF|P2L | defaults | save | reboot | bootloader",
+        help=COMMANDS,
     )
     args = parser.parse_args()
 
@@ -635,40 +688,19 @@ def main():
                 for line in commands:
                     smc.command(line)
                 print(f"Imported {path}: {len(commands)} changed" + ("" if commands else ", nothing to change"))
-            elif name == "set-brightness":
-                smc.command(f"set brightness {words.pop(0)}")
-                print("LED brightness set")
             elif name in SIMPLE_SETTINGS:
-                value = words.pop(0)
-                smc.command(f"set {SIMPLE_SETTINGS[name]} {value}")
-                print(f"{SIMPLE_SETTINGS[name]} {value}")
-            elif name == "set-rgb-mode":
-                mode = words.pop(0)
-                smc.command(f"set rgb-mode {mode}")
-                print(f"RGB LED mode {mode}")
-            elif name == "set-rgb-brightness":
-                smc.command(f"set rgb-brightness {words.pop(0)}")
-                print("RGB LED brightness set")
+                setting, value = SIMPLE_SETTINGS[name][0], words.pop(0)
+                smc.command(f"set {setting} {value}")
+                print(f"{setting} {value}")
             elif name == "set-threshold":
                 index, value = words.pop(0), words.pop(0)
                 smc.command(f"set threshold {index} {value}")
                 print(f"Threshold {index} set")
-            elif name == "set-ssid":
-                smc.command(f"set ssid {words.pop(0)}")
-                print("Wi-Fi name set")
             elif name == "set-password":
                 # "" for the one made from the board ID
                 password = words.pop(0)
                 smc.command(f"set password {password}" if password else "set password")
                 print("Wi-Fi password set")
-            elif name == "set-web":
-                state = words.pop(0)
-                smc.command(f"set web {state}")
-                print(f"Web interface {state}")
-            elif name == "set-report-version":
-                version = words.pop(0)
-                smc.command(f"set report-version {version}")
-                print(f"Reported version {version}")
             elif name == "defaults":
                 smc.command("defaults")
                 print("Back to the defaults (not saved yet)")
