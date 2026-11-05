@@ -52,7 +52,9 @@ uint8_t getCustomFanSpeed();
 // min_threshold and the firmware's default. Not reset at power off; kept
 // across a Pico restart only once saved (Settings).
 constexpr uint8_t max_thresholds = 10;
-constexpr uint8_t min_threshold = 30;
+// Not lower: with a threshold under the normal running temperature the Xbox
+// sees an overheat as soon as it starts and keeps shutting down
+constexpr uint8_t min_threshold = 40;
 uint8_t           thresholdCount();
 const char*       thresholdLabel(uint8_t index);
 uint8_t           thresholdDefault(uint8_t index);

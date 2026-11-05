@@ -297,7 +297,9 @@ class App(ttk.Frame):
         self.fan_rows.grid(row=1, column=0, columnspan=3, sticky="nsew")
         self.fan_rows.columnconfigure(0, weight=1)
         self.fan_labels = []
-        self.fan_rows.bind("<Configure>", self.wrap_fan_labels)
+        self.fan_wrap_job = None  # Pending re-wrap (after())
+        self.fan_wrap_width = None  # Width the labels were last wrapped to
+        self.fan_rows.bind("<Configure>", self.schedule_fan_wrap)
         self.muted(self.fan_rows, "Connect to read them.").grid(row=0, column=0, sticky="w")
         self.thresholds = []  # (index, IntVar, min, default, value read)
 
@@ -307,6 +309,7 @@ class App(ttk.Frame):
         self.read_button = ttk.Button(actions, text="Read again", command=self.read)
         self.defaults_button = ttk.Button(actions, text="Defaults", command=self.defaults)
         self.reboot_button = ttk.Button(actions, text="Reboot Pico", command=self.reboot)
+        self.bootloader_button = ttk.Button(actions, text="Firmware update", command=self.bootloader)
         self.save_button = ttk.Button(
             actions,
             text="Save to flash",
@@ -314,7 +317,7 @@ class App(ttk.Frame):
             style="Accent.TButton" if sv_ttk else "TButton",
         )
         self.apply_button = ttk.Button(actions, text="Apply", command=lambda: self.apply(save=False))
-        for button in (self.read_button, self.defaults_button, self.reboot_button):
+        for button in (self.read_button, self.defaults_button, self.reboot_button, self.bootloader_button):
             button.pack(side="left", padx=(0, 6))
         self.save_button.pack(side="right")
         self.apply_button.pack(side="right", padx=6)
@@ -324,30 +327,22 @@ class App(ttk.Frame):
             self.save_button,
             self.defaults_button,
             self.reboot_button,
+            self.bootloader_button,
         )
 
         # Status line
         self.status = ttk.Label(self, text="")
         self.status.grid(row=4, column=0, columnspan=2, sticky="w", pady=(10, 0))
 
-        # Log, folded away by default
-        log_bar = ttk.Frame(self)
-        log_bar.grid(row=5, column=0, columnspan=2, sticky="new", pady=(8, 0))
-        log_bar.columnconfigure(0, weight=1)
-        self.log_shown = tk.BooleanVar(value=False)
-        self.log_toggle = ttk.Checkbutton(
-            log_bar,
-            text="Show log",
-            variable=self.log_shown,
-            command=self.toggle_log,
-            style="Toggle.TButton" if sv_ttk else "TCheckbutton",
-        )
-        self.log_toggle.grid(row=0, column=0, sticky="w")
-        self.log_frame = ttk.Frame(log_bar)
-        self.log_frame.columnconfigure(0, weight=1)
-        self.log_frame.rowconfigure(0, weight=1)
+        # Log: the commands sent and the Pico's log lines. Takes the height
+        # left over when the window is made taller.
+        log_frame = ttk.Frame(self)
+        log_frame.grid(row=5, column=0, columnspan=2, sticky="nsew", pady=(8, 0))
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(1, weight=1)
+        ttk.Label(log_frame, text="Log", font=self.font_heading).grid(row=0, column=0, sticky="w", pady=(0, 4))
         self.log = tk.Text(
-            self.log_frame,
+            log_frame,
             height=9,
             state="disabled",
             font=self.font_log,
@@ -358,11 +353,10 @@ class App(ttk.Frame):
             pady=6,
             wrap="word",
         )
-        self.log.grid(row=0, column=0, sticky="nsew")
-        scroll = ttk.Scrollbar(self.log_frame, orient="vertical", command=self.log.yview)
-        scroll.grid(row=0, column=1, sticky="ns")
+        self.log.grid(row=1, column=0, sticky="nsew")
+        scroll = ttk.Scrollbar(log_frame, orient="vertical", command=self.log.yview)
+        scroll.grid(row=1, column=1, sticky="ns")
         self.log.configure(yscrollcommand=scroll.set)
-        self.log_bar = log_bar
 
     def slider(self, parent, row, text, variable):
         ttk.Label(parent, text=text).grid(row=row, column=0, sticky="w", padx=(0, 12))
@@ -380,18 +374,6 @@ class App(ttk.Frame):
 
         variable.trace_add("write", changed)
         changed()
-
-    def toggle_log(self):
-        if self.log_shown.get():
-            self.log_frame.grid(row=1, column=0, sticky="nsew", pady=(8, 0))
-            self.log_bar.grid_configure(sticky="nsew")
-            self.log_toggle.configure(text="Hide log")
-            self.log_bar.rowconfigure(1, weight=1)
-            self.log.see("end")
-        else:
-            self.log_frame.grid_remove()
-            self.log_bar.grid_configure(sticky="new")
-            self.log_toggle.configure(text="Show log")
 
     def board_password_changed(self):
         """Shows the board ID password while it's ticked (read-only), the
@@ -568,7 +550,8 @@ class App(ttk.Frame):
 
     def show_settings(self, s):
         self.settings = s
-        self.firmware.configure(text=f"Firmware {s.get('firmware', '?')}")
+        build = f" · build {s['git']}" if s.get("git") else ""
+        self.firmware.configure(text=f"Firmware {s.get('firmware', '?')}{build}")
         self.brightness.set(s.get("brightness", 100))
         self.rgb_mode.set(RGB_MODE_NAMES.get(s.get("rgb_mode"), s.get("rgb_mode", "")))
         self.rgb_brightness.set(s.get("rgb_brightness", 100))
@@ -611,12 +594,24 @@ class App(ttk.Frame):
         self.wrap_fan_labels()
         self.update_buttons()
 
-    def wrap_fan_labels(self, _event=None):
+    def schedule_fan_wrap(self, event):
+        """Re-wraps the threshold names once the resizing pauses. Re-wrapping
+        on every resize event made Tk lay the whole window out again for each
+        one, which lagged while dragging."""
+        if event.width == self.fan_wrap_width:
+            return  # Only the height changed, or our own re-wrap
+        if self.fan_wrap_job is not None:
+            self.root.after_cancel(self.fan_wrap_job)
+        self.fan_wrap_job = self.root.after(100, self.wrap_fan_labels)
+
+    def wrap_fan_labels(self):
         """Wraps the threshold names to the space the card has, so they're on
         one line when the window is wide enough."""
+        self.fan_wrap_job = None
         width = self.fan_rows.winfo_width()
         if width <= 1 or not self.fan_labels:
             return
+        self.fan_wrap_width = width
         others = sum(self.fan_rows.grid_bbox(column, 0)[2] for column in (1, 2))
         for label, whole_row in self.fan_labels:
             label.configure(wraplength=max(width if whole_row else width - others - 4, 80))
@@ -716,6 +711,27 @@ class App(ttk.Frame):
 
         self.run(lambda: self.send("reboot"), done, "Rebooting...")
 
+    def bootloader(self):
+        """Restarts the Pico into its USB bootloader (BOOTSEL), where it shows up
+        as a drive to copy a new firmware file to. Only USB config mode has the
+        command, so only a PC with the Pico plugged in can do this."""
+        question = (
+            "Restart the Pico into the bootloader for a firmware update?\n\n"
+            "It shows up as a drive (RPI-RP2 or RP2350): copy SMCX.uf2 onto it, "
+            "and the Pico restarts with the new firmware."
+        )
+        if self.unsaved:
+            question += "\n\nSome changes aren't saved and will be lost."
+        if not messagebox.askyesno(TITLE, question):
+            return
+
+        def done(_):
+            self.unsaved = False
+            self.drop_connection()
+            self.set_status("In the bootloader: copy SMCX.uf2 to the RPI-RP2 / RP2350 drive.", "ok")
+
+        self.run(lambda: self.send("bootloader"), done, "Restarting into the bootloader...")
+
     def close(self):
         if self.unsaved and not messagebox.askyesno(TITLE, "Some changes aren't saved to flash. Quit anyway?"):
             return
@@ -724,6 +740,8 @@ class App(ttk.Frame):
                 self.smc.close()
             except OSError:
                 pass
+        if self.fan_wrap_job is not None:
+            self.root.after_cancel(self.fan_wrap_job)
         self.root.destroy()
 
 

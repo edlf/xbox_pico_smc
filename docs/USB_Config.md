@@ -64,13 +64,21 @@ system's and has a switch in the corner. Without it the window uses the plain
 tkinter style.
 
 It picks the SMCX's port (Refresh after plugging it in), and Connect reads
-the settings. Change them, then:
+the settings. The header shows the firmware and its build: the short git hash
+it was built from (`-dirty` if it had uncommitted changes), also printed as
+`GIT_HASH` in the boot log.
+
+Change the settings, then:
 
 - **Apply** sends what changed to the Pico. It's used at once in config mode,
   but lost when the Pico restarts.
 - **Save to flash** applies and saves, so the SMC loads them next time.
 - **Defaults** goes back to the firmware's defaults (not saved until you save).
 - **Reboot Pico** restarts it.
+- **Firmware update** restarts it into the USB bootloader (BOOTSEL): it shows
+  up as an `RPI-RP2` (Pico, Pico W) or `RP2350` (Pico 2, Pico 2 W) drive, and
+  copying `SMCX.uf2` onto it installs the new firmware. Same as holding BOOTSEL
+  while plugging it in.
 
 While no Wi-Fi password is saved, the access point uses one made from the
 board's unique ID (`smcx-<id>`, different for every Pico). With "Use the
@@ -79,8 +87,8 @@ password made from the board ID" ticked, the password field shows it
 type your own; ticking it again goes back to the board ID one when you apply.
 Firmware older than the `board-password` reply only shows it in the boot log.
 
-The fan thresholds can only be lowered, down to the minimum. "Show log" opens a
-pane with each command sent and the Pico's log lines. The window warns before
+The fan thresholds can only be lowered, down to the minimum. The log at the
+bottom shows each command sent and the Pico's log lines. The window warns before
 quitting or rebooting with applied changes that aren't saved.
 
 ## The script
@@ -91,6 +99,7 @@ python tools/smcx_config.py get
 python tools/smcx_config.py set-brightness 40 set-threshold 2 65 save
 python tools/smcx_config.py defaults save
 python tools/smcx_config.py reboot
+python tools/smcx_config.py bootloader
 ```
 
 It finds the Pico by its USB name (`--port` to pick a port yourself). Changes only
@@ -106,7 +115,7 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | Command | Reply |
 |---------|-------|
 | `help` | The commands |
-| `get` | `firmware <name>`, `brightness <percent>`, `rgb-mode <mode>`, `rgb-brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `board-password smcx-<id>` (the one the access point uses while the password is empty), `web on` or `web off` (with a note on builds without a web interface), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
+| `get` | `firmware <name>`, `git <hash>` (short git hash of the build, `-dirty` if it had uncommitted changes), `brightness <percent>`, `rgb-mode <mode>`, `rgb-brightness <percent>`, `ssid <name>`, `password <password>` (empty: from the board ID), `board-password smcx-<id>` (the one the access point uses while the password is empty), `web on` or `web off` (with a note on builds without a web interface), then per fan threshold `threshold <index> <value> default <d> min <m> label <text>` |
 | `set brightness <1-100>` | LED brightness in percent |
 | `set rgb-mode <off\|boot\|mirror>` | RGB LED: `off` (dark, even while booting), `boot` (the boot phases, then dark), `mirror` (the boot phases, then what the front panel LEDs show) |
 | `set rgb-brightness <1-100>` | RGB LED brightness in percent |
@@ -117,3 +126,4 @@ one line, and its reply ends with `OK` or `ERR <reason>`. Lines starting with
 | `defaults` | Brightness back to `SMC_LED_BRIGHTNESS`, thresholds to the firmware's defaults, Wi-Fi back to `SMC_WIFI_SSID` / `SMC_WIFI_PASSWORD`, web interface on |
 | `save` | Writes the settings to flash (`SETTINGS: Saved`) |
 | `reboot` | Restarts the Pico |
+| `bootloader` | Restarts the Pico into the USB bootloader (BOOTSEL) for a firmware update. Only in config mode: the SMBus and the web interface have no way to do this |

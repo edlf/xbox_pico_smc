@@ -158,6 +158,29 @@ TEST_F(SettingsTest, InvalidWifiInRecordKeepsDefault) {
   EXPECT_STREQ(SMC::Settings::wifiPassword(), "correct horse");
 }
 
+// Below min_threshold (40 °C) the Xbox would see an overheat at every start
+TEST_F(SettingsTest, ThresholdsBelowTheMinimumAreRefused) {
+  EXPECT_FALSE(SMC::Fan::setThreshold(0, SMC::Fan::min_threshold - 1));
+  EXPECT_TRUE(SMC::Fan::setThreshold(0, SMC::Fan::min_threshold));
+  SMC::Fan::resetThresholds();
+}
+
+// A threshold saved by older firmware, which allowed down to 30 °C, is left
+// at the default
+TEST_F(SettingsTest, SavedThresholdBelowTheMinimumKeepsDefault) {
+  SMC::Settings::load();
+  changeEverything();
+  ASSERT_TRUE(SMC::Settings::saveNow());
+  record()[14] = 35;  // Threshold 0
+  fixChecksum();
+
+  backToDefaults();
+  const uint8_t default_threshold = SMC::Fan::getThreshold(0);
+  SMC::Settings::load();
+  EXPECT_EQ(SMC::Fan::getThreshold(0), default_threshold);
+  EXPECT_EQ(hal::get_led_brightness(), 40);  // The rest still loads
+}
+
 TEST_F(SettingsTest, RequestedSaveIsDoneByUpdate) {
   SMC::Settings::load();
   hal::set_led_brightness(55);

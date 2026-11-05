@@ -300,7 +300,8 @@ target_link_libraries(SMCX
         hardware_dma
         hardware_flash
         pico_flash
-        pico_unique_id)
+        pico_unique_id
+        pico_bootrom)
 
 # Project headers, and lwipopts.h for the web interface
 target_include_directories(SMCX PRIVATE
@@ -325,5 +326,19 @@ get_target_property(SMC_TARGET_SOURCES SMCX SOURCES)
 list(FILTER SMC_TARGET_SOURCES INCLUDE REGEX "^${SMC_SRC_DIR}/")
 set_source_files_properties(${SMC_TARGET_SOURCES} PROPERTIES
                             COMPILE_OPTIONS "-Wall;-Wextra;-Wshadow;-Wconversion")
+
+# Git short hash (SMC_GIT_HASH in git_version.h), shown in the boot log and by
+# the USB config. A target, so it's checked on every build, not only when CMake
+# runs; the header only changes (and the files using it only rebuild) when the
+# hash does.
+set(SMC_GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+add_custom_target(smcx_git_version
+        COMMAND ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+                -DOUTPUT=${SMC_GENERATED_DIR}/git_version.h
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/git_version.cmake
+        BYPRODUCTS ${SMC_GENERATED_DIR}/git_version.h
+        COMMENT "Reading the git hash")
+add_dependencies(SMCX smcx_git_version)
+target_include_directories(SMCX PRIVATE ${SMC_GENERATED_DIR})
 
 pico_add_extra_outputs(SMCX)

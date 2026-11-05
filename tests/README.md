@@ -42,8 +42,9 @@ They build with the default settings from `src/config.hpp` (P11).
   SMBus override, power off, tray moving) and the power down fade.
 - `test_settings.cpp`: settings saved to and loaded from a fake flash
   (`fake_flash.cpp`): round trip, nothing written when unchanged, corrupt
-  records, thresholds from another firmware, invalid Wi-Fi values, and the
-  access point password (saved, or the board ID one).
+  records, thresholds from another firmware, thresholds below the 40 °C
+  minimum, invalid Wi-Fi values, and the access point password (saved, or the
+  board ID one).
 - `test_i2c_decoder.cpp`: the sniffer's SMBus decoder fed SDA/SCL levels:
   encoders found, writes logged (long, NACKed, two per tick), reads, other
   devices and our own transfers not logged, and a video mode decoded from bus

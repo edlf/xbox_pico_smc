@@ -2,9 +2,11 @@
 #include "smc.hpp"
 #include "hal.hpp"
 #include "pin_assignments.hpp"
+#include "git_version.h"  // Generated on every build, see cmake/git_version.cmake
 
 #include "hardware/gpio.h"
 #include "hardware/watchdog.h"
+#include "pico/bootrom.h"
 #include "pico/stdio_usb.h"
 #include "pico/stdlib.h"
 #include "tusb.h"
@@ -80,6 +82,7 @@ static void error(const char* reason) {
 
 static void printSettings() {
   printf("firmware %s\n", SMC_FIRMWARE_NAME);
+  printf("git %s\n", SMC_GIT_HASH);  // Short hash of the build, "-dirty" with uncommitted changes
   printf("brightness %u\n", hal::get_led_brightness());
   // Kept on builds without the RGB LED too, ignored there
   printf("rgb-mode %s%s\n", SMC::RgbLed::modeName(SMC::RgbLed::mode()), SMC_RGB_LED ? "" : " (no RGB LED in this build, ignored)");
@@ -149,7 +152,8 @@ static void command(char* line) {
         "set web <on|off>             start the web interface (W boards)\n"
         "defaults                     back to the firmware's defaults\n"
         "save                         write them to flash\n"
-        "reboot                       restart the Pico\n");
+        "reboot                       restart the Pico\n"
+        "bootloader                   restart into the USB bootloader (BOOTSEL), for a firmware update\n");
     ok();
   } else if (strcmp(words[0], "get") == 0) {
     printSettings();
@@ -211,6 +215,15 @@ static void command(char* line) {
     watchdog_reboot(0, 0, 0);
     while (true) {
     }
+  } else if (strcmp(words[0], "bootloader") == 0) {
+    // Only here, in USB config mode: the Pico is out of the Xbox and a PC is
+    // talking to it. Nothing on the SMBus or the web interface can get here.
+    // The Pico then shows up as the RPI-RP2 / RP2350 drive for a UF2 file.
+    debug::print(debug::Level::Info, "USB: Restarting into the bootloader");
+    ok();
+    stdio_flush();
+    sleep_ms(100);
+    reset_usb_boot(0, 0);
   } else {
     error("unknown command, try help");
   }

@@ -15,6 +15,7 @@ starts in config mode instead of running the SMC (see src/usb_config.hpp).
     python tools/smcx_config.py defaults
     python tools/smcx_config.py save
     python tools/smcx_config.py reboot
+    python tools/smcx_config.py bootloader   (USB bootloader, to copy a new SMCX.uf2)
 
 Several commands can be chained: `set-brightness 40 save`. Changes are only
 kept after `save`. tools/smcx_config_gui.py does the same in a window.
@@ -171,6 +172,8 @@ def parse_settings(lines):
         key, _, rest = line.partition(" ")
         if key == "firmware":
             settings["firmware"] = rest
+        elif key == "git":
+            settings["git"] = rest  # Short hash of the build (not sent by older firmware)
         elif key == "brightness":
             settings["brightness"] = int(rest)
         elif key == "rgb-mode":
@@ -204,6 +207,7 @@ def parse_settings(lines):
 
 def print_settings(s):
     print(f"Firmware:        {s.get('firmware', '?')}")
+    print(f"Build:           {s.get('git', '(not reported by this firmware)')}")
     print(f"LED brightness:  {s.get('brightness', '?')}%")
     print(
         f"RGB LED:         {s.get('rgb_mode', '?')}{'' if s['rgb_available'] else ' (no RGB LED in this build, ignored)'}"
@@ -226,7 +230,7 @@ def main():
     parser.add_argument(
         "commands",
         nargs="+",
-        help="get | set-brightness N | set-rgb-mode off|boot|mirror | set-rgb-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | defaults | save | reboot",
+        help="get | set-brightness N | set-rgb-mode off|boot|mirror | set-rgb-brightness N | set-threshold I C | set-ssid NAME | set-password PW | set-web on|off | defaults | save | reboot | bootloader",
     )
     args = parser.parse_args()
 
@@ -272,6 +276,9 @@ def main():
             elif name == "reboot":
                 smc.command("reboot")
                 print("Rebooting")
+            elif name == "bootloader":
+                smc.command("bootloader")
+                print("Restarting into the bootloader: copy SMCX.uf2 to the RPI-RP2 / RP2350 drive that appears")
             else:
                 sys.exit(f"Unknown command '{name}'")
     except IndexError:

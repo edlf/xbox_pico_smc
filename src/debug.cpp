@@ -1,5 +1,6 @@
 #include "debug.hpp"
 #include "config.hpp"
+#include "git_version.h"  // Generated on every build, see cmake/git_version.cmake
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -73,6 +74,7 @@ static const char* onOff(const bool on) {
 void print_build_flags() {
   // Build options from CMake, see CMakeLists.txt
   printf("Build flags:\n");
+  printf("  > GIT_HASH=%s\n", SMC_GIT_HASH);
   printf("  > PICO_BOARD=%s\n", SMC_BOARD);
   printf("  > SMC_DVD_SUPPORT=%s\n", onOff(SMC_DVD_SUPPORT));
   printf("  > SMC_BOOT_CHALLENGE=%s\n", onOff(SMC_BOOT_CHALLENGE));
