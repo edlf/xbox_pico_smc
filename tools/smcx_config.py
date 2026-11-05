@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Configure the SMCX over USB serial.
 
 Only works with the Pico out of the Xbox, powered from USB alone: it then

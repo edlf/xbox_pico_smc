@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Generates docs/images/wiring.svg: Pico and PIC footprints with net labels.
 
 Run from the project root: python tools/wiring_svg.py docs/images/wiring.svg

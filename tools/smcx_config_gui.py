@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Configure the SMCX over USB serial, in a window.
 
 The same settings as tools/smcx_config.py, with the same rule: only with the
@@ -33,6 +32,27 @@ except ImportError:
 TITLE = "SMCX config"
 
 REPORT_VERSIONS = ("P01", "P11", "D01", "DXF", "P2L")
+
+# The P01/P11 fan thresholds (src/smc_fan_pic.cpp, threshold_entries) with the
+# P11 defaults, shown before connecting. The rows stay and only take the
+# Pico's values when it has the same list; a P2L firmware has its own.
+PIC_THRESHOLDS = [
+    {"index": i, "label": label, "value": default, "default": default, "min": 40}
+    for i, (label, default) in enumerate(
+        [
+            ("CPU overheat (above)", 88),
+            ("Board overheat (above)", 75),
+            ("CPU hot, +3 speed (above)", 67),
+            ("Predicted CPU hot, +3 speed (above)", 86),
+            ("Predicted CPU warm, +1 speed (above)", 67),
+            ("Board warm, +1 speed (above)", 60),
+            ("Predicted CPU cool, -1 speed (below)", 66),
+            ("Board cool, -1 speed (below)", 57),
+            ("CPU still overheated, shut down (above)", 97),
+            ("Board still overheated, shut down (above)", 84),
+        ]
+    )
+]
 
 RGB_MODE_NAMES = {
     "off": "Off, even while booting",
@@ -251,7 +271,7 @@ class App(ttk.Frame):
         self.rgb_note.grid(row=5, column=0, columnspan=3, sticky="w")
 
         # Web interface
-        wifi = self.card(left, "Web interface", row=1, column=0)
+        wifi = self.card(left, "Web interface", row=1, column=0, pady=(0, 12))
         self.web = tk.BooleanVar(value=True)
         self.input(
             ttk.Checkbutton(
@@ -293,13 +313,16 @@ class App(ttk.Frame):
         self.web_note = self.muted(wifi, "")
         self.web_note.grid(row=6, column=0, columnspan=3, sticky="w")
 
-        right = ttk.Frame(self)
-        right.grid(row=2, column=1, sticky="nsew", padx=(8, 0))
-        right.columnconfigure(0, weight=1)
-        right.rowconfigure(0, weight=1)
+        # Version reported to the Xbox on SMBus 0x01
+        xbox = self.card(left, "Reported version", row=2, column=0)
+        ttk.Label(xbox, text="SMBus 0x01").grid(row=1, column=0, sticky="w", padx=(0, 12))
+        self.report_version = self.input(ttk.Combobox(xbox, state="readonly", width=24))
+        self.report_version.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
+        self.report_version_note = self.muted(xbox, "What the SMC tells the Xbox it is.", wraplength=360)
+        self.report_version_note.grid(row=2, column=0, columnspan=3, sticky="w")
 
-        # Fan thresholds, filled in by show_settings()
-        self.fan = self.card(right, "Fan thresholds", row=0, column=0, pady=(0, 12))
+        # Fan thresholds: the P01/P11 ones until the Pico says otherwise
+        self.fan = self.card(self, "Fan thresholds", row=2, column=1, padx=(8, 0))
         self.fan_rows = ttk.Frame(self.fan)
         self.fan_rows.grid(row=1, column=0, columnspan=3, sticky="nsew")
         self.fan_rows.columnconfigure(0, weight=1)
@@ -307,16 +330,9 @@ class App(ttk.Frame):
         self.fan_wrap_job = None  # Pending re-wrap (after())
         self.fan_wrap_width = None  # Width the labels were last wrapped to
         self.fan_rows.bind("<Configure>", self.schedule_fan_wrap)
-        self.muted(self.fan_rows, "Connect to read them.").grid(row=0, column=0, sticky="w")
         self.thresholds = []  # (index, IntVar, min, default, value read)
-
-        # Version reported to the Xbox on SMBus 0x01
-        xbox = self.card(right, "Reported version", row=1, column=0)
-        ttk.Label(xbox, text="SMBus 0x01").grid(row=1, column=0, sticky="w", padx=(0, 12))
-        self.report_version = self.input(ttk.Combobox(xbox, state="readonly", width=24))
-        self.report_version.grid(row=1, column=1, columnspan=2, sticky="ew", pady=4)
-        self.report_version_note = self.muted(xbox, "What the SMC tells the Xbox it is.", wraplength=360)
-        self.report_version_note.grid(row=2, column=0, columnspan=3, sticky="w")
+        self.fan_rows_shown = []  # (label, Spinbox, range label, IntVar) per threshold
+        self.build_fan_rows(PIC_THRESHOLDS)
 
         # Actions
         actions = ttk.Frame(self)
@@ -595,30 +611,50 @@ class App(ttk.Frame):
         self.password.set(self.typed_password or self.board_password_value)
         self.web_note.configure(text="" if s["web_available"] else "No web interface in this build: kept, but ignored.")
 
+        self.show_thresholds(s["thresholds"])
+        self.update_buttons()
+
+    def show_thresholds(self, thresholds):
+        """The Pico's thresholds: into the rows already there when it has the
+        same ones (P01, P11 and the debug kits), new rows otherwise (P2L)."""
+        if [t["label"] for t in thresholds] != [row[0]["text"] for row in self.fan_rows_shown]:
+            self.build_fan_rows(thresholds)
+            return
+        self.thresholds = []
+        for t, (_, spinbox, limits, var) in zip(thresholds, self.fan_rows_shown):
+            spinbox.configure(from_=t["min"], to=t["default"])
+            var.set(t["value"])
+            limits.configure(text=f"°C, {t['min']}-{t['default']}")
+            self.thresholds.append((t["index"], var, t["min"], t["default"], t["value"]))
+
+    def build_fan_rows(self, thresholds):
+        """One row per threshold: its name, a box for the value and its range"""
         for child in self.fan_rows.winfo_children():
             if child in self.muted_labels:
                 self.muted_labels.remove(child)
             child.destroy()
         self.thresholds = []
+        self.fan_rows_shown = []
         self.fan_labels = []  # (label, whole row width) wrapped to the card's width
-        for row, t in enumerate(s["thresholds"]):
+        for row, t in enumerate(thresholds):
             # Every row as tall as the tallest, so the rows are evenly spaced
             self.fan_rows.rowconfigure(row, uniform="fan")
             label = ttk.Label(self.fan_rows, text=t["label"])
             label.grid(row=row, column=0, sticky="w", pady=4)
             self.fan_labels.append((label, False))
             var = tk.IntVar(value=t["value"])
-            ttk.Spinbox(self.fan_rows, from_=t["min"], to=t["default"], textvariable=var, width=4).grid(
-                row=row, column=1, padx=8, pady=4
-            )
-            self.muted(self.fan_rows, f"°C, {t['min']}-{t['default']}").grid(row=row, column=2, sticky="w", pady=4)
+            spinbox = ttk.Spinbox(self.fan_rows, from_=t["min"], to=t["default"], textvariable=var, width=4)
+            spinbox.grid(row=row, column=1, padx=8, pady=4)
+            limits = self.muted(self.fan_rows, f"°C, {t['min']}-{t['default']}")
+            limits.grid(row=row, column=2, sticky="w", pady=4)
+            self.fan_rows_shown.append((label, spinbox, limits, var))
             self.thresholds.append((t["index"], var, t["min"], t["default"], t["value"]))
         if self.thresholds:
             note = self.muted(self.fan_rows, "The firmware's default is the highest you can set each one.")
             note.grid(row=len(self.thresholds), column=0, columnspan=3, sticky="w", pady=(10, 0))
             self.fan_labels.append((note, True))
+        self.fan_wrap_width = None
         self.wrap_fan_labels()
-        self.update_buttons()
 
     def schedule_fan_wrap(self, event):
         """Re-wraps the threshold names once the resizing pauses. Re-wrapping
@@ -779,16 +815,27 @@ class App(ttk.Frame):
 
 def main():
     root = tk.Tk()
+    # Hidden until it's built: shown at once, the empty window would pop up
+    # small and then grow, once per theme change and layout pass
+    root.withdraw()
     root.title(TITLE)
     try:
         cli.require_pyserial()
     except cli.SmcError as e:
-        root.withdraw()
         messagebox.showerror(TITLE, str(e))
         return
     app = App(root)
     root.protocol("WM_DELETE_WINDOW", app.close)
     root.minsize(860, 600)
+    # A fixed size from the start: left to follow its contents, the window
+    # would change size again as the threshold names re-wrap, on connecting
+    # and whenever the status line changes. It can still be resized by hand.
+    # Kept on the screen (the log shrinks first), with room for the taskbar.
+    root.update_idletasks()
+    width = min(max(root.winfo_reqwidth(), 860), root.winfo_screenwidth() - 40)
+    height = min(max(root.winfo_reqheight(), 600), root.winfo_screenheight() - 100)
+    root.geometry(f"{width}x{height}")
+    root.deiconify()
     root.mainloop()
 
 
